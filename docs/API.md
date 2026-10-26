@@ -191,3 +191,64 @@ since plain EXPLAIN does not execute the query. Not recorded in history.
 
 `GET /api/profiles/{id}/history?limit=50` → `200 [{ id, sql, startedAt, durationMs, rowCount, status: "ok"|"error"|"rejected"|"cancelled", errorCode? }]`
 Newest first, max 200. Stores SQL and metadata only, never row data. Deleted with the profile.
+
+## Phase 3
+
+Design: `docs/NL.md`.
+
+### LLM settings (global)
+
+- `GET /api/llm/settings` → `200 LLMSettings`
+- `PUT /api/llm/settings` body = `LLMSettings` fields plus optional `apiKey` (omitted = keep, `""` = clear) → `200 LLMSettings`
+- `POST /api/llm/test` → `200 {"ok":bool,"provider":"...","model":"...","latencyMs":n,"error"?:{"kind":"auth|network|model|rate_limit|other","message":"..."}}`
+  (one tiny structured-output call; never sends schema or data)
+- `GET /api/llm/models` → `200 ["..."]` (OpenAI-compatible `/v1/models`; for Anthropic the supported list)
+
+```ts
+interface LLMSettings {
+  provider: "anthropic" | "openai_compat" | "none";   // default "none"
+  model: string;            // anthropic default "claude-opus-5-5"
+  summaryModel: string;     // anthropic default "claude-haiku-5-5"
+  baseUrl?: string;         // openai_compat only, e.g. "http://localhost:11434/v1/"
+  effort?: "low" | "medium" | "high";  // anthropic only, default "medium"
+  hasApiKey: boolean;       // never the key itself
+}
+```
+
+### Glossary (per profile)
+
+- `GET /api/profiles/{id}/glossary` → `200 [{ "term": "active user", "definition": "...", "sql": "status = 'active'" }]`
+- `PUT /api/profiles/{id}/glossary` body = the full array (max 500 entries, term ≤ 100, definition ≤ 1000, sql ≤ 1000 chars) → `204`
+
+### Ask
+
+`POST /api/profiles/{id}/ask` → `text/event-stream` (SSE frames over the fetch response)
+
+```ts
+interface AskRequest {
+  question: string;                    // 1..2000 chars
+  conversationId?: string;             // returned by an earlier "done" event; keeps the last 6 turns (in memory, 30 min idle TTL)
+  assumptionOverrides?: { label: string; sqlFragment: string }[];  // user-edited chips: regenerate honouring them
+  clarification?: { question: string; answer: string; saveToGlossary?: boolean };
+  maxRows?: number;                    // as /query
+  confirmCost?: boolean;               // as /query
+  confirmRows?: boolean;               // prod-replica + rows mode, see NL.md
+}
+```
+
+Events, in order (any may be followed by `error`, which ends the stream):
+
+| event | data |
+|---|---|
+| `status` | `{"stage":"retrieving|generating|checking|running|repairing|summarizing"}` |
+| `context` | `{"provider","model","schemaMode":"full|retrieved","tables":["s.t",...],"omittedColumns":["s.t.password"],"sends":"schema|schema+profile|schema+rows"}` |
+| `answer` | `{"kind":"sql|clarify","sql","explanationSteps":[],"assumptions":[{"label","sqlFragment"}],"tables":[],"clarifyingQuestion"?:{"question","options":[]},"repaired":bool}` (sent again after a repair) |
+| `needs_confirmation` | `{"reason":"cost","estimatedCost","estimatedRows"}` or `{"reason":"rows"}` — stream ends; re-send with the confirm flag |
+| `result` | the Phase 2 `QueryResult` |
+| `summary` | `{"text","mode":"profile|rows"}` |
+| `done` | `{"conversationId","durationMs","usage":{"inputTokens","outputTokens","cacheReadTokens"}}` |
+| `error` | the standard error envelope body; plus `{"code":"llm", "detail":"auth|network|refusal|max_tokens|invalid_output|rate_limit"}` for provider failures |
+
+`400 validation` / `404` / `423` / `409 llm_not_configured` are returned as normal JSON before the stream starts.
+Aborting the fetch cancels the LLM call and any running statement.
+Ask runs are recorded in query history with `source: "ask"` and the question (never rows).
