@@ -1,7 +1,8 @@
 /dist/
 /bin/
 node_modules/
-web/dist/
+web/dist/*
+!web/dist/.gitkeep
 *.test
 coverage.out
 .DS_Store

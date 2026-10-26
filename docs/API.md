@@ -7,7 +7,10 @@ Errors always use one envelope and an appropriate 4xx/5xx status:
 { "error": { "code": "validation", "message": "port must be 1-65535", "detail": "optional" } }
 ```
 
-`code` values: `validation`, `not_found`, `conflict`, `unauthorized`, `secrets_locked`, `internal`.
+`code` values: `validation`, `not_found`, `conflict`, `unauthorized`, `forbidden`, `secrets_locked`, `internal`.
+
+The request guard uses the same envelope: `401 unauthorized` for a missing or
+stale token (e.g. the agent restarted), `403 forbidden` for a foreign Host or Origin.
 
 ## Phase 0
 

@@ -1,0 +1,134 @@
+import type { Page, Route } from "@playwright/test";
+
+/** Mirrors the Phase 0 contract in docs/API.md, kept local so e2e does not import app code. */
+export type Env = "local" | "staging" | "prod-replica";
+
+export interface StubProfile {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  database: string;
+  user: string;
+  sslMode: "disable" | "prefer" | "require" | "verify-ca" | "verify-full";
+  env: Env;
+  schemas: string[];
+  summaryMode: "off" | "profile" | "rows";
+  maxRowsToLLM: number;
+  statementTimeoutMs: number;
+  hasPassword: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const E2E_TOKEN = "e2e-session-token";
+
+const NOW = "2026-10-26T10:00:00Z";
+
+export function stubProfile(overrides: Partial<StubProfile> = {}): StubProfile {
+  return {
+    id: "01JB00000000000000000000AA",
+    name: "orders-dev",
+    host: "localhost",
+    port: 5432,
+    database: "orders",
+    user: "app",
+    sslMode: "prefer",
+    env: "local",
+    schemas: [],
+    summaryMode: "profile",
+    maxRowsToLLM: 50,
+    statementTimeoutMs: 30000,
+    hasPassword: true,
+    createdAt: NOW,
+    updatedAt: NOW,
+    ...overrides,
+  };
+}
+
+interface StubOptions {
+  profiles?: StubProfile[];
+}
+
+const HEALTHY_TEST = {
+  ok: true,
+  latencyMs: 3,
+  serverVersion: "17.2",
+  serverVersionNum: 170002,
+  isReplica: false,
+  defaultReadOnly: false,
+  writePrivileges: [],
+  pgStatStatements: true,
+  warnings: [],
+};
+
+function json(route: Route, status: number, body?: unknown) {
+  return route.fulfill({
+    status,
+    contentType: "application/json",
+    body: body === undefined ? "" : JSON.stringify(body),
+  });
+}
+
+/** An in-memory dbscope agent behind page.route, so e2e runs without the Go backend. */
+export async function stubAgent(page: Page, options: StubOptions = {}) {
+  const profiles = [...(options.profiles ?? [])];
+  let nextId = 1;
+
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    if (request.headers()["x-dbscope-token"] !== E2E_TOKEN) {
+      return json(route, 401, { error: { code: "unauthorized", message: "missing or invalid token" } });
+    }
+    const { pathname } = new URL(request.url());
+    const method = request.method();
+    const byId = pathname.match(/^\/api\/profiles\/([^/]+)(\/test)?$/);
+
+    if (pathname === "/api/health") return json(route, 200, { version: "dev", os: "darwin", arch: "arm64" });
+    if (pathname === "/api/secrets/status") return json(route, 200, { backend: "keyring", locked: false });
+    if (pathname === "/api/connection-url/parse" && method === "POST") {
+      const { url } = request.postDataJSON() as { url: string };
+      const parsed = new URL(url);
+      return json(route, 200, {
+        host: parsed.hostname,
+        port: Number(parsed.port || 5432),
+        database: parsed.pathname.slice(1),
+        user: decodeURIComponent(parsed.username),
+        ...(parsed.password ? { password: decodeURIComponent(parsed.password) } : {}),
+        sslMode: parsed.searchParams.get("sslmode") ?? "prefer",
+      });
+    }
+    if (pathname === "/api/profiles/test" && method === "POST") return json(route, 200, HEALTHY_TEST);
+    if (pathname === "/api/profiles" && method === "GET") {
+      return json(
+        route,
+        200,
+        [...profiles].sort((a, b) => a.name.localeCompare(b.name)),
+      );
+    }
+    if (pathname === "/api/profiles" && method === "POST") {
+      const { password, ...input } = request.postDataJSON() as Omit<StubProfile, "id"> & { password?: string };
+      const created = stubProfile({
+        ...input,
+        id: `01JB0000000000000000000N${nextId++}`,
+        hasPassword: Boolean(password),
+      });
+      profiles.push(created);
+      return json(route, 201, created);
+    }
+    if (byId?.[2] && method === "POST") return json(route, 200, HEALTHY_TEST);
+    if (byId && method === "DELETE") {
+      const index = profiles.findIndex((p) => p.id === byId[1]);
+      if (index >= 0) profiles.splice(index, 1);
+      return json(route, 204);
+    }
+    return json(route, 404, { error: { code: "not_found", message: `no stub for ${method} ${pathname}` } });
+  });
+
+  return { profiles };
+}
+
+/** Opens the UI the way `dbscope ui` does: with the session token in the fragment. */
+export async function openApp(page: Page) {
+  await page.goto(`/#t=${E2E_TOKEN}`);
+}

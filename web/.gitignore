@@ -1,0 +1,7 @@
+node_modules/
+dist/*
+!dist/.gitkeep
+playwright-report/
+test-results/
+blob-report/
+*.tsbuildinfo

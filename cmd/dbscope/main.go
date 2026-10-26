@@ -25,6 +25,7 @@ import (
 	"github.com/dbscope/dbscope/internal/logx"
 	"github.com/dbscope/dbscope/internal/secrets"
 	"github.com/dbscope/dbscope/internal/store"
+	"github.com/dbscope/dbscope/web"
 )
 
 const defaultPort = 4555
@@ -125,7 +126,7 @@ func serve(log *slog.Logger, port int, portSet, noOpen bool, devOrigin string) e
 	}
 	h, err := agent.New(agent.Config{
 		Port: port, Token: token, DevOrigin: devOrigin,
-		Assets: nil, Store: st, Secrets: vault, Logger: log,
+		Assets: web.Assets(), Store: st, Secrets: vault, Logger: log,
 	})
 	if err != nil {
 		return err

@@ -50,17 +50,17 @@ func (g guard) allowedOrigin(origin string) bool {
 func (g guard) wrap(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !g.allowedHost(r.Host) {
-			http.Error(w, "forbidden host", http.StatusForbidden)
+			writeError(w, http.StatusForbidden, "forbidden", "request host is not this agent's loopback address")
 			return
 		}
 		if o := r.Header.Get("Origin"); o != "" && !g.allowedOrigin(o) {
-			http.Error(w, "forbidden origin", http.StatusForbidden)
+			writeError(w, http.StatusForbidden, "forbidden", "request origin is not allowed")
 			return
 		}
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			got := []byte(r.Header.Get(TokenHeader))
 			if subtle.ConstantTimeCompare(got, g.token) != 1 {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				writeError(w, http.StatusUnauthorized, "unauthorized", "missing or invalid session token")
 				return
 			}
 		}

@@ -1,0 +1,141 @@
+import { screen, waitFor } from "@testing-library/react";
+import { HttpResponse, http } from "msw/http";
+import { describe, expect, it, vi } from "vitest";
+import { ConnectionForm } from "@/features/add-connection";
+import type { ProfileInput } from "@/shared/api";
+import { makeProfile, renderWithProviders } from "@/test/render";
+import { server } from "@/test/server";
+
+function renderForm() {
+  const onSaved = vi.fn();
+  const utils = renderWithProviders(<ConnectionForm submitLabel="Save and open" onSaved={onSaved} autoFocus />);
+  return { ...utils, onSaved };
+}
+
+describe("ConnectionForm", () => {
+  it("shows inline errors on Enter and focuses the first invalid field", async () => {
+    const { user, onSaved } = renderForm();
+
+    await user.click(screen.getByLabelText("Name"));
+    await user.keyboard("{Enter}");
+
+    expect(await screen.findByText("Enter a name for this connection.")).toBeInTheDocument();
+    expect(screen.getByText("Choose the environment this database belongs to.")).toBeInTheDocument();
+    expect(screen.getByText("Enter the server host name or IP address.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Name")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText("Name")).toHaveAccessibleDescription("Enter a name for this connection.");
+    await waitFor(() => expect(screen.getByLabelText("Name")).toHaveFocus());
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it("validates a field when the user leaves it", async () => {
+    const { user } = renderForm();
+    const port = screen.getByLabelText("Port");
+    await user.clear(port);
+    await user.type(port, "99999");
+    await user.tab();
+    expect(screen.getByText("Port must be a whole number from 1 to 65535.")).toBeInTheDocument();
+    expect(screen.queryByText("Enter the database name.")).not.toBeInTheDocument();
+  });
+
+  it("fills the fields from a pasted URL and clears the URL", async () => {
+    let sent: unknown;
+    server.use(
+      http.post("/api/connection-url/parse", async ({ request }) => {
+        sent = await request.json();
+        return HttpResponse.json({
+          host: "127.0.0.1",
+          port: 6432,
+          database: "orders",
+          user: "app",
+          password: "pw",
+          sslMode: "disable",
+        });
+      }),
+    );
+    const { user } = renderForm();
+
+    const url = screen.getByLabelText("Paste a connection URL");
+    expect(url).toHaveFocus();
+    await user.paste("postgresql://app:pw@127.0.0.1:6432/orders?sslmode=disable");
+
+    await waitFor(() => expect(screen.getByLabelText("Host")).toHaveValue("127.0.0.1"));
+    expect(sent).toEqual({ url: "postgresql://app:pw@127.0.0.1:6432/orders?sslmode=disable" });
+    expect(screen.getByLabelText("Port")).toHaveValue("6432");
+    expect(screen.getByLabelText("Database")).toHaveValue("orders");
+    expect(screen.getByLabelText("User")).toHaveValue("app");
+    expect(screen.getByLabelText(/Password/)).toHaveValue("pw");
+    expect(screen.getByLabelText("Name")).toHaveValue("orders@127.0.0.1");
+    expect(url).toHaveValue("");
+    expect(screen.getByTestId("live-region")).toHaveTextContent(
+      "Filled name, host, port, database, user, SSL mode, password",
+    );
+    // Loopback host: suggest local, but do not choose it for the user.
+    expect(screen.getByText("This host is on your machine.")).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /local/ })).not.toBeChecked();
+    await waitFor(() => expect(screen.getByRole("radio", { name: /local/ })).toHaveFocus());
+  });
+
+  it("shows the parser's error inline when the URL is invalid", async () => {
+    server.use(
+      http.post("/api/connection-url/parse", () =>
+        HttpResponse.json({ error: { code: "validation", message: 'unsupported scheme "mysql"' } }, { status: 400 }),
+      ),
+    );
+    const { user } = renderForm();
+    await user.type(screen.getByLabelText("Paste a connection URL"), "mysql://x{Enter}");
+    expect(await screen.findByText('unsupported scheme "mysql"')).toBeInTheDocument();
+    expect(screen.getByLabelText("Paste a connection URL")).toHaveAttribute("aria-invalid", "true");
+  });
+
+  it("does not suggest local for a remote host", async () => {
+    const { user } = renderForm();
+    await user.type(screen.getByLabelText("Host"), "db.prod.internal");
+    expect(screen.queryByText("This host is on your machine.")).not.toBeInTheDocument();
+  });
+
+  it("tests, then saves with the chosen environment and its default timeout", async () => {
+    let saved: ProfileInput | undefined;
+    server.use(
+      http.post("/api/profiles/test", () =>
+        HttpResponse.json({ ok: true, latencyMs: 4, serverVersion: "17.2", warnings: [] }),
+      ),
+      http.post("/api/profiles", async ({ request }) => {
+        saved = (await request.json()) as ProfileInput;
+        return HttpResponse.json(makeProfile({ ...saved, id: "new-id" }), { status: 201 });
+      }),
+    );
+    const { user, onSaved } = renderForm();
+
+    await user.type(screen.getByLabelText("Name"), "reports");
+    await user.click(screen.getByRole("radio", { name: /prod-replica/ }));
+    await user.type(screen.getByLabelText("Host"), "replica.internal");
+    await user.type(screen.getByLabelText("Database"), "reports");
+    await user.type(screen.getByLabelText("User"), "reader");
+
+    await user.click(screen.getByRole("button", { name: "Test connection" }));
+    expect(await screen.findByText("Connected in 4 ms")).toBeInTheDocument();
+    expect(screen.getByTestId("live-region")).toHaveTextContent("Connection test passed.");
+
+    await user.click(screen.getByRole("button", { name: "Save and open" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+    expect(saved).toMatchObject({ name: "reports", env: "prod-replica", statementTimeoutMs: 10000 });
+    expect(saved).not.toHaveProperty("password");
+  });
+
+  it("flags a duplicate name reported by the agent on the name field", async () => {
+    server.use(
+      http.post("/api/profiles", () =>
+        HttpResponse.json({ error: { code: "conflict", message: "name already used" } }, { status: 409 }),
+      ),
+    );
+    const { user } = renderForm();
+    await user.type(screen.getByLabelText("Name"), "orders-dev");
+    await user.click(screen.getByRole("radio", { name: /staging/ }));
+    await user.type(screen.getByLabelText("Host"), "h");
+    await user.type(screen.getByLabelText("Database"), "d");
+    await user.type(screen.getByLabelText("User"), "u{Enter}");
+
+    expect(await screen.findByText(/A connection with this name already exists/)).toBeInTheDocument();
+  });
+});

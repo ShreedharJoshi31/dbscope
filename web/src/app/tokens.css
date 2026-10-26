@@ -1,0 +1,119 @@
+/*
+ * dbscope design tokens. The single source of colour, spacing, radius and type.
+ * Values follow docs/ARCHITECTURE.md "Design system"; contrast ratios there are
+ * measured against surface-subtle.
+ *
+ * Each colour is a light-dark() pair resolved from `color-scheme` on <html>:
+ * "light dark" follows the OS, and app/theme.ts pins "light" or "dark" for a
+ * manual override. Nothing outside this file may hardcode a colour.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* Surfaces */
+  --surface-canvas: light-dark(#ffffff, #0d1117);
+  --surface-subtle: light-dark(#f6f8fa, #161b22);
+  --surface-raised: light-dark(#ffffff, #161b22);
+  --surface-overlay: light-dark(#ffffff, #1c2128);
+  --surface-hover: light-dark(#eff2f5, #21262d);
+  --surface-selected: light-dark(#ddf4ff, #172a45);
+
+  /* Borders */
+  --border-default: light-dark(#d1d9e0, #30363d);
+  --border-control: light-dark(#818b98, #656c76);
+  --border-focus: light-dark(#0969da, #58a6ff);
+
+  /* Text */
+  --text-primary: light-dark(#1f2328, #e6edf3);
+  --text-muted: light-dark(#59636e, #9198a1);
+  --text-on-emphasis: light-dark(#ffffff, #ffffff);
+  --text-link: light-dark(#0969da, #58a6ff);
+
+  /* Accent */
+  --accent-fg: light-dark(#0969da, #58a6ff);
+  --accent-emphasis: light-dark(#0969da, #1f6feb);
+
+  /* Status: fg for text and outlines, emphasis for filled shapes, subtle for tinted backgrounds */
+  --status-success-fg: light-dark(#1a7f37, #3fb950);
+  --status-success-emphasis: light-dark(#1a7f37, #238636);
+  --status-success-subtle: light-dark(#dafbe1, #12261e);
+  --status-warn-fg: light-dark(#9a6700, #d29922);
+  --status-warn-emphasis: light-dark(#9a6700, #9e6a03);
+  --status-warn-subtle: light-dark(#fff8c5, #272115);
+  --status-danger-fg: light-dark(#cf222e, #f85149);
+  --status-danger-emphasis: light-dark(#cf222e, #b62324);
+  --status-danger-subtle: light-dark(#ffebe9, #2d1517);
+  --status-info-fg: light-dark(#0969da, #58a6ff);
+  --status-info-emphasis: light-dark(#0969da, #1f6feb);
+  --status-info-subtle: light-dark(#ddf4ff, #121d2f);
+
+  /* Environments */
+  --env-local-fg: light-dark(#0f766e, #2dd4bf);
+  --env-staging-fg: light-dark(#bc4c00, #db6d28);
+  --env-prod-fg: light-dark(#a40e26, #ff7b72);
+  --env-prod-banner-bg: light-dark(#a40e26, #b62324);
+  --env-prod-banner-fg: light-dark(#ffffff, #ffffff);
+
+  /* Modal backdrop (not in the doc table; needed by dialogs and drawers) */
+  --overlay-backdrop: light-dark(rgb(31 35 40 / 0.2), rgb(1 4 9 / 0.6));
+  --shadow-color: light-dark(rgb(31 35 40 / 0.12), rgb(1 4 9 / 0.6));
+
+  /* Spacing, 4px base */
+  --space-0: 0px;
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --space-48: 48px;
+
+  /* Radius */
+  --radius-4: 4px;
+  --radius-6: 6px;
+  --radius-8: 8px;
+  --radius-full: 9999px;
+
+  /* Type scale (px); 13 is the default body size */
+  --font-size-11: 11px;
+  --font-size-12: 12px;
+  --font-size-13: 13px;
+  --font-size-14: 14px;
+  --font-size-16: 16px;
+  --font-size-20: 20px;
+
+  /* Row density */
+  --row-compact: 24px;
+  --row-default: 28px;
+  --row-comfortable: 32px;
+
+  /* shadcn/ui variables mapped onto dbscope tokens */
+  --background: var(--surface-canvas);
+  --foreground: var(--text-primary);
+  --card: var(--surface-raised);
+  --card-foreground: var(--text-primary);
+  --popover: var(--surface-overlay);
+  --popover-foreground: var(--text-primary);
+  --primary: var(--accent-emphasis);
+  --primary-foreground: var(--text-on-emphasis);
+  --secondary: var(--surface-subtle);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--surface-hover);
+  --muted-foreground: var(--text-muted);
+  --accent: var(--surface-hover);
+  --accent-foreground: var(--text-primary);
+  --destructive: var(--status-danger-fg);
+  --border: var(--border-default);
+  --input: var(--border-control);
+  --ring: var(--border-focus);
+  --radius: var(--radius-6);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}

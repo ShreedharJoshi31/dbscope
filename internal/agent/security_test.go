@@ -3,6 +3,7 @@ package agent
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -48,6 +49,11 @@ func TestGuard(t *testing.T) {
 			h.ServeHTTP(w, r)
 			if w.Code != c.want {
 				t.Fatalf("got %d, want %d", w.Code, c.want)
+			}
+			// The UI maps rejections by the JSON envelope's code, not the status.
+			wantCode := map[int]string{401: `"code":"unauthorized"`, 403: `"code":"forbidden"`}[c.want]
+			if wantCode != "" && !strings.Contains(w.Body.String(), wantCode) {
+				t.Fatalf("body %q lacks %s", w.Body.String(), wantCode)
 			}
 		})
 	}
