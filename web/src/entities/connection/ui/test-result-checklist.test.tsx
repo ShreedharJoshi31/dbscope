@@ -97,4 +97,32 @@ describe("TestResultChecklist", () => {
     const privileges = screen.getByText(/Write privileges: this login can change data \(1\)/).closest("li");
     expect(privileges).toHaveAttribute("data-tone", "warn");
   });
+
+  it("shows each prod-replica fact once and keeps the other server warnings", () => {
+    const sslWarning =
+      "sslMode is disable on a non-loopback host, so the password and query results travel unencrypted.";
+    render(
+      <TestResultChecklist
+        result={{
+          ...healthy,
+          isReplica: false,
+          defaultReadOnly: false,
+          writePrivileges: ["INSERT on public.orders"],
+          // Order as sent by internal/conn/probe.go.
+          warnings: [
+            sslWarning,
+            "env is prod-replica but the server is not in recovery, so it appears to be a primary.",
+            "env is prod-replica but this role has write privileges. A SELECT-only role is safer.",
+          ],
+        }}
+        env="prod-replica"
+      />,
+    );
+    const text = items().map((li) => li.textContent ?? "");
+    expect(text.filter((t) => /primary/.test(t))).toEqual(["Warning: Replica: no, this is a primary server"]);
+    const privileges = text.filter((t) => /write privileges/i.test(t));
+    expect(privileges).toHaveLength(1);
+    expect(privileges[0]).toMatch(/^Problem: Write privileges: this login can change/);
+    expect(screen.getByText(sslWarning).closest("li")).toHaveAttribute("data-tone", "warn");
+  });
 });

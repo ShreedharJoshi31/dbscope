@@ -1,4 +1,4 @@
-import { CircleAlert, KeyRound } from "lucide-react";
+import { CircleAlert, KeyRound, LoaderCircle } from "lucide-react";
 import { type FormEvent, useId, useState } from "react";
 import { useUnlockPrompt } from "@/features/unlock-secrets/model/unlock-prompt";
 import { useSecretsStatus, useUnlockSecrets } from "@/shared/api";
@@ -13,11 +13,18 @@ export function UnlockSecretsDialog() {
   const { data: status } = useSecretsStatus();
   const { dismissed, dismiss } = useUnlockPrompt();
   const open = Boolean(status?.locked) && !dismissed;
+  // The form stays mounted while the dialog animates closed; a new key on each open resets it.
+  const [formKey, setFormKey] = useState(0);
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setFormKey((key) => key + 1);
+  }
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && dismiss()}>
       <DialogContent className="sm:max-w-md" showCloseButton={false}>
-        {open && <UnlockForm onDismiss={dismiss} />}
+        <UnlockForm key={formKey} onDismiss={dismiss} />
       </DialogContent>
     </Dialog>
   );
@@ -41,7 +48,7 @@ function UnlockForm({ onDismiss }: { onDismiss: () => void }) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-4">
+    <form onSubmit={onSubmit} aria-busy={unlock.isPending} className="flex flex-col gap-4">
       <DialogHeader>
         <DialogTitle className="flex items-center gap-2">
           <KeyRound aria-hidden className="size-4 text-text-muted" />
@@ -63,9 +70,15 @@ function UnlockForm({ onDismiss }: { onDismiss: () => void }) {
           autoComplete="current-password"
           value={passphrase}
           onChange={(e) => setPassphrase(e.target.value)}
+          readOnly={unlock.isPending}
           aria-invalid={unlock.isError || undefined}
           aria-describedby={unlock.isError ? `${id}-error` : undefined}
         />
+        {unlock.isPending && (
+          <p role="status" className="text-xs text-text-muted">
+            Unlocking the vault. The first unlock can take a few seconds.
+          </p>
+        )}
         {unlock.isError && (
           <p id={`${id}-error`} className="flex items-start gap-1 text-xs text-status-danger-fg">
             <CircleAlert aria-hidden className="mt-0.5 size-3 shrink-0" />
@@ -78,6 +91,7 @@ function UnlockForm({ onDismiss }: { onDismiss: () => void }) {
           Not now
         </Button>
         <Button type="submit" disabled={!passphrase || unlock.isPending}>
+          {unlock.isPending && <LoaderCircle aria-hidden className="animate-spin" />}
           {unlock.isPending ? "Unlocking…" : "Unlock"}
         </Button>
       </DialogFooter>

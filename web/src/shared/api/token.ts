@@ -34,6 +34,22 @@ export function bootstrapToken(
   return cachedToken;
 }
 
+/**
+ * Pasting a new `dbscope ui` link into an open tab changes only the fragment,
+ * so the page does not reload and bootstrapToken never sees it. Adopt the new
+ * token and reload: the query cache and every screen derived from the old
+ * token (rejected, missing) then start over cleanly.
+ */
+export function reloadOnNewToken(win: Window = window): () => void {
+  const onHashChange = () => {
+    if (!new URLSearchParams(win.location.hash.replace(/^#/, "")).get("t")) return;
+    bootstrapToken({ location: win.location, history: win.history, storage: safeSessionStorage });
+    win.location.reload();
+  };
+  win.addEventListener("hashchange", onHashChange);
+  return () => win.removeEventListener("hashchange", onHashChange);
+}
+
 export function getToken(): string | null {
   return cachedToken;
 }

@@ -138,4 +138,23 @@ describe("ConnectionForm", () => {
 
     expect(await screen.findByText(/A connection with this name already exists/)).toBeInTheDocument();
   });
+
+  it("clears the test result when the environment changes", async () => {
+    server.use(
+      http.post("/api/profiles/test", () =>
+        HttpResponse.json({ ok: true, latencyMs: 4, isReplica: false, writePrivileges: [], warnings: [] }),
+      ),
+    );
+    const { user } = renderForm();
+    await user.type(screen.getByLabelText("Name"), "reports");
+    await user.click(screen.getByRole("radio", { name: /staging/ }));
+    await user.type(screen.getByLabelText("Host"), "replica.internal");
+    await user.type(screen.getByLabelText("Database"), "reports");
+    await user.type(screen.getByLabelText("User"), "reader");
+    await user.click(screen.getByRole("button", { name: "Test connection" }));
+    expect(await screen.findByText("Connected in 4 ms")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("radio", { name: /prod-replica/ }));
+    expect(screen.queryByRole("region", { name: "Connection test result" })).not.toBeInTheDocument();
+  });
 });

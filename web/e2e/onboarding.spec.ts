@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openApp, stubAgent } from "./support/agent-stub";
+import { E2E_TOKEN, openApp, stubAgent, stubProfile } from "./support/agent-stub";
 
 test.describe("first run", () => {
   test("paste URL, test, save and land in the workbench", async ({ page, context }) => {
@@ -53,5 +53,26 @@ test.describe("first run", () => {
     await stubAgent(page);
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "Open dbscope from the URL printed by dbscope ui" })).toBeVisible();
+  });
+
+  test("pasting a new session link into a tab with a rejected token recovers", async ({ page }) => {
+    await stubAgent(page, { profiles: [stubProfile()] });
+    await page.goto("/#t=stale-token-from-an-old-agent");
+    await expect(page.getByText("The dbscope agent did not accept this session.", { exact: false })).toBeVisible();
+
+    // Same document, only the fragment changes: the browser fires hashchange instead of loading the page.
+    await page.goto(`/#t=${E2E_TOKEN}`);
+    await expect(page.getByRole("complementary", { name: "Schema explorer" })).toBeVisible();
+    await expect(page).toHaveURL(/\/$/);
+  });
+
+  test("pasting a session link into a tab that had no token recovers", async ({ page }) => {
+    await stubAgent(page);
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "Open dbscope from the URL printed by dbscope ui" })).toBeVisible();
+
+    await page.goto(`/#t=${E2E_TOKEN}`);
+    await expect(page.getByRole("heading", { name: "Connect to PostgreSQL" })).toBeVisible();
+    await expect(page).toHaveURL(/\/$/);
   });
 });

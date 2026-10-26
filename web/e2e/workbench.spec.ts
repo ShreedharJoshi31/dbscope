@@ -118,6 +118,69 @@ test.describe("workbench", () => {
     await expect(drawer).toBeHidden();
   });
 
+  test("crossing the 1280px breakpoint keeps every panel's open state", async ({ page }) => {
+    await stubAgent(page, { profiles: [stubProfile()] });
+    await openApp(page);
+
+    const explorer = page.getByRole("complementary", { name: "Schema explorer" });
+    const dock = page.getByRole("region", { name: "Results dock" });
+    const inlineAssistant = page.getByRole("complementary", { name: "Assistant" });
+    const drawer = page.getByRole("dialog", { name: "Assistant" });
+    const assistantToggle = page.getByRole("navigation", { name: "Workbench" }).getByRole("button", {
+      name: "Toggle assistant",
+    });
+
+    await expect(explorer).toBeVisible();
+    await expect(inlineAssistant).toBeVisible();
+
+    // Wide -> narrow: the explorer stays open and the first Cmd/Ctrl+I opens the drawer.
+    await page.setViewportSize({ width: 1100, height: 760 });
+    await expect(inlineAssistant).toHaveCount(0);
+    await expect(explorer).toBeVisible();
+    await expect(assistantToggle).toHaveAttribute("aria-pressed", "false");
+    await page.keyboard.press("ControlOrMeta+I");
+    await expect(drawer).toBeVisible();
+    await page.keyboard.press("ControlOrMeta+I");
+    await expect(drawer).toBeHidden();
+    await assistantToggle.click();
+    await expect(drawer).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(drawer).toBeHidden();
+    await page.keyboard.press("ControlOrMeta+J");
+    await expect(dock).toBeVisible();
+
+    // Narrow -> wide: the explorer, the dock and the inline assistant are as they were.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await expect(explorer).toBeVisible();
+    await expect(dock).toBeVisible();
+    await expect(inlineAssistant).toBeVisible();
+    await expect(assistantToggle).toHaveAttribute("aria-pressed", "true");
+
+    // The first Cmd/Ctrl+I hides the inline panel, and that choice survives a round trip.
+    await page.keyboard.press("ControlOrMeta+I");
+    await expect(inlineAssistant).toBeHidden();
+    await page.setViewportSize({ width: 1100, height: 760 });
+    await expect(explorer).toBeVisible();
+    await expect(dock).toBeVisible();
+    // Collapsing the explorer while narrow keeps it collapsed when going wide.
+    await page.keyboard.press("ControlOrMeta+B");
+    await expect(explorer).toBeHidden();
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await expect(explorer).toBeHidden();
+    await expect(dock).toBeVisible();
+    await expect(inlineAssistant).toBeHidden();
+    await page.keyboard.press("ControlOrMeta+I");
+    await expect(inlineAssistant).toBeVisible();
+    await page.keyboard.press("ControlOrMeta+B");
+    await expect(explorer).toBeVisible();
+
+    // The persisted layout agrees with what is on screen.
+    await page.reload();
+    await expect(page.getByRole("complementary", { name: "Schema explorer" })).toBeVisible();
+    await expect(page.getByRole("complementary", { name: "Assistant" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Results dock" })).toBeVisible();
+  });
+
   test("deleting a prod-replica connection requires typing its name", async ({ page }) => {
     await stubAgent(page, {
       profiles: [

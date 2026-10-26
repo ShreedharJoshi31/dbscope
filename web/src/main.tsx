@@ -3,9 +3,10 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "@/app/app";
 import { applyInitialTheme } from "@/app/theme";
-import { bootstrapToken } from "@/shared/api";
+import { bootstrapToken, reloadOnNewToken } from "@/shared/api";
 
 bootstrapToken();
+reloadOnNewToken();
 applyInitialTheme();
 
 const root = document.getElementById("root");

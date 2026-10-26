@@ -97,7 +97,8 @@ export function ConnectionForm({ profile, submitLabel, onSaved, onCancel, autoFo
       return next;
     });
     if (field === "statementTimeoutMs") setTimeoutEdited(true);
-    if (CONNECTION_FIELDS.has(field)) setTestResult(null);
+    // The server's warnings depend on the env it tested with, so a new env needs a new test.
+    if (CONNECTION_FIELDS.has(field) || field === "env") setTestResult(null);
     setFormError(null);
   }
 
