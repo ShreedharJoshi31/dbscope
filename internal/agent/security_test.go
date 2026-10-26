@@ -53,6 +53,29 @@ func TestGuard(t *testing.T) {
 	}
 }
 
+func TestGuardDevOrigin(t *testing.T) {
+	ok := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	for _, c := range []struct {
+		devOrigin, origin string
+		want              int
+	}{
+		{"", "http://localhost:5173", 403},
+		{"http://localhost:5173", "http://localhost:5173", 204},
+		{"http://localhost:5173", "http://localhost:5174", 403},
+	} {
+		h := guard{port: "4555", token: []byte("t"), devOrigin: c.devOrigin}.wrap(ok)
+		r := httptest.NewRequest("GET", "/api/health", nil)
+		r.Host = "127.0.0.1:4555"
+		r.Header.Set("Origin", c.origin)
+		r.Header.Set(TokenHeader, "t")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code != c.want {
+			t.Fatalf("devOrigin=%q origin=%q: got %d, want %d", c.devOrigin, c.origin, w.Code, c.want)
+		}
+	}
+}
+
 func TestNewTokenIsRandom(t *testing.T) {
 	a, _ := NewToken()
 	b, _ := NewToken()

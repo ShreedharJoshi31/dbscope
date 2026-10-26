@@ -27,6 +27,8 @@ func NewToken() (string, error) {
 type guard struct {
 	port  string
 	token []byte
+	// devOrigin is the Vite dev server origin, set only by an explicit --dev-origin flag.
+	devOrigin string
 }
 
 func (g guard) allowedHost(host string) bool {
@@ -38,6 +40,9 @@ func (g guard) allowedHost(host string) bool {
 }
 
 func (g guard) allowedOrigin(origin string) bool {
+	if g.devOrigin != "" && origin == g.devOrigin {
+		return true
+	}
 	rest, ok := strings.CutPrefix(origin, "http://")
 	return ok && g.allowedHost(rest)
 }
