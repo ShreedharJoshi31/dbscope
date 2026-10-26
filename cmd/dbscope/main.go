@@ -131,6 +131,8 @@ func serve(log *slog.Logger, port int, portSet, noOpen bool, devOrigin string) e
 	if err != nil {
 		return err
 	}
+	// Deferred after st.Close, so it runs first: pools close before the store.
+	defer h.Close()
 	srv := &http.Server{
 		Handler:           h,
 		ReadHeaderTimeout: 10 * time.Second,

@@ -242,3 +242,7 @@ func isTLSError(err error) bool {
 	msg := err.Error()
 	return strings.Contains(msg, "tls:") || strings.Contains(msg, "refused TLS")
 }
+
+// Classify sorts a connection or query error into the TestError kinds, so
+// other packages report failures the same way the connection test does.
+func Classify(err error) *TestError { return classify(err) }

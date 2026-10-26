@@ -88,7 +88,8 @@ Profile create/update/test-by-id with a locked vault → `423 {"error":{"code":"
   Non-system schemas (excludes `pg_catalog`, `information_schema`, `pg_toast`, `pg_temp_*`), sorted by name.
   Lets the UI offer a schema picker. Requires the vault to be unlocked when the profile has a password (`423` otherwise).
 - `GET /api/profiles/{id}/schema` → `200 Model` (the JSON form of `internal/schema.Model`)
-  Introspects `profile.schemas`, or every non-system schema when that list is empty. Runs in one
+  Introspects `profile.schemas`, or, when that list is empty, every non-system schema the role has USAGE on
+  (schemas named explicitly are read even without USAGE, since catalogs are world-readable). Runs in one
   `REPEATABLE READ READ ONLY` transaction with `statement_timeout` = the profile's `statementTimeoutMs`.
   Partitions are collapsed into their parent (`partitions`, `partitionKey`, summed `rowEstimate`).
   Relations outside the selected schemas that a foreign key references are included with `"stub": true`.
@@ -114,4 +115,5 @@ Profile create/update/test-by-id with a locked vault → `423 {"error":{"code":"
 - `GET /api/sample/schema` → `200 Model` — a built-in, realistic ~40-table e-commerce + SaaS schema
   (no database needed) used by the onboarding "Open sample schema" action. `serverVersion` is 170000.
 
-New error codes: `upstream` (502), `timeout` (504).
+New error codes: `upstream` (502), `timeout` (504). A schema request that arrives while the agent is
+shutting down gets `503 internal`.

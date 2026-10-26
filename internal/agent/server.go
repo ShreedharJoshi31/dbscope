@@ -28,17 +28,30 @@ type Config struct {
 	Store   *store.Store
 	Secrets *secrets.Vault
 	Logger  *slog.Logger
+	// Schema reads database structure; nil keeps a pgx pool per profile.
+	Schema SchemaSource
 }
 
 type server struct {
-	store *store.Store
-	vault *secrets.Vault
-	log   *slog.Logger
+	store  *store.Store
+	vault  *secrets.Vault
+	log    *slog.Logger
+	source SchemaSource
 }
+
+// Agent is the agent's HTTP handler. Close releases its database pools.
+type Agent struct {
+	http.Handler
+	source SchemaSource
+}
+
+// Close closes every database pool, waiting for in-flight queries to return
+// their connections. Call it after the HTTP server has shut down.
+func (a *Agent) Close() { a.source.Close() }
 
 // New returns the agent's HTTP handler: API routes and static assets behind
 // the localhost guard.
-func New(cfg Config) (http.Handler, error) {
+func New(cfg Config) (*Agent, error) {
 	switch {
 	case cfg.Token == "":
 		return nil, errors.New("agent: empty token would disable API authentication")
@@ -47,9 +60,12 @@ func New(cfg Config) (http.Handler, error) {
 	case cfg.Store == nil || cfg.Secrets == nil:
 		return nil, errors.New("agent: Store and Secrets are required")
 	}
-	s := &server{store: cfg.Store, vault: cfg.Secrets, log: cfg.Logger}
+	s := &server{store: cfg.Store, vault: cfg.Secrets, log: cfg.Logger, source: cfg.Schema}
 	if s.log == nil {
 		s.log = slog.New(slog.DiscardHandler)
+	}
+	if s.source == nil {
+		s.source = newPools()
 	}
 
 	mux := http.NewServeMux()
@@ -63,13 +79,19 @@ func New(cfg Config) (http.Handler, error) {
 	mux.HandleFunc("POST /api/connection-url/parse", s.parseURL)
 	mux.HandleFunc("GET /api/secrets/status", s.secretsStatus)
 	mux.HandleFunc("POST /api/secrets/unlock", s.unlock)
+	mux.HandleFunc("GET /api/profiles/{id}/namespaces", s.namespaces)
+	mux.HandleFunc("GET /api/profiles/{id}/schema", s.schema)
+	mux.HandleFunc("PUT /api/profiles/{id}/inferred-fks", s.setInferredFK)
+	mux.HandleFunc("GET /api/profiles/{id}/layout", s.getLayout)
+	mux.HandleFunc("PUT /api/profiles/{id}/layout", s.putLayout)
+	mux.HandleFunc("GET /api/sample/schema", s.sampleSchema)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "no such API route")
 	})
 	mux.Handle("/", getOnly(static(cfg.Assets)))
 
 	g := guard{port: strconv.Itoa(cfg.Port), token: []byte(cfg.Token), devOrigin: cfg.DevOrigin}
-	return g.wrap(mux), nil
+	return &Agent{Handler: g.wrap(mux), source: s.source}, nil
 }
 
 type apiError struct {
@@ -86,6 +108,10 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func writeError(w http.ResponseWriter, status int, code, msg string) {
 	writeJSON(w, status, map[string]apiError{"error": {Code: code, Message: msg}})
+}
+
+func writeErrorDetail(w http.ResponseWriter, status int, code, msg, detail string) {
+	writeJSON(w, status, map[string]apiError{"error": {Code: code, Message: msg, Detail: detail}})
 }
 
 // internalError logs the cause and returns a generic 500; causes can name

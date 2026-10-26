@@ -120,6 +120,7 @@ func (s *server) updateProfile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	s.source.Forget(p.ID)
 	writeJSON(w, http.StatusOK, updated)
 }
 
@@ -138,6 +139,7 @@ func (s *server) deleteProfile(w http.ResponseWriter, r *http.Request) {
 		s.storeError(w, r, err)
 		return
 	}
+	s.source.Forget(p.ID)
 	w.WriteHeader(http.StatusNoContent)
 }
 

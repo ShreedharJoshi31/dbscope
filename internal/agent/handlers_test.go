@@ -30,6 +30,7 @@ const (
 type env struct {
 	t     *testing.T
 	h     http.Handler
+	agent *Agent
 	store *store.Store
 	vault *secrets.Vault
 }
@@ -41,11 +42,12 @@ func newEnv(t *testing.T, vault *secrets.Vault, dir string) *env {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
-	h, err := New(Config{Port: testPort, Token: testToken, Store: st, Secrets: vault})
+	a, err := New(Config{Port: testPort, Token: testToken, Store: st, Secrets: vault})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &env{t: t, h: h, store: st, vault: vault}
+	t.Cleanup(a.Close)
+	return &env{t: t, h: a, agent: a, store: st, vault: vault}
 }
 
 // keyringEnv has an unlocked vault backed by the mock keyring.
