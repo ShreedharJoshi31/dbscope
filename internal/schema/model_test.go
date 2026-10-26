@@ -16,7 +16,7 @@ func sample() *Model {
 				Columns:    []Column{{Name: "id", Type: "bigint"}},
 				PrimaryKey: []string{"id"},
 				Uniques:    [][]string{{"id"}},
-				Indexes:    []Index{{Name: "users_pkey", Columns: []string{"id"}, Primary: true}}},
+				Indexes:    []Index{{Name: "users_pkey", Columns: []string{"id"}, Include: []string{"x"}, Primary: true}}},
 			{Schema: "public", Name: "orders", Kind: KindTable,
 				Columns:     []Column{{Name: "user_id", Type: "bigint"}},
 				ForeignKeys: []ForeignKey{{Name: "fk", Columns: []string{"user_id"}, Ref: QualifiedName{"public", "users"}, RefCols: []string{"id"}}}},
@@ -35,6 +35,7 @@ func TestCloneIsDeep(t *testing.T) {
 	c.Relations[0].PrimaryKey[0] = "x"
 	c.Relations[0].Uniques[0][0] = "x"
 	c.Relations[0].Indexes[0].Columns[0] = "x"
+	c.Relations[0].Indexes[0].Include[0] = "y"
 	c.Relations[1].ForeignKeys[0].Columns[0] = "x"
 	c.Relations[1].ForeignKeys[0].RefCols[0] = "x"
 	c.Enums[0].Values[0] = "x"

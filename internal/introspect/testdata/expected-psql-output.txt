@@ -1,0 +1,147 @@
+######## PG14
+--- a_relations
+oid | schema | name | kind | relispartition | partition_parent | partition_bound | partition_key | reltuples | relpages | persistence | relrowsecurity | comment
+16393 | app | accounts | r | f |  |  |  | 0 | 0 | p | f | customer accounts
+16445 | app | big_orders | v | f |  |  |  | -1 | 0 | p | f | 
+16421 | app | events | p | f |  |  | RANGE (at) | -1 | 0 | p | f | 
+16429 | app | events_2026 | r | t | 16421 | FOR VALUES FROM ('2026-01-01') TO ('2027-01-01') |  | -1 | 0 | p | f | 
+16437 | app | events_2027 | r | t | 16421 | FOR VALUES FROM ('2027-01-01') TO ('2028-01-01') |  | -1 | 0 | p | f | 
+16449 | app | order_totals | m | f |  |  |  | -1 | 0 | p | f | 
+16404 | app | orders | r | f |  |  |  | -1 | 0 | p | f | 
+16471 | hidden | secret | r | f |  |  |  | -1 | 0 | p | f | 
+16462 | public | legacy_posts | r | f |  |  |  | -1 | 0 | p | f | 
+16455 | public | legacy_users | r | f |  |  |  | -1 | 0 | p | f | 
+(10 rows)
+--- b_columns
+rel_oid | num | name | type | type_oid | typtype | elem_type_oid | not_null | domain_not_null | default_expr | generated_expr | identity | generated | attislocal | inhcount | comment
+16393 | 1 | region | text | 25 | b | 0 | t | f |  |  |  |  | t | 0 | 
+16393 | 2 | id | bigint | 20 | b | 0 | t | f |  |  |  |  | t | 0 | 
+16393 | 3 | email | text | 25 | b | 0 | t | f |  |  |  |  | t | 0 | login email
+16393 | 4 | status | app.status | 16387 | e | 0 | t | f | 'active'::app.status |  |  |  | t | 0 | 
+16404 | 1 | id | bigint | 20 | b | 0 | t | f |  |  | a |  | t | 0 | 
+16404 | 2 | acct_id | bigint | 20 | b | 0 | t | f |  |  |  |  | t | 0 | 
+16404 | 3 | acct_region | text | 25 | b | 0 | t | f |  |  |  |  | t | 0 | 
+16404 | 4 | total | numeric(12,2) | 1700 | b | 0 | t | f |  |  |  |  | t | 0 | 
+16404 | 5 | created_at | timestamp with time zone | 1184 | b | 0 | t | f | now() |  |  |  | t | 0 | 
+16404 | 6 | total_cents | bigint | 20 | b | 0 | f | f |  | ((total * (100)::numeric))::bigint |  | s | t | 0 | 
+16421 | 1 | id | bigint | 20 | b | 0 | t | f |  |  |  |  | t | 0 | 
+16421 | 2 | at | date | 1082 | b | 0 | t | f |  |  |  |  | t | 0 | 
+16421 | 3 | order_id | bigint | 20 | b | 0 | f | f |  |  |  |  | t | 0 | 
+16445 | 1 | id | bigint | 20 | b | 0 | f | f |  |  |  |  | t | 0 | 
+16445 | 2 | email | text | 25 | b | 0 | f | f |  |  |  |  | t | 0 | 
+16449 | 1 | acct_id | bigint | 20 | b | 0 | f | f |  |  |  |  | t | 0 | 
+16449 | 2 | s | numeric | 1700 | b | 0 | f | f |  |  |  |  | t | 0 | 
+16455 | 1 | id | integer | 23 | b | 0 | t | f |  |  |  |  | t | 0 | 
+16455 | 2 | name | text | 25 | b | 0 | f | f |  |  |  |  | t | 0 | 
+16462 | 1 | id | integer | 23 | b | 0 | t | f |  |  |  |  | t | 0 | 
+16462 | 2 | legacy_user_id | integer | 23 | b | 0 | f | f |  |  |  |  | t | 0 | 
+16462 | 3 | body | text | 25 | b | 0 | f | f |  |  |  |  | t | 0 | 
+16471 | 1 | id | integer | 23 | b | 0 | f | f |  |  |  |  | t | 0 | 
+(23 rows)
+--- c_constraints
+oid | rel_oid | name | type | condeferrable | condeferred | convalidated | columns | ref_rel_oid | ref_columns | on_delete | on_update | match_type | definition | comment
+16400 | 16393 | accounts_pkey | p | f | f | t | {region,id} |  | {} |  |  |  |  | 
+16402 | 16393 | accounts_email_key | u | f | f | t | {email} |  | {} |  |  |  |  | 
+16409 | 16404 | orders_total_check | c | f | f | t | {total} |  | {} |  |  |  | CHECK (total >= 0::numeric) | 
+16414 | 16404 | orders_acct_region_acct_id_fkey | f | f | f | t | {acct_region,acct_id} | 16393 | {region,id} | c | a | s |  | 
+16413 | 16404 | orders_pkey | p | f | f | t | {id} |  | {} |  |  |  |  | 
+16426 | 16421 | events_order_id_fkey | f | f | f | t | {order_id} | 16404 | {id} | a | a | s |  | 
+16425 | 16421 | events_pkey | p | f | f | t | {id,at} |  | {} |  |  |  |  | 
+16461 | 16455 | legacy_users_pkey | p | f | f | t | {id} |  | {} |  |  |  |  | 
+16468 | 16462 | legacy_posts_pkey | p | f | f | t | {id} |  | {} |  |  |  |  | 
+(9 rows)
+--- d_indexes
+index_oid | rel_oid | name | method | indisunique | indisprimary | indisexclusion | indisvalid | indisready | key_count | elements | options | predicate | constraint_oid
+16401 | 16393 | accounts_email_key | btree | t | f | f | t | t | 1 | {email} | [0:0]={0} |  | 16402
+16399 | 16393 | accounts_pkey | btree | t | t | f | t | t | 2 | {region,id} | [0:1]={0,0} |  | 16400
+16420 | 16404 | orders_lower | btree | f | f | f | t | t | 2 | {lower(acct_region),acct_id} | [0:1]={0,0} |  | 
+16412 | 16404 | orders_pkey | btree | t | t | f | t | t | 1 | {id} | [0:0]={0} |  | 16413
+16419 | 16404 | orders_recent | btree | f | f | f | t | t | 1 | {created_at,total} | [0:0]={3} | total > 0::numeric | 
+16424 | 16421 | events_pkey | btree | t | t | f | t | t | 2 | {id,at} | [0:1]={0,0} |  | 16425
+16460 | 16455 | legacy_users_pkey | btree | t | t | f | t | t | 1 | {id} | [0:0]={0} |  | 16461
+16467 | 16462 | legacy_posts_pkey | btree | t | t | f | t | t | 1 | {id} | [0:0]={0} |  | 16468
+(8 rows)
+--- e_viewdeps
+view_oid | view_kind | base_oid | base_attnums
+16445 | v | 16393 | {1,2,3}
+16445 | v | 16404 | {1,2,3,4}
+16449 | m | 16404 | {2,4}
+(3 rows)
+--- f_enums
+type_oid | schema | name | labels
+16387 | app | status | {active,suspended,closed}
+(1 row)
+######## PG18
+--- a_relations
+oid | schema | name | kind | relispartition | partition_parent | partition_bound | partition_key | reltuples | relpages | persistence | relrowsecurity | comment
+16393 | app | accounts | r | f |  |  |  | 0 | 0 | p | f | customer accounts
+16462 | app | big_orders | v | f |  |  |  | -1 | 0 | p | f | 
+16430 | app | events | p | f |  |  | RANGE (at) | -1 | 0 | p | f | 
+16442 | app | events_2026 | r | t | 16430 | FOR VALUES FROM ('2026-01-01') TO ('2027-01-01') |  | -1 | 0 | p | f | 
+16452 | app | events_2027 | r | t | 16430 | FOR VALUES FROM ('2027-01-01') TO ('2028-01-01') |  | -1 | 0 | p | f | 
+16466 | app | order_totals | m | f |  |  |  | -1 | 0 | p | f | 
+16408 | app | orders | r | f |  |  |  | -1 | 0 | p | f | 
+16495 | hidden | secret | r | f |  |  |  | -1 | 0 | p | f | 
+16485 | public | legacy_posts | r | f |  |  |  | -1 | 0 | p | f | 
+16477 | public | legacy_users | r | f |  |  |  | -1 | 0 | p | f | 
+(10 rows)
+--- b_columns
+rel_oid | num | name | type | type_oid | typtype | elem_type_oid | not_null | domain_not_null | default_expr | generated_expr | identity | generated | attislocal | inhcount | comment
+16393 | 1 | region | text | 25 | b | 0 | t | f |  |  |  |  | t | 0 | 
+16393 | 2 | id | bigint | 20 | b | 0 | t | f |  |  |  |  | t | 0 | 
+16393 | 3 | email | text | 25 | b | 0 | t | f |  |  |  |  | t | 0 | login email
+16393 | 4 | status | app.status | 16387 | e | 0 | t | f | 'active'::app.status |  |  |  | t | 0 | 
+16408 | 1 | id | bigint | 20 | b | 0 | t | f |  |  | a |  | t | 0 | 
+16408 | 2 | acct_id | bigint | 20 | b | 0 | t | f |  |  |  |  | t | 0 | 
+16408 | 3 | acct_region | text | 25 | b | 0 | t | f |  |  |  |  | t | 0 | 
+16408 | 4 | total | numeric(12,2) | 1700 | b | 0 | t | f |  |  |  |  | t | 0 | 
+16408 | 5 | created_at | timestamp with time zone | 1184 | b | 0 | t | f | now() |  |  |  | t | 0 | 
+16408 | 6 | total_cents | bigint | 20 | b | 0 | f | f |  | ((total * (100)::numeric))::bigint |  | s | t | 0 | 
+16408 | 7 | total_virtual | bigint | 20 | b | 0 | f | f |  | ((total * (10)::numeric))::bigint |  | v | t | 0 | 
+16430 | 1 | id | bigint | 20 | b | 0 | t | f |  |  |  |  | t | 0 | 
+16430 | 2 | at | date | 1082 | b | 0 | t | f |  |  |  |  | t | 0 | 
+16430 | 3 | order_id | bigint | 20 | b | 0 | f | f |  |  |  |  | t | 0 | 
+16462 | 1 | id | bigint | 20 | b | 0 | f | f |  |  |  |  | t | 0 | 
+16462 | 2 | email | text | 25 | b | 0 | f | f |  |  |  |  | t | 0 | 
+16466 | 1 | acct_id | bigint | 20 | b | 0 | f | f |  |  |  |  | t | 0 | 
+16466 | 2 | s | numeric | 1700 | b | 0 | f | f |  |  |  |  | t | 0 | 
+16477 | 1 | id | integer | 23 | b | 0 | t | f |  |  |  |  | t | 0 | 
+16477 | 2 | name | text | 25 | b | 0 | f | f |  |  |  |  | t | 0 | 
+16485 | 1 | id | integer | 23 | b | 0 | t | f |  |  |  |  | t | 0 | 
+16485 | 2 | legacy_user_id | integer | 23 | b | 0 | f | f |  |  |  |  | t | 0 | 
+16485 | 3 | body | text | 25 | b | 0 | f | f |  |  |  |  | t | 0 | 
+16495 | 1 | id | integer | 23 | b | 0 | f | f |  |  |  |  | t | 0 | 
+(24 rows)
+--- c_constraints
+oid | rel_oid | name | type | condeferrable | condeferred | convalidated | columns | ref_rel_oid | ref_columns | on_delete | on_update | match_type | definition | comment
+16404 | 16393 | accounts_pkey | p | f | f | t | {region,id} |  | {} |  |  |  |  | 
+16406 | 16393 | accounts_email_key | u | f | f | t | {email} |  | {} |  |  |  |  | 
+16413 | 16408 | orders_total_check | c | f | f | t | {total} |  | {} |  |  |  | CHECK (total >= 0::numeric) | 
+16423 | 16408 | orders_acct_region_acct_id_fkey | f | f | f | t | {acct_region,acct_id} | 16393 | {region,id} | c | a | s |  | 
+16422 | 16408 | orders_pkey | p | f | f | t | {id} |  | {} |  |  |  |  | 
+16437 | 16430 | events_order_id_fkey | f | f | f | t | {order_id} | 16408 | {id} | a | a | s |  | 
+16436 | 16430 | events_pkey | p | f | f | t | {id,at} |  | {} |  |  |  |  | 
+16484 | 16477 | legacy_users_pkey | p | f | f | t | {id} |  | {} |  |  |  |  | 
+16492 | 16485 | legacy_posts_pkey | p | f | f | t | {id} |  | {} |  |  |  |  | 
+(9 rows)
+--- d_indexes
+index_oid | rel_oid | name | method | indisunique | indisprimary | indisexclusion | indisvalid | indisready | key_count | elements | options | predicate | constraint_oid
+16405 | 16393 | accounts_email_key | btree | t | f | f | t | t | 1 | {email} | [0:0]={0} |  | 16406
+16403 | 16393 | accounts_pkey | btree | t | t | f | t | t | 2 | {region,id} | [0:1]={0,0} |  | 16404
+16429 | 16408 | orders_lower | btree | f | f | f | t | t | 2 | {lower(acct_region),acct_id} | [0:1]={0,0} |  | 
+16421 | 16408 | orders_pkey | btree | t | t | f | t | t | 1 | {id} | [0:0]={0} |  | 16422
+16428 | 16408 | orders_recent | btree | f | f | f | t | t | 1 | {created_at,total} | [0:0]={3} | total > 0::numeric | 
+16435 | 16430 | events_pkey | btree | t | t | f | t | t | 2 | {id,at} | [0:1]={0,0} |  | 16436
+16483 | 16477 | legacy_users_pkey | btree | t | t | f | t | t | 1 | {id} | [0:0]={0} |  | 16484
+16491 | 16485 | legacy_posts_pkey | btree | t | t | f | t | t | 1 | {id} | [0:0]={0} |  | 16492
+(8 rows)
+--- e_viewdeps
+view_oid | view_kind | base_oid | base_attnums
+16462 | v | 16393 | {1,2,3}
+16462 | v | 16408 | {1,2,3,4}
+16466 | m | 16408 | {2,4}
+(3 rows)
+--- f_enums
+type_oid | schema | name | labels
+16387 | app | status | {active,suspended,closed}
+(1 row)

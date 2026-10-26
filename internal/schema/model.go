@@ -6,6 +6,7 @@ package schema
 import (
 	"fmt"
 	"slices"
+	"time"
 )
 
 type RelKind string
@@ -19,10 +20,12 @@ const (
 )
 
 type Model struct {
-	ServerVersion int        `json:"serverVersion"` // server_version_num, e.g. 170002
-	Schemas       []string   `json:"schemas"`
-	Relations     []Relation `json:"relations"`
-	Enums         []Enum     `json:"enums"`
+	ServerVersion  int        `json:"serverVersion"` // server_version_num, e.g. 170002
+	Schemas        []string   `json:"schemas"`
+	Relations      []Relation `json:"relations"`
+	Enums          []Enum     `json:"enums"`
+	IntrospectedAt time.Time  `json:"introspectedAt"`
+	DurationMs     int64      `json:"durationMs"`
 }
 
 type Relation struct {
@@ -30,7 +33,8 @@ type Relation struct {
 	Name    string  `json:"name"`
 	Kind    RelKind `json:"kind"`
 	Comment string  `json:"comment,omitempty"`
-	// RowEstimate is pg_class.reltuples; nil when the table was never analyzed.
+	// RowEstimate is pg_class.reltuples (summed over partitions for a
+	// partitioned table); nil when never analyzed.
 	RowEstimate *int64       `json:"rowEstimate"`
 	Pages       int64        `json:"pages"`
 	Columns     []Column     `json:"columns"`
@@ -39,8 +43,13 @@ type Relation struct {
 	Uniques     [][]string   `json:"uniques,omitempty"`
 	Checks      []Check      `json:"checks,omitempty"`
 	Indexes     []Index      `json:"indexes,omitempty"`
+	// PartitionKey is pg_get_partkeydef for a partitioned table, e.g. "RANGE (at)".
+	PartitionKey string `json:"partitionKey,omitempty"`
 	// Partitions lists child relations collapsed under a partitioned parent.
 	Partitions []QualifiedName `json:"partitions,omitempty"`
+	// Stub marks a relation outside the selected schemas that a foreign key
+	// points at; only its name, kind and primary key are filled in.
+	Stub bool `json:"stub,omitempty"`
 	// DependsOn holds the relations a view or matview reads from.
 	DependsOn []QualifiedName `json:"dependsOn,omitempty"`
 }
@@ -50,18 +59,23 @@ type Column struct {
 	Type     string `json:"type"` // format_type() output, e.g. "character varying(255)"
 	Nullable bool   `json:"nullable"`
 	Default  string `json:"default,omitempty"`
-	Identity bool   `json:"identity,omitempty"`
-	// Generated is the expression of a stored generated column.
-	Generated string `json:"generated,omitempty"`
-	Comment   string `json:"comment,omitempty"`
+	// Identity is "always" or "by_default" for identity columns.
+	Identity string `json:"identity,omitempty"`
+	// Generated is the expression of a generated column; GeneratedKind is
+	// "stored" or "virtual" (virtual exists from PostgreSQL 18).
+	Generated     string `json:"generated,omitempty"`
+	GeneratedKind string `json:"generatedKind,omitempty"`
+	Comment       string `json:"comment,omitempty"`
 }
 
+// FK actions use the SQL words: "no action", "restrict", "cascade", "set null", "set default".
 type ForeignKey struct {
 	Name      string        `json:"name"`
 	Columns   []string      `json:"columns"`
 	Ref       QualifiedName `json:"ref"`
 	RefCols   []string      `json:"refColumns"`
 	OnDelete  string        `json:"onDelete,omitempty"`
+	OnUpdate  string        `json:"onUpdate,omitempty"`
 	Validated bool          `json:"validated"`
 	// Inferred marks a relationship guessed from naming, not declared in the catalog.
 	Inferred   bool    `json:"inferred,omitempty"`
@@ -77,6 +91,7 @@ type Check struct {
 type Index struct {
 	Name    string   `json:"name"`
 	Columns []string `json:"columns"` // expression indexes appear as their expression text
+	Include []string `json:"include,omitempty"`
 	Unique  bool     `json:"unique"`
 	Primary bool     `json:"primary"`
 	Method  string   `json:"method"` // btree, gin, ...
@@ -147,6 +162,7 @@ func (m *Model) Clone() *Model {
 		r.Indexes = slices.Clone(r.Indexes)
 		for j := range r.Indexes {
 			r.Indexes[j].Columns = slices.Clone(r.Indexes[j].Columns)
+			r.Indexes[j].Include = slices.Clone(r.Indexes[j].Include)
 		}
 		r.Partitions = slices.Clone(r.Partitions)
 		r.DependsOn = slices.Clone(r.DependsOn)
