@@ -117,3 +117,74 @@ Profile create/update/test-by-id with a locked vault → `423 {"error":{"code":"
 
 New error codes: `upstream` (502), `timeout` (504). A schema request that arrives while the agent is
 shutting down gets `503 internal`.
+
+## Phase 2
+
+Design and verified facts: `docs/QUERY-SAFETY.md`.
+
+### Run a query
+
+`POST /api/profiles/{id}/query`
+
+```ts
+interface QueryRequest {
+  sql: string;              // exactly one SELECT (incl. VALUES / TABLE / WITH ... SELECT)
+  maxRows?: number;         // default 500, 1..5000
+  analyze?: boolean;        // EXPLAIN ANALYZE as well (executes the query a second time); default false
+  confirmCost?: boolean;    // re-send true after a 409 cost_confirmation_required
+}
+interface QueryResult {
+  columns: { name: string; type: string; typeOid: number; relation?: string; column?: string }[];
+                            // relation = "schema.name" (partition children mapped to their root), column = attribute name
+  rows: (string | number | boolean | null | object | unknown[])[][];  // see QUERY-SAFETY.md value mapping
+  truncated: boolean;       // more than maxRows existed
+  rowCount: number;         // rows returned (<= maxRows)
+  durationMs: number;       // FETCH time
+  executedSql: string;      // the deparsed statement actually run
+  plan: PlanNode;           // EXPLAIN (VERBOSE) tree; with analyze, ANALYZE + BUFFERS figures
+  overlay: Overlay;
+  warnings: string[];
+}
+interface PlanNode {
+  nodeType: string; relation?: string; alias?: string; index?: string; joinType?: string;
+  condition?: string;       // Hash/Merge Cond, Join Filter, Index Cond, Filter (first present)
+  startupCost: number; totalCost: number; planRows: number;
+  actualRows?: number; actualLoops?: number; actualTotalMs?: number; rowsRemovedByFilter?: number;
+  costShare: number;        // exclusive cost / total cost, 0..1
+  timeShare?: number;       // exclusive time / total time (analyze only)
+  flags: { level: "info" | "warn" | "danger"; code: string; message: string }[];
+  children: PlanNode[];
+}
+interface Overlay {
+  relations: Record<string, {           // key "schema.name"
+    level: "good" | "warn" | "danger";  // worst over its scans
+    scans: { nodeType: string; index?: string; planRows: number; actualRows?: number }[];
+    reasons: string[];                   // human sentences, e.g. "Seq Scan reads 2.1M rows and discards 99%"
+  }>;
+  joins: { from: string; to: string; method: "Hash Join" | "Merge Join" | "Nested Loop"; joinType: string; condition?: string }[];
+}
+```
+
+Errors (envelope `code`):
+- `422 rejected` — the guard refused the statement. `detail` is a machine reason
+  (`multiple_statements|not_select|writes_data|locking_clause|select_into|function_not_allowed|syntax`);
+  `message` is a sentence naming the construct. For `syntax`, `position` (1-based char offset) is added to the envelope.
+- `409 cost_confirmation_required` — EXPLAIN estimates over the profile's limit. Body adds
+  `estimatedCost` and `estimatedRows`. Re-send with `confirmCost: true`.
+- `400 database` — Postgres rejected the statement; envelope adds `sqlstate` and `position` when known.
+- `504 timeout` (57014 from statement_timeout), `503 recovery_conflict` (40001 conflict with recovery),
+  `502 upstream` (connection), `423 secrets_locked`, `404 not_found`.
+- Client disconnect (fetch aborted) cancels the running statement server-side.
+
+Cost limits: `prod-replica` 1e6, `staging` 1e7, `local` none (unless a profile sets `maxCost`).
+Profiles gain an optional `maxCost: number` (0 = no limit).
+
+### Explain only
+
+`POST /api/profiles/{id}/explain` body `{ sql, analyze? }` → `200 { executedSql, plan, overlay, warnings }`
+(same guard, transaction and errors; no rows fetched).
+
+### History
+
+`GET /api/profiles/{id}/history?limit=50` → `200 [{ id, sql, startedAt, durationMs, rowCount, status: "ok"|"error"|"rejected"|"cancelled", errorCode? }]`
+Newest first, max 200. Stores SQL and metadata only, never row data. Deleted with the profile.
