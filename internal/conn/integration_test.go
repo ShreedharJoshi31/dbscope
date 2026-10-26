@@ -258,6 +258,41 @@ func TestIntegrationPrivilegeCap(t *testing.T) {
 	}
 }
 
+// A database whose sessions default to another client encoding must still
+// return UTF-8, or pgx hands back invalid strings.
+func TestIntegrationClientEncoding(t *testing.T) {
+	p, pass := testDB(t)
+	ctx := t.Context()
+	cc, err := connConfig(p, pass)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := pgx.ConnectConfig(ctx, cc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Exec(ctx, "CREATE TABLE enc(s text); INSERT INTO enc VALUES ('café ñ')"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Exec(ctx, "ALTER DATABASE "+pgx.Identifier{p.Database}.Sanitize()+" SET client_encoding = 'LATIN1'"); err != nil {
+		t.Fatal(err)
+	}
+	c.Close(ctx)
+
+	pool, err := NewPool(ctx, p, pass)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	var s string
+	if err := pool.QueryRow(ctx, "SELECT s FROM enc").Scan(&s); err != nil {
+		t.Fatal(err)
+	}
+	if s != "café ñ" {
+		t.Fatalf("got %q", s)
+	}
+}
+
 func TestIntegrationPool(t *testing.T) {
 	p, pass := testDB(t)
 	pool, err := NewPool(t.Context(), p, pass)

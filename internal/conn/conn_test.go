@@ -43,6 +43,23 @@ func TestProfileDefaults(t *testing.T) {
 	}
 }
 
+func TestCostLimit(t *testing.T) {
+	for env, want := range map[Env]float64{EnvLocal: 0, EnvStaging: 1e7, EnvProdReplica: 1e6} {
+		in := validInput()
+		in.Env = env
+		p, err := in.Profile()
+		if err != nil || p.MaxCost != nil || p.CostLimit() != want {
+			t.Errorf("%s: limit %v (maxCost %v, err %v), want %v", env, p.CostLimit(), p.MaxCost, err, want)
+		}
+		for _, set := range []float64{0, 5e5} {
+			in.MaxCost = ptr(set)
+			if p, _ := in.Profile(); p.CostLimit() != set || *p.MaxCost != set {
+				t.Errorf("%s with maxCost %v: limit %v", env, set, p.CostLimit())
+			}
+		}
+	}
+}
+
 func TestProfileValidation(t *testing.T) {
 	for name, mut := range map[string]func(*ProfileInput){
 		"empty name":    func(in *ProfileInput) { in.Name = "  " },
@@ -62,6 +79,7 @@ func TestProfileValidation(t *testing.T) {
 		"rows 501":      func(in *ProfileInput) { in.MaxRowsToLLM = ptr(501) },
 		"timeout 0":     func(in *ProfileInput) { in.StatementTimeoutMs = ptr(0) },
 		"negative port": func(in *ProfileInput) { in.Port = ptr(-1) },
+		"negative cost": func(in *ProfileInput) { in.MaxCost = ptr(-1.0) },
 	} {
 		in := validInput()
 		mut(&in)
@@ -135,7 +153,7 @@ func TestConnConfigIgnoresEnvironment(t *testing.T) {
 	if cc.TLSConfig != nil || len(cc.Fallbacks) != 0 || cc.ValidateConnect != nil {
 		t.Fatal("environment leaked into TLS or session settings")
 	}
-	if len(cc.RuntimeParams) != 1 || cc.RuntimeParams["application_name"] != "dbscope" {
+	if len(cc.RuntimeParams) != 2 || cc.RuntimeParams["application_name"] != "dbscope" || cc.RuntimeParams["client_encoding"] != "UTF8" {
 		t.Fatalf("runtime params %v", cc.RuntimeParams)
 	}
 	if cc.ConnectTimeout.Seconds() != 10 {

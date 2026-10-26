@@ -69,9 +69,10 @@ func configure(cc *pgx.ConnConfig, p Profile, password string) error {
 	for _, t := range tlsConfigs[1:] {
 		cc.Fallbacks = append(cc.Fallbacks, &pgconn.FallbackConfig{Host: p.Host, Port: port, TLSConfig: t})
 	}
-	// Only application_name: PgBouncer by default rejects startup parameters
-	// it does not track (statement_timeout among them).
-	cc.RuntimeParams = map[string]string{"application_name": "dbscope"}
+	// Only parameters PgBouncer tracks: by default it rejects others
+	// (statement_timeout among them). client_encoding must be explicit because a
+	// non-UTF8 database would otherwise send results pgx decodes as UTF-8.
+	cc.RuntimeParams = map[string]string{"application_name": "dbscope", "client_encoding": "UTF8"}
 	cc.BuildContextWatcherHandler = func(c *pgconn.PgConn) ctxwatch.Handler {
 		return &pgconn.CancelRequestContextWatcherHandler{Conn: c, CancelRequestDelay: 0, DeadlineDelay: 5 * time.Second}
 	}
