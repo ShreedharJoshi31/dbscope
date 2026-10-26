@@ -169,20 +169,23 @@ Errors (envelope `code`):
 - `422 rejected` — the guard refused the statement. `detail` is a machine reason
   (`multiple_statements|not_select|writes_data|locking_clause|select_into|function_not_allowed|syntax`);
   `message` is a sentence naming the construct. For `syntax`, `position` (1-based char offset) is added to the envelope.
-- `409 cost_confirmation_required` — EXPLAIN estimates over the profile's limit. Body adds
+- `409 cost_confirmation_required` — EXPLAIN estimates over the profile's limit. The `error` object adds
   `estimatedCost` and `estimatedRows`. Re-send with `confirmCost: true`.
-- `400 database` — Postgres rejected the statement; envelope adds `sqlstate` and `position` when known.
+- `400 database` — Postgres rejected the statement; the `error` object adds `sqlstate` and `position` when
+  known. This `position` refers to `executedSql` (the deparsed text), not the user's input; the 422 syntax
+  `position` refers to the user's input.
 - `504 timeout` (57014 from statement_timeout), `503 recovery_conflict` (40001 conflict with recovery),
   `502 upstream` (connection), `423 secrets_locked`, `404 not_found`.
 - Client disconnect (fetch aborted) cancels the running statement server-side.
 
-Cost limits: `prod-replica` 1e6, `staging` 1e7, `local` none (unless a profile sets `maxCost`).
-Profiles gain an optional `maxCost: number` (0 = no limit).
+Cost limits: `prod-replica` 1e6, `staging` 1e7, `local` none. Profiles gain an optional `maxCost: number`:
+omitted = the environment default, `0` = no limit, otherwise the limit.
 
 ### Explain only
 
-`POST /api/profiles/{id}/explain` body `{ sql, analyze? }` → `200 { executedSql, plan, overlay, warnings }`
-(same guard, transaction and errors; no rows fetched).
+`POST /api/profiles/{id}/explain` body `{ sql, analyze?, confirmCost? }` → `200 { executedSql, plan, overlay, warnings }`
+(same guard, transaction and errors; no rows fetched). The cost gate applies only when `analyze` is true,
+since plain EXPLAIN does not execute the query. Not recorded in history.
 
 ### History
 

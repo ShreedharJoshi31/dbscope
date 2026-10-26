@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 
+	qguard "github.com/dbscope/dbscope/internal/query/guard"
 	"github.com/dbscope/dbscope/internal/secrets"
 	"github.com/dbscope/dbscope/internal/store"
 )
@@ -28,7 +29,8 @@ type Config struct {
 	Store   *store.Store
 	Secrets *secrets.Vault
 	Logger  *slog.Logger
-	// Schema reads database structure; nil keeps a pgx pool per profile.
+	// Schema reads database structure and runs queries; nil keeps a pgx
+	// pool per profile.
 	Schema SchemaSource
 }
 
@@ -67,6 +69,7 @@ func New(cfg Config) (*Agent, error) {
 	if s.source == nil {
 		s.source = newPools()
 	}
+	qguard.Warm() // the first parse loads a WebAssembly module (~600 ms)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", s.health)
@@ -85,6 +88,9 @@ func New(cfg Config) (*Agent, error) {
 	mux.HandleFunc("GET /api/profiles/{id}/layout", s.getLayout)
 	mux.HandleFunc("PUT /api/profiles/{id}/layout", s.putLayout)
 	mux.HandleFunc("GET /api/sample/schema", s.sampleSchema)
+	mux.HandleFunc("POST /api/profiles/{id}/query", s.runQuery)
+	mux.HandleFunc("POST /api/profiles/{id}/explain", s.runExplain)
+	mux.HandleFunc("GET /api/profiles/{id}/history", s.history)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "no such API route")
 	})

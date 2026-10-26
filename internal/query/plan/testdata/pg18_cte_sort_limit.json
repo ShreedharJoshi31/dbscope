@@ -1,0 +1,102 @@
+[
+  {
+    "Plan": {
+      "Node Type": "Limit",
+      "Parallel Aware": false,
+      "Async Capable": false,
+      "Startup Cost": 10574.39,
+      "Total Cost": 10574.41,
+      "Plan Rows": 10,
+      "Plan Width": 40,
+      "Disabled": false,
+      "Output": [
+        "t.acct_id",
+        "t.s"
+      ],
+      "Plans": [
+        {
+          "Node Type": "Aggregate",
+          "Strategy": "Sorted",
+          "Partial Mode": "Simple",
+          "Parent Relationship": "InitPlan",
+          "Subplan Name": "CTE t",
+          "Parallel Aware": false,
+          "Async Capable": false,
+          "Startup Cost": 0.29,
+          "Total Cost": 10532.78,
+          "Plan Rows": 1000,
+          "Plan Width": 40,
+          "Disabled": false,
+          "Output": [
+            "orders.acct_id",
+            "sum(orders.total)"
+          ],
+          "Group Key": [
+            "orders.acct_id"
+          ],
+          "Plans": [
+            {
+              "Node Type": "Index Scan",
+              "Parent Relationship": "Outer",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "Scan Direction": "Forward",
+              "Index Name": "orders_acct",
+              "Relation Name": "orders",
+              "Schema": "app",
+              "Alias": "orders",
+              "Startup Cost": 0.29,
+              "Total Cost": 9520.28,
+              "Plan Rows": 200000,
+              "Plan Width": 14,
+              "Disabled": false,
+              "Output": [
+                "orders.id",
+                "orders.acct_id",
+                "orders.total",
+                "orders.note"
+              ]
+            }
+          ]
+        },
+        {
+          "Node Type": "Sort",
+          "Parent Relationship": "Outer",
+          "Parallel Aware": false,
+          "Async Capable": false,
+          "Startup Cost": 41.61,
+          "Total Cost": 44.11,
+          "Plan Rows": 1000,
+          "Plan Width": 40,
+          "Disabled": false,
+          "Output": [
+            "t.acct_id",
+            "t.s"
+          ],
+          "Sort Key": [
+            "t.s DESC"
+          ],
+          "Plans": [
+            {
+              "Node Type": "CTE Scan",
+              "Parent Relationship": "Outer",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "CTE Name": "t",
+              "Alias": "t",
+              "Startup Cost": 0.00,
+              "Total Cost": 20.00,
+              "Plan Rows": 1000,
+              "Plan Width": 40,
+              "Disabled": false,
+              "Output": [
+                "t.acct_id",
+                "t.s"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+]

@@ -13,14 +13,19 @@ import (
 
 	"github.com/dbscope/dbscope/internal/conn"
 	"github.com/dbscope/dbscope/internal/introspect"
+	"github.com/dbscope/dbscope/internal/query/exec"
 	"github.com/dbscope/dbscope/internal/schema"
 )
 
-// SchemaSource reads database structure for a saved profile. Errors are
-// pgx errors, which the handlers turn into upstream and timeout responses.
+// SchemaSource reads database structure and runs guarded queries for a
+// saved profile. Errors are pgx errors (and exec's typed errors), which
+// the handlers turn into API responses.
 type SchemaSource interface {
 	Namespaces(ctx context.Context, p conn.Profile, password string) ([]introspect.Namespace, error)
 	Introspect(ctx context.Context, p conn.Profile, password string) (*schema.Model, error)
+	// Query runs a statement that passed guard.Check (exec.Run). It shares
+	// the profile's pool: exec passes QueryExecModeExec on every call.
+	Query(ctx context.Context, p conn.Profile, password string, req exec.Request) (*exec.Result, error)
 	// Forget drops anything held for the profile, e.g. after it changed.
 	Forget(profileID string)
 	// Close releases everything and waits for it to be released.
@@ -141,4 +146,15 @@ func (ps *pools) Introspect(ctx context.Context, p conn.Profile, password string
 		return nil, err
 	}
 	return introspect.Introspect(ctx, pool, p.Schemas, statementTimeout(p))
+}
+
+func (ps *pools) Query(ctx context.Context, p conn.Profile, password string, req exec.Request) (*exec.Result, error) {
+	// EXPLAIN, EXPLAIN ANALYZE and the fetch can each take a statement timeout.
+	ctx, cancel := context.WithTimeout(ctx, 3*statementTimeout(p)+connectSlack)
+	defer cancel()
+	pool, err := ps.get(ctx, p, password)
+	if err != nil {
+		return nil, err
+	}
+	return exec.Run(ctx, pool, req)
 }

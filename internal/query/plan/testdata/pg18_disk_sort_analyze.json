@@ -1,0 +1,92 @@
+[
+  {
+    "Plan": {
+      "Node Type": "Sort",
+      "Parallel Aware": false,
+      "Async Capable": false,
+      "Startup Cost": 33376.64,
+      "Total Cost": 33876.64,
+      "Plan Rows": 200000,
+      "Plan Width": 24,
+      "Actual Startup Time": 160.174,
+      "Actual Total Time": 171.213,
+      "Actual Rows": 200000.00,
+      "Actual Loops": 1,
+      "Disabled": false,
+      "Output": [
+        "id",
+        "acct_id",
+        "total",
+        "note"
+      ],
+      "Sort Key": [
+        "orders.note",
+        "orders.total DESC"
+      ],
+      "Sort Method": "external merge",
+      "Sort Space Used": 6872,
+      "Sort Space Type": "Disk",
+      "Shared Hit Blocks": 1464,
+      "Shared Read Blocks": 0,
+      "Shared Dirtied Blocks": 0,
+      "Shared Written Blocks": 0,
+      "Local Hit Blocks": 0,
+      "Local Read Blocks": 0,
+      "Local Dirtied Blocks": 0,
+      "Local Written Blocks": 0,
+      "Temp Read Blocks": 3425,
+      "Temp Written Blocks": 3656,
+      "Plans": [
+        {
+          "Node Type": "Seq Scan",
+          "Parent Relationship": "Outer",
+          "Parallel Aware": false,
+          "Async Capable": false,
+          "Relation Name": "orders",
+          "Schema": "app",
+          "Alias": "orders",
+          "Startup Cost": 0.00,
+          "Total Cost": 3461.00,
+          "Plan Rows": 200000,
+          "Plan Width": 24,
+          "Actual Startup Time": 0.002,
+          "Actual Total Time": 8.779,
+          "Actual Rows": 200000.00,
+          "Actual Loops": 1,
+          "Disabled": false,
+          "Output": [
+            "id",
+            "acct_id",
+            "total",
+            "note"
+          ],
+          "Shared Hit Blocks": 1461,
+          "Shared Read Blocks": 0,
+          "Shared Dirtied Blocks": 0,
+          "Shared Written Blocks": 0,
+          "Local Hit Blocks": 0,
+          "Local Read Blocks": 0,
+          "Local Dirtied Blocks": 0,
+          "Local Written Blocks": 0,
+          "Temp Read Blocks": 0,
+          "Temp Written Blocks": 0
+        }
+      ]
+    },
+    "Planning": {
+      "Shared Hit Blocks": 0,
+      "Shared Read Blocks": 0,
+      "Shared Dirtied Blocks": 0,
+      "Shared Written Blocks": 0,
+      "Local Hit Blocks": 0,
+      "Local Read Blocks": 0,
+      "Local Dirtied Blocks": 0,
+      "Local Written Blocks": 0,
+      "Temp Read Blocks": 0,
+      "Temp Written Blocks": 0
+    },
+    "Planning Time": 0.007,
+    "Triggers": [],
+    "Execution Time": 176.487
+  }
+]

@@ -4,6 +4,7 @@ package conn
 
 import (
 	"fmt"
+	"math"
 	"net"
 	"strings"
 	"time"
@@ -60,9 +61,12 @@ type Profile struct {
 	SummaryMode        SummaryMode `json:"summaryMode"`
 	MaxRowsToLLM       int         `json:"maxRowsToLLM"`
 	StatementTimeoutMs int         `json:"statementTimeoutMs"`
-	HasPassword        bool        `json:"hasPassword"`
-	CreatedAt          time.Time   `json:"createdAt"`
-	UpdatedAt          time.Time   `json:"updatedAt"`
+	// MaxCost is the EXPLAIN cost above which a query needs confirming;
+	// 0 means no limit and nil means the env default (see CostLimit).
+	MaxCost     *float64  `json:"maxCost,omitempty"`
+	HasPassword bool      `json:"hasPassword"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
 // ProfileInput is the create/update/test request body. Pointer fields
@@ -81,6 +85,7 @@ type ProfileInput struct {
 	SummaryMode        SummaryMode `json:"summaryMode"`
 	MaxRowsToLLM       *int        `json:"maxRowsToLLM"`
 	StatementTimeoutMs *int        `json:"statementTimeoutMs"`
+	MaxCost            *float64    `json:"maxCost"`
 	Password           *string     `json:"password"`
 }
 
@@ -173,7 +178,36 @@ func (in ProfileInput) Profile() (Profile, error) {
 	if p.StatementTimeoutMs < 1 {
 		return Profile{}, invalid("statementTimeoutMs must be a positive number of milliseconds")
 	}
+	if in.MaxCost != nil {
+		if c := *in.MaxCost; c < 0 || math.IsNaN(c) || math.IsInf(c, 0) {
+			return Profile{}, invalid("maxCost must be 0 (no limit) or a positive number")
+		}
+		c := *in.MaxCost
+		p.MaxCost = &c
+	}
 	return p, nil
+}
+
+// Default EXPLAIN cost limits per env; local has none.
+const (
+	DefaultMaxCostProdReplica = 1e6
+	DefaultMaxCostStaging     = 1e7
+)
+
+// CostLimit is the EXPLAIN total cost above which a query needs
+// confirming, or 0 for no limit: the profile's maxCost when set, else the
+// env default.
+func (p Profile) CostLimit() float64 {
+	if p.MaxCost != nil {
+		return *p.MaxCost
+	}
+	switch p.Env {
+	case EnvProdReplica:
+		return DefaultMaxCostProdReplica
+	case EnvStaging:
+		return DefaultMaxCostStaging
+	}
+	return 0
 }
 
 func isLoopback(host string) bool {

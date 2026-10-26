@@ -1,0 +1,46 @@
+[
+  {
+    "Plan": {
+      "Node Type": "Sort",
+      "Parallel Aware": false,
+      "Async Capable": false,
+      "Startup Cost": 33376.64,
+      "Total Cost": 33876.64,
+      "Plan Rows": 200000,
+      "Plan Width": 24,
+      "Disabled": false,
+      "Output": [
+        "id",
+        "acct_id",
+        "total",
+        "note"
+      ],
+      "Sort Key": [
+        "orders.note",
+        "orders.total DESC"
+      ],
+      "Plans": [
+        {
+          "Node Type": "Seq Scan",
+          "Parent Relationship": "Outer",
+          "Parallel Aware": false,
+          "Async Capable": false,
+          "Relation Name": "orders",
+          "Schema": "app",
+          "Alias": "orders",
+          "Startup Cost": 0.00,
+          "Total Cost": 3461.00,
+          "Plan Rows": 200000,
+          "Plan Width": 24,
+          "Disabled": false,
+          "Output": [
+            "id",
+            "acct_id",
+            "total",
+            "note"
+          ]
+        }
+      ]
+    }
+  }
+]

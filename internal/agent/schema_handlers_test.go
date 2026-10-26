@@ -18,6 +18,8 @@ import (
 	"github.com/dbscope/dbscope/internal/conn"
 	"github.com/dbscope/dbscope/internal/introspect"
 	"github.com/dbscope/dbscope/internal/pgtest"
+	"github.com/dbscope/dbscope/internal/query/exec"
+	"github.com/dbscope/dbscope/internal/query/plan"
 	"github.com/dbscope/dbscope/internal/schema"
 )
 
@@ -30,6 +32,25 @@ type fakeSource struct {
 	passwords []string
 	forgotten []string
 	closed    bool
+	// queryErr is returned by Query; requests records what it was asked.
+	queryErr error
+	requests []exec.Request
+}
+
+func (f *fakeSource) Query(_ context.Context, _ conn.Profile, password string, req exec.Request) (*exec.Result, error) {
+	f.mu.Lock()
+	f.passwords = append(f.passwords, password)
+	f.requests = append(f.requests, req)
+	err := f.queryErr
+	f.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	return &exec.Result{
+		Columns: []exec.Column{{Name: "one", Type: "integer", TypeOID: 23}}, Rows: [][]json.RawMessage{{json.RawMessage("1")}},
+		RowCount: 1, ExecutedSQL: req.Parsed.Deparsed, Plan: &plan.Node{NodeType: "Result", Flags: []plan.Flag{}, Children: []*plan.Node{}},
+		Overlay: plan.Overlay{Relations: map[string]*plan.RelOverlay{}, Joins: []plan.Join{}}, Warnings: []string{},
+	}, nil
 }
 
 func (f *fakeSource) record(password string) error {

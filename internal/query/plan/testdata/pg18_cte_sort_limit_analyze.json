@@ -1,0 +1,193 @@
+[
+  {
+    "Plan": {
+      "Node Type": "Limit",
+      "Parallel Aware": false,
+      "Async Capable": false,
+      "Startup Cost": 10574.39,
+      "Total Cost": 10574.41,
+      "Plan Rows": 10,
+      "Plan Width": 40,
+      "Actual Startup Time": 53.585,
+      "Actual Total Time": 53.586,
+      "Actual Rows": 10.00,
+      "Actual Loops": 1,
+      "Disabled": false,
+      "Output": [
+        "t.acct_id",
+        "t.s"
+      ],
+      "Shared Hit Blocks": 200005,
+      "Shared Read Blocks": 166,
+      "Shared Dirtied Blocks": 0,
+      "Shared Written Blocks": 0,
+      "Local Hit Blocks": 0,
+      "Local Read Blocks": 0,
+      "Local Dirtied Blocks": 0,
+      "Local Written Blocks": 0,
+      "Temp Read Blocks": 0,
+      "Temp Written Blocks": 0,
+      "Plans": [
+        {
+          "Node Type": "Aggregate",
+          "Strategy": "Sorted",
+          "Partial Mode": "Simple",
+          "Parent Relationship": "InitPlan",
+          "Subplan Name": "CTE t",
+          "Parallel Aware": false,
+          "Async Capable": false,
+          "Startup Cost": 0.29,
+          "Total Cost": 10532.78,
+          "Plan Rows": 1000,
+          "Plan Width": 40,
+          "Actual Startup Time": 0.074,
+          "Actual Total Time": 53.196,
+          "Actual Rows": 1000.00,
+          "Actual Loops": 1,
+          "Disabled": false,
+          "Output": [
+            "orders.acct_id",
+            "sum(orders.total)"
+          ],
+          "Group Key": [
+            "orders.acct_id"
+          ],
+          "Shared Hit Blocks": 200002,
+          "Shared Read Blocks": 166,
+          "Shared Dirtied Blocks": 0,
+          "Shared Written Blocks": 0,
+          "Local Hit Blocks": 0,
+          "Local Read Blocks": 0,
+          "Local Dirtied Blocks": 0,
+          "Local Written Blocks": 0,
+          "Temp Read Blocks": 0,
+          "Temp Written Blocks": 0,
+          "Plans": [
+            {
+              "Node Type": "Index Scan",
+              "Parent Relationship": "Outer",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "Scan Direction": "Forward",
+              "Index Name": "orders_acct",
+              "Relation Name": "orders",
+              "Schema": "app",
+              "Alias": "orders",
+              "Startup Cost": 0.29,
+              "Total Cost": 9520.28,
+              "Plan Rows": 200000,
+              "Plan Width": 14,
+              "Actual Startup Time": 0.006,
+              "Actual Total Time": 36.562,
+              "Actual Rows": 200000.00,
+              "Actual Loops": 1,
+              "Disabled": false,
+              "Output": [
+                "orders.id",
+                "orders.acct_id",
+                "orders.total",
+                "orders.note"
+              ],
+              "Index Searches": 1,
+              "Shared Hit Blocks": 200002,
+              "Shared Read Blocks": 166,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0
+            }
+          ]
+        },
+        {
+          "Node Type": "Sort",
+          "Parent Relationship": "Outer",
+          "Parallel Aware": false,
+          "Async Capable": false,
+          "Startup Cost": 41.61,
+          "Total Cost": 44.11,
+          "Plan Rows": 1000,
+          "Plan Width": 40,
+          "Actual Startup Time": 53.584,
+          "Actual Total Time": 53.584,
+          "Actual Rows": 10.00,
+          "Actual Loops": 1,
+          "Disabled": false,
+          "Output": [
+            "t.acct_id",
+            "t.s"
+          ],
+          "Sort Key": [
+            "t.s DESC"
+          ],
+          "Sort Method": "top-N heapsort",
+          "Sort Space Used": 25,
+          "Sort Space Type": "Memory",
+          "Shared Hit Blocks": 200005,
+          "Shared Read Blocks": 166,
+          "Shared Dirtied Blocks": 0,
+          "Shared Written Blocks": 0,
+          "Local Hit Blocks": 0,
+          "Local Read Blocks": 0,
+          "Local Dirtied Blocks": 0,
+          "Local Written Blocks": 0,
+          "Temp Read Blocks": 0,
+          "Temp Written Blocks": 0,
+          "Plans": [
+            {
+              "Node Type": "CTE Scan",
+              "Parent Relationship": "Outer",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "CTE Name": "t",
+              "Alias": "t",
+              "Startup Cost": 0.00,
+              "Total Cost": 20.00,
+              "Plan Rows": 1000,
+              "Plan Width": 40,
+              "Actual Startup Time": 0.075,
+              "Actual Total Time": 53.376,
+              "Actual Rows": 1000.00,
+              "Actual Loops": 1,
+              "Disabled": false,
+              "Output": [
+                "t.acct_id",
+                "t.s"
+              ],
+              "Storage": "Memory",
+              "Maximum Storage": 56,
+              "Shared Hit Blocks": 200002,
+              "Shared Read Blocks": 166,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0
+            }
+          ]
+        }
+      ]
+    },
+    "Planning": {
+      "Shared Hit Blocks": 0,
+      "Shared Read Blocks": 0,
+      "Shared Dirtied Blocks": 0,
+      "Shared Written Blocks": 0,
+      "Local Hit Blocks": 0,
+      "Local Read Blocks": 0,
+      "Local Dirtied Blocks": 0,
+      "Local Written Blocks": 0,
+      "Temp Read Blocks": 0,
+      "Temp Written Blocks": 0
+    },
+    "Planning Time": 0.016,
+    "Triggers": [],
+    "Execution Time": 53.609
+  }
+]

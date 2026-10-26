@@ -1,0 +1,52 @@
+[
+  {
+    "Plan": {
+      "Node Type": "Append",
+      "Parallel Aware": false,
+      "Async Capable": false,
+      "Startup Cost": 0.00,
+      "Total Cost": 458.98,
+      "Plan Rows": 19995,
+      "Plan Width": 12,
+      "Subplans Removed": 0,
+      "Plans": [
+        {
+          "Node Type": "Seq Scan",
+          "Parent Relationship": "Member",
+          "Parallel Aware": false,
+          "Async Capable": false,
+          "Relation Name": "events_2026",
+          "Schema": "app",
+          "Alias": "events_1",
+          "Startup Cost": 0.00,
+          "Total Cost": 190.30,
+          "Plan Rows": 10579,
+          "Plan Width": 12,
+          "Output": [
+            "events_1.id",
+            "events_1.at"
+          ],
+          "Filter": "(events_1.id > 5)"
+        },
+        {
+          "Node Type": "Seq Scan",
+          "Parent Relationship": "Member",
+          "Parallel Aware": false,
+          "Async Capable": false,
+          "Relation Name": "events_2027",
+          "Schema": "app",
+          "Alias": "events_2",
+          "Startup Cost": 0.00,
+          "Total Cost": 168.70,
+          "Plan Rows": 9416,
+          "Plan Width": 12,
+          "Output": [
+            "events_2.id",
+            "events_2.at"
+          ],
+          "Filter": "(events_2.id > 5)"
+        }
+      ]
+    }
+  }
+]

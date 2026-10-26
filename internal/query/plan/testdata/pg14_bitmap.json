@@ -1,0 +1,37 @@
+[
+  {
+    "Plan": {
+      "Node Type": "Bitmap Heap Scan",
+      "Parallel Aware": false,
+      "Async Capable": false,
+      "Relation Name": "orders",
+      "Schema": "app",
+      "Alias": "orders",
+      "Startup Cost": 17.51,
+      "Total Cost": 1142.72,
+      "Plan Rows": 597,
+      "Plan Width": 24,
+      "Output": [
+        "id",
+        "acct_id",
+        "total",
+        "note"
+      ],
+      "Recheck Cond": "(orders.acct_id = ANY ('{1,2,3}'::bigint[]))",
+      "Plans": [
+        {
+          "Node Type": "Bitmap Index Scan",
+          "Parent Relationship": "Outer",
+          "Parallel Aware": false,
+          "Async Capable": false,
+          "Index Name": "orders_acct",
+          "Startup Cost": 0.00,
+          "Total Cost": 17.36,
+          "Plan Rows": 597,
+          "Plan Width": 0,
+          "Index Cond": "(orders.acct_id = ANY ('{1,2,3}'::bigint[]))"
+        }
+      ]
+    }
+  }
+]
