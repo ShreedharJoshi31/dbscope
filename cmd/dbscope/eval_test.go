@@ -33,6 +33,22 @@ func TestEvalErrorsDoNotEchoDSN(t *testing.T) {
 	}
 }
 
+// A local Ollama needs no key, so a locked passphrase vault must not block it;
+// Anthropic still needs one.
+func TestEvalLockedVaultOnlyBlocksAnthropic(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("AppData", t.TempDir())
+	t.Setenv("DBSCOPE_SECRETS", "file")
+	p, err := evalProvider(evalOptions{provider: "openai_compat", baseURL: "http://127.0.0.1:11434/v1/", model: "m"})
+	if err != nil || p.Model() != "m" {
+		t.Fatalf("openai_compat with a locked vault: %v %v", p, err)
+	}
+	if _, err := evalProvider(evalOptions{provider: "anthropic"}); err == nil || !strings.Contains(err.Error(), "locked") {
+		t.Fatalf("anthropic with a locked vault: %v", err)
+	}
+}
+
 func TestEvalAPIKeyEnvTakesAName(t *testing.T) {
 	if _, err := evalProvider(evalOptions{provider: "anthropic", keyEnv: "sk-ant=abc"}); err == nil || !strings.Contains(err.Error(), "variable name") {
 		t.Fatalf("value accepted: %v", err)

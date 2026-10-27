@@ -248,6 +248,9 @@ func evalProvider(o evalOptions) (llm.Provider, error) {
 		name := "llm:" + settings.Provider
 		k, ok, err := v.Get(name)
 		switch {
+		// Local OpenAI-compatible servers (Ollama, LM Studio) need no key; a
+		// server that does will answer 401, which the eval reports.
+		case errors.Is(err, secrets.ErrLocked) && settings.Provider != llm.NameAnthropic:
 		case errors.Is(err, secrets.ErrLocked):
 			return nil, errors.New("the secrets vault is locked (passphrase backend); pass --api-key-env NAME")
 		case err != nil:
