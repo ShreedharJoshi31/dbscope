@@ -17,12 +17,16 @@ function isLetter(key: string): boolean {
 }
 
 export function matchesCombo(event: KeyboardEvent, combo: KeyCombo, mac = isMacPlatform()): boolean {
-  if (event.altKey) return false;
+  if (event.altKey !== Boolean(combo.alt)) return false;
+  // On Windows and Linux AltGr reports Ctrl+Alt; it types characters (Polish AltGr+N is "ń"), never a shortcut.
+  if (combo.alt && !mac && event.getModifierState?.("AltGraph")) return false;
   const modPressed = mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
   const noMod = !event.metaKey && !event.ctrlKey;
   if (combo.mod ? !modPressed : !noMod) return false;
   if (isLetter(combo.key) || combo.key.length > 1) {
     if (event.shiftKey !== Boolean(combo.shift)) return false;
+    // Option on macOS changes event.key ("n" becomes "˜"), so letters with Alt match the physical key.
+    if (combo.alt && isLetter(combo.key)) return event.code === `Key${combo.key.toUpperCase()}`;
     return event.key.toLowerCase() === combo.key.toLowerCase();
   }
   // Symbols such as "?" already encode Shift in event.key.
@@ -59,4 +63,14 @@ export function useHotkeys(bindings: HotkeyBinding[]): void {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
+}
+
+/** CodeMirror key name for a combo, e.g. "Mod-Shift-Enter". */
+export function codeMirrorKey(combo: KeyCombo): string {
+  const parts: string[] = [];
+  if (combo.mod) parts.push("Mod");
+  if (combo.alt) parts.push("Alt");
+  if (combo.shift) parts.push("Shift");
+  parts.push(combo.key.length === 1 ? combo.key.toLowerCase() : combo.key);
+  return parts.join("-");
 }

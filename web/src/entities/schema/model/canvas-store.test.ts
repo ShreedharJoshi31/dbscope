@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { nodeVisual, useCanvasStore } from "@/entities/schema/model/canvas-store";
+import { edgeVisual, MAX_FLOW_EDGES, nodeVisual, useCanvasStore } from "@/entities/schema/model/canvas-store";
 import { buildSchemaGraph } from "@/entities/schema/model/graph";
+import { heatmapFromOverlay, showQueryOverlay } from "@/entities/schema/model/heatmap";
 import { sampleModel } from "@/test/fixtures";
 
 const graph = buildSchemaGraph(sampleModel());
@@ -10,7 +11,7 @@ afterEach(() => {
   store().setGraph(null);
   store().clearSearch();
   store().select(null);
-  store().setOverlay({});
+  store().clearOverlay();
   useCanvasStore.setState({ focus: null, focusHops: 1, hoverEdge: null, selectedEdge: null });
 });
 
@@ -91,5 +92,69 @@ describe("canvas store", () => {
       store().clearOne(),
       store().clearOne(),
     ]).toEqual(["search", "details", "focus", "selection", null]);
+  });
+
+  it("a query overlay badges relations with icon tone and text, animates only joined keys and dims the rest", () => {
+    store().setGraph(graph);
+    const overlay = {
+      relations: {
+        "shop.orders": {
+          level: "danger" as const,
+          scans: [{ nodeType: "Seq Scan", planRows: 2_100_000 }],
+          reasons: ["Seq Scan reads about 2.1M rows to keep an estimated 2K"],
+        },
+        "shop.customers": {
+          level: "good" as const,
+          scans: [{ nodeType: "Index Scan", index: "customers_pkey", planRows: 1, actualRows: 1 }],
+          reasons: [],
+        },
+      },
+      joins: [{ from: "shop.orders", to: "shop.customers", method: "Hash Join" as const, joinType: "Inner" }],
+    };
+    const { entries } = heatmapFromOverlay(overlay);
+    expect(entries["shop.orders"]).toEqual({
+      tone: "danger",
+      label: "Problem",
+      details: ["Seq Scan reads about 2.1M rows to keep an estimated 2K", "Seq Scan: est. 2.1M rows"],
+    });
+    expect(entries["shop.customers"]?.details).toEqual(["Index Scan using customers_pkey: est. 1 row, actual 1 row"]);
+
+    showQueryOverlay(overlay);
+    const fk = "shop.orders|orders_customer_id_fkey";
+    expect([...store().derived.flowEdges]).toEqual([fk]);
+    expect(edgeVisual(store(), fk, "shop.orders", "shop.customers")).toBe("flow");
+    expect(edgeVisual(store(), "shop.orders|orders_billing_address_id_fkey", "shop.orders", "shop.addresses")).toBe(
+      "dim",
+    );
+    expect(nodeVisual(store(), "shop.orders")).toBe("");
+    expect(nodeVisual(store(), "app.users")).toBe("|dim");
+  });
+
+  it("caps animated join edges", () => {
+    store().setGraph(graph);
+    const joins = graph.edges.map((e) => ({
+      from: e.child,
+      to: e.parent,
+      method: "Nested Loop" as const,
+      joinType: "Inner",
+    }));
+    showQueryOverlay({ relations: {}, joins });
+    expect(store().derived.flowEdges.size).toBe(MAX_FLOW_EDGES);
+  });
+
+  it("answer highlights mark tables; Esc clears the overlay last; clearOverlay removes everything", () => {
+    store().setGraph(graph);
+    showQueryOverlay({ relations: { "shop.orders": { level: "warn", scans: [], reasons: [] } }, joins: [] });
+    store().setHighlight(["shop.orders", "shop.payments"]);
+    expect(nodeVisual(store(), "shop.payments")).toBe("highlight");
+    expect(nodeVisual(store(), "app.users")).toBe("|dim");
+    store().select("app.users");
+    expect(store().clearOne()).toBe("selection");
+    expect(store().clearOne()).toBe("overlay");
+    expect(store().overlay).toEqual({});
+    expect(store().derived.keep).toBeNull();
+    showQueryOverlay({ relations: { "shop.orders": { level: "warn", scans: [], reasons: [] } }, joins: [] });
+    store().clearOverlay();
+    expect(store()).toMatchObject({ heat: null, highlight: null, overlay: {} });
   });
 });

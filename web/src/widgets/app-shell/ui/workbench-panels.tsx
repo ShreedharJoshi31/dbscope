@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Group, Panel, useDefaultLayout } from "react-resizable-panels";
+import { usePanelStore } from "@/features/toggle-panel";
 import { safeLocalStorage } from "@/shared/lib/storage";
 import { useSyncedPanel } from "@/widgets/app-shell/model/use-synced-panel";
 import { ResizeHandle } from "@/widgets/app-shell/ui/resize-handle";
@@ -8,22 +9,24 @@ interface WorkbenchPanelsProps {
   /** At 1280px and wider the assistant is a docked panel; below, AppShell renders a drawer. */
   wide: boolean;
   explorer: ReactNode;
+  history: ReactNode;
   centre: ReactNode;
   dock: ReactNode;
   assistant: ReactNode;
 }
 
-/** The dock starts collapsed until the user opens it (later: until the first query run). */
+/** The dock starts collapsed until the user opens it or the first query runs. */
 const FIRST_RUN_CENTRE_LAYOUT = { editor: 100, dock: 0 };
 
-export function WorkbenchPanels({ wide, explorer, centre, dock, assistant }: WorkbenchPanelsProps) {
+export function WorkbenchPanels({ wide, explorer, history, centre, dock, assistant }: WorkbenchPanelsProps) {
+  const explorerView = usePanelStore((s) => s.explorerView);
   const mainLayout = useDefaultLayout({
     id: wide ? "dbscope.layout.main" : "dbscope.layout.main-narrow",
     storage: safeLocalStorage,
   });
   const centreLayout = useDefaultLayout({ id: "dbscope.layout.centre", storage: safeLocalStorage });
   const explorerPanel = useSyncedPanel("explorer");
-  const dockPanel = useSyncedPanel("dock");
+  const dockPanel = useSyncedPanel("dock", 280);
   const assistantPanel = useSyncedPanel("assistant");
 
   return (
@@ -45,12 +48,12 @@ export function WorkbenchPanels({ wide, explorer, centre, dock, assistant }: Wor
         groupResizeBehavior="preserve-pixel-size"
       >
         <aside
-          aria-label="Schema explorer"
+          aria-label={explorerView === "history" ? "Query history" : "Schema explorer"}
           data-region="explorer"
           tabIndex={-1}
           className="flex h-full min-w-0 flex-col bg-surface-subtle"
         >
-          {explorer}
+          {explorerView === "history" ? history : explorer}
         </aside>
       </Panel>
       <ResizeHandle label="Resize schema explorer" orientation="vertical" />

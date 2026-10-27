@@ -1,0 +1,31 @@
+/* SQL syntax colours for CodeMirror and the read-only SQL viewer. Tokens only. */
+
+.sx-keyword {
+  color: var(--syntax-keyword);
+  font-weight: 500;
+}
+
+.sx-string {
+  color: var(--syntax-string);
+}
+
+.sx-number {
+  color: var(--syntax-number);
+}
+
+.sx-type {
+  color: var(--syntax-type);
+}
+
+.sx-function {
+  color: var(--syntax-function);
+}
+
+.sx-comment {
+  color: var(--syntax-comment);
+  font-style: italic;
+}
+
+.sx-punctuation {
+  color: var(--syntax-punctuation);
+}

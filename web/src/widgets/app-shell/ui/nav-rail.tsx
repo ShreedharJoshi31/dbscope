@@ -1,6 +1,7 @@
-import { Keyboard, ListTree, Network, PanelBottom, Sparkles } from "lucide-react";
+import { History, Keyboard, ListTree, Network, PanelBottom, Sparkles } from "lucide-react";
+import { ERD_TAB, useSqlTabs } from "@/entities/query";
 import { openShortcutSheet } from "@/features/show-shortcuts";
-import { togglePanel, useIsPanelVisible } from "@/features/toggle-panel";
+import { toggleExplorerView, togglePanel, useIsPanelVisible, usePanelStore } from "@/features/toggle-panel";
 import { SHORTCUTS } from "@/shared/config/shortcuts";
 import { RailButton } from "@/widgets/app-shell/ui/rail-button";
 
@@ -9,7 +10,11 @@ interface NavRailProps {
 }
 
 export function NavRail({ onShowErd }: NavRailProps) {
-  const explorer = useIsPanelVisible("explorer");
+  const explorerOpen = useIsPanelVisible("explorer");
+  const view = usePanelStore((s) => s.explorerView);
+  const explorer = explorerOpen && view === "schema";
+  const history = explorerOpen && view === "history";
+  const erdActive = useSqlTabs((s) => s.active === ERD_TAB);
   const dock = useIsPanelVisible("dock");
   const assistant = useIsPanelVisible("assistant");
 
@@ -20,13 +25,27 @@ export function NavRail({ onShowErd }: NavRailProps) {
       tabIndex={-1}
       className="flex w-12 shrink-0 flex-col items-center gap-1 border-r border-border-default bg-surface-subtle py-2"
     >
-      <RailButton icon={Network} label="ERD canvas" current onClick={onShowErd} />
+      <RailButton
+        icon={Network}
+        label="ERD canvas"
+        current={erdActive}
+        onClick={() => {
+          useSqlTabs.getState().setActive(ERD_TAB);
+          onShowErd();
+        }}
+      />
       <RailButton
         icon={ListTree}
         label={SHORTCUTS.toggleExplorer.label}
         combo={SHORTCUTS.toggleExplorer.combo}
         pressed={explorer}
-        onClick={() => togglePanel("explorer")}
+        onClick={() => toggleExplorerView("schema")}
+      />
+      <RailButton
+        icon={History}
+        label="Query history"
+        pressed={history}
+        onClick={() => toggleExplorerView("history")}
       />
       <RailButton
         icon={PanelBottom}

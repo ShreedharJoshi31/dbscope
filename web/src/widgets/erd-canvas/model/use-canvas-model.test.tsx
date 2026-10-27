@@ -2,7 +2,13 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { ReactFlowProvider } from "@xyflow/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildSchemaGraph, useCanvasStore } from "@/entities/schema";
+import {
+  buildSchemaGraph,
+  clearCanvasOverlay,
+  highlightTables,
+  showQueryOverlay,
+  useCanvasStore,
+} from "@/entities/schema";
 import { sampleModel } from "@/test/fixtures";
 import { gridLayout } from "@/widgets/erd-canvas/model/layout/grid";
 import { useCanvasModel } from "@/widgets/erd-canvas/model/use-canvas-model";
@@ -25,7 +31,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => {
     useCanvasStore.getState().setGraph(null);
-    useCanvasStore.getState().setOverlay({});
+    useCanvasStore.getState().clearOverlay();
   });
 });
 
@@ -68,6 +74,42 @@ describe("useCanvasModel", () => {
       });
       s.patchOverlay("shop.orders", { tone: "warn", label: "Rewrites" });
     });
+
+    expect(result.current.nodes).toBe(nodes);
+    expect(result.current.edges).toBe(edges);
+    expect(runLayout).toHaveBeenCalledTimes(1);
+  });
+
+  it("a query heatmap, answer highlights and clearing them never rebuild nodes or edges or relayout", async () => {
+    const { result } = setup();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    const { nodes, edges } = result.current;
+    Object.freeze(nodes);
+    Object.freeze(edges);
+    for (const n of nodes) Object.freeze(n);
+    for (const e of edges) Object.freeze(e);
+
+    act(() => {
+      useCanvasStore.getState().setGraph(graph);
+      showQueryOverlay({
+        relations: {
+          "shop.orders": {
+            level: "danger",
+            scans: [{ nodeType: "Seq Scan", planRows: 2e6 }],
+            reasons: ["Seq Scan reads 2M rows"],
+          },
+          "shop.customers": {
+            level: "good",
+            scans: [{ nodeType: "Index Scan", index: "customers_pkey", planRows: 1 }],
+            reasons: [],
+          },
+        },
+        joins: [{ from: "shop.orders", to: "shop.customers", method: "Hash Join", joinType: "Inner" }],
+      });
+      highlightTables(["shop.orders", "shop.order_items"]);
+    });
+    expect(useCanvasStore.getState().derived.flowEdges.size).toBe(1);
+    act(() => clearCanvasOverlay());
 
     expect(result.current.nodes).toBe(nodes);
     expect(result.current.edges).toBe(edges);

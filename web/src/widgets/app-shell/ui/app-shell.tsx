@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect } from "react";
 import { useActiveConnection } from "@/entities/connection";
+import type { SqlTab } from "@/entities/query";
 import { usePanelStore } from "@/features/toggle-panel";
 import { useMediaQuery } from "@/shared/lib/use-media-query";
 import { useDocumentTitle } from "@/widgets/app-shell/model/document-title";
@@ -16,13 +17,15 @@ export const WIDE_QUERY = "(min-width: 1280px)";
 interface AppShellProps {
   search: ReactNode;
   explorer: ReactNode;
+  history: ReactNode;
   erd: ReactNode;
+  renderSqlTab: (tab: SqlTab) => ReactNode;
   dock: ReactNode;
   assistant: ReactNode;
 }
 
 /** The workbench frame from docs/ARCHITECTURE.md; widgets fill its slots. */
-export function AppShell({ search, explorer, erd, dock, assistant }: AppShellProps) {
+export function AppShell({ search, explorer, history, erd, renderSqlTab, dock, assistant }: AppShellProps) {
   const { profile } = useActiveConnection();
   const wide = useMediaQuery(WIDE_QUERY);
   const setAssistantMode = usePanelStore((s) => s.setAssistantMode);
@@ -46,7 +49,8 @@ export function AppShell({ search, explorer, erd, dock, assistant }: AppShellPro
           key={wide ? "wide" : "narrow"}
           wide={wide}
           explorer={explorer}
-          centre={<CentreTabs erd={erd} />}
+          history={history}
+          centre={<CentreTabs erd={erd} renderSqlTab={renderSqlTab} />}
           dock={dock}
           assistant={assistant}
         />

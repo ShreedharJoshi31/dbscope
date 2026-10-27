@@ -18,6 +18,11 @@ export interface Profile {
   summaryMode: SummaryMode;
   maxRowsToLLM: number;
   statementTimeoutMs: number;
+  /**
+   * EXPLAIN cost above which a query needs confirming. Omitted = the environment
+   * default (prod-replica 1e6, staging 1e7, local none); 0 = no limit.
+   */
+  maxCost?: number;
   hasPassword: boolean;
   createdAt: string;
   updatedAt: string;

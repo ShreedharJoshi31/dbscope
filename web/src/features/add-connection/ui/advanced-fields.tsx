@@ -16,6 +16,7 @@ interface AdvancedFieldsProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   timeoutRef: (el: HTMLInputElement | null) => void;
+  maxCostRef?: (el: HTMLInputElement | null) => void;
 }
 
 function summaryModes(maxRows: number): { value: SummaryMode; title: string; text: string }[] {
@@ -42,6 +43,7 @@ export function AdvancedFields({
   open,
   onOpenChange,
   timeoutRef,
+  maxCostRef,
 }: AdvancedFieldsProps) {
   const summaryLabelId = useId();
 
@@ -50,7 +52,7 @@ export function AdvancedFields({
       <CollapsibleTrigger className="group/advanced flex items-center gap-1 rounded-sm text-xs font-medium text-text-muted hover:text-text-primary">
         <ChevronRight aria-hidden className="size-3.5 transition-transform group-data-panel-open/advanced:rotate-90" />
         Advanced
-        <span className="font-normal">schemas, assistant data, statement timeout</span>
+        <span className="font-normal">schemas, assistant data, statement timeout, cost limit</span>
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-3 flex flex-col gap-4 border-l border-border-default pl-4">
         <FormField
@@ -113,6 +115,27 @@ export function AdvancedFields({
               value={values.statementTimeoutMs}
               onChange={(e) => onChange("statementTimeoutMs", e.target.value)}
               onBlur={() => onBlur("statementTimeoutMs")}
+              className="font-mono tabular-nums"
+            />
+          )}
+        </FormField>
+
+        <FormField
+          label="Cost limit"
+          optional
+          error={errors.maxCost}
+          description="Queries whose EXPLAIN cost is higher ask before running. Blank = environment default (prod-replica 1,000,000; staging 10,000,000; local no limit), 0 = no limit."
+          className="max-w-80"
+        >
+          {(control) => (
+            <Input
+              {...control}
+              ref={maxCostRef}
+              inputMode="decimal"
+              value={values.maxCost}
+              onChange={(e) => onChange("maxCost", e.target.value)}
+              onBlur={() => onBlur("maxCost")}
+              placeholder="Environment default"
               className="font-mono tabular-nums"
             />
           )}

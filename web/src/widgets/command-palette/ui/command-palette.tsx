@@ -3,7 +3,7 @@ import { EnvBadge, useActiveConnection } from "@/entities/connection";
 import { useConnectionDialog } from "@/features/add-connection";
 import { openShortcutSheet } from "@/features/show-shortcuts";
 import { switchConnection } from "@/features/switch-connection";
-import { togglePanel } from "@/features/toggle-panel";
+import { toggleExplorerView, togglePanel } from "@/features/toggle-panel";
 import { toggleTheme } from "@/features/toggle-theme";
 import { formatCombo, type KeyCombo, SHORTCUTS } from "@/shared/config/shortcuts";
 import {
@@ -18,6 +18,7 @@ import {
 } from "@/shared/ui/command";
 import { useCommandPalette } from "@/widgets/command-palette/model/palette-store";
 import { CanvasCommandItems } from "@/widgets/command-palette/ui/canvas-command-items";
+import { AssistantCommandItems, QueryCommandItems } from "@/widgets/command-palette/ui/query-command-items";
 
 function Shortcut({ combo }: { combo: KeyCombo }) {
   return <CommandShortcut className="font-mono tracking-normal">{formatCombo(combo)}</CommandShortcut>;
@@ -65,13 +66,15 @@ export function CommandPalette() {
                 </CommandItem>
               ))}
           </CommandGroup>
+          <QueryCommandItems run={run} />
+          <AssistantCommandItems run={run} />
           <CanvasCommandItems run={run} />
           <CommandGroup heading="View">
             <CommandItem onSelect={run(toggleTheme)}>
               <SunMoon aria-hidden />
               Toggle theme
             </CommandItem>
-            <CommandItem onSelect={run(() => togglePanel("explorer"))}>
+            <CommandItem onSelect={run(() => toggleExplorerView("schema"))}>
               <ListTree aria-hidden />
               {SHORTCUTS.toggleExplorer.label}
               <Shortcut combo={SHORTCUTS.toggleExplorer.combo} />

@@ -1,5 +1,6 @@
 import { FlaskConical, LoaderCircle, ShieldAlert } from "lucide-react";
 import { EnvBadge, ERROR_KIND_COPY } from "@/entities/connection";
+import { useRunStore } from "@/entities/query";
 import { useWorkbenchSchema } from "@/features/load-schema";
 import { type Profile, useHealth, useSavedProfileTest } from "@/shared/api";
 import { formatAge, useNow } from "@/shared/lib/relative-time";
@@ -46,6 +47,26 @@ function ConnectionState({ profile }: { profile: Profile }) {
   );
 }
 
+function LastRun() {
+  const last = useRunStore((s) => s.last);
+  const running = useRunStore((s) => s.running !== null);
+  if (running) return <span data-testid="last-run">Running…</span>;
+  if (!last) return null;
+  const ms = last.durationMs < 1000 ? `${Math.round(last.durationMs)} ms` : `${(last.durationMs / 1000).toFixed(2)} s`;
+  return (
+    <span data-testid="last-run">
+      {last.kind === "explain" ? (
+        "last: plan only"
+      ) : (
+        <>
+          last: <span className="font-mono tabular-nums">{ms}</span>,{" "}
+          <span className="font-mono tabular-nums">{(last.rowCount ?? 0).toLocaleString("en")}</span> rows
+        </>
+      )}
+    </span>
+  );
+}
+
 function SnapshotAge() {
   const { source, query } = useWorkbenchSchema();
   const now = useNow();
@@ -87,6 +108,7 @@ export function StatusBar({ profile }: { profile: Profile | undefined }) {
           <ConnectionState profile={profile} />
         </>
       )}
+      <LastRun />
       <SnapshotAge />
       {health && <span className="font-mono">dbscope {health.version}</span>}
     </footer>

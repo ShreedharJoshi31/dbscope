@@ -15,6 +15,8 @@ export interface ConnectionFormValues {
   schemas: string;
   summaryMode: SummaryMode;
   statementTimeoutMs: string;
+  /** "" = the environment default, "0" = no limit. */
+  maxCost: string;
   maxRowsToLLM: number;
 }
 
@@ -35,6 +37,7 @@ export const FIELD_ORDER: readonly ConnectionField[] = [
   "schemas",
   "summaryMode",
   "statementTimeoutMs",
+  "maxCost",
 ];
 
 export const EMPTY_CONNECTION_FORM: ConnectionFormValues = {
@@ -50,6 +53,7 @@ export const EMPTY_CONNECTION_FORM: ConnectionFormValues = {
   schemas: "",
   summaryMode: "profile",
   statementTimeoutMs: String(defaultStatementTimeoutMs(undefined)),
+  maxCost: "",
   maxRowsToLLM: 50,
 };
 
@@ -67,6 +71,7 @@ export function formFromProfile(profile: Profile): ConnectionFormValues {
     schemas: profile.schemas.join(", "),
     summaryMode: profile.summaryMode,
     statementTimeoutMs: String(profile.statementTimeoutMs),
+    maxCost: profile.maxCost === undefined ? "" : String(profile.maxCost),
     maxRowsToLLM: profile.maxRowsToLLM,
   };
 }
@@ -95,6 +100,10 @@ export function validateConnectionForm(values: ConnectionFormValues): Connection
 
   if (!isWholeNumber(values.statementTimeoutMs) || Number(values.statementTimeoutMs) < 1) {
     errors.statementTimeoutMs = "Timeout must be a whole number of milliseconds, 1 or more.";
+  }
+  const cost = values.maxCost.trim();
+  if (cost && !(/^\d+(\.\d+)?$/.test(cost) && Number.isFinite(Number(cost)))) {
+    errors.maxCost = "Cost limit must be 0 (no limit) or a positive number, or empty for the default.";
   }
   return errors;
 }
@@ -129,6 +138,8 @@ export function toProfileInput(values: ConnectionFormValues): ProfileInput {
     maxRowsToLLM: values.maxRowsToLLM,
     statementTimeoutMs: Number(values.statementTimeoutMs),
   };
+  // Omitted means the environment default; the agent treats 0 as no limit.
+  if (values.maxCost.trim()) input.maxCost = Number(values.maxCost.trim());
   const rootCert = values.sslRootCert.trim();
   if (rootCert && (values.sslMode === "verify-ca" || values.sslMode === "verify-full")) {
     input.sslRootCert = rootCert;

@@ -97,3 +97,15 @@ describe("applyParsedUrl", () => {
     expect(values.password).toBe("");
   });
 });
+
+describe("maxCost", () => {
+  it("blank means the environment default (omitted), 0 means no limit, a number is the limit", () => {
+    expect(toProfileInput({ ...valid, maxCost: "" })).not.toHaveProperty("maxCost");
+    expect(toProfileInput({ ...valid, maxCost: "0" }).maxCost).toBe(0);
+    expect(toProfileInput({ ...valid, maxCost: " 250000 " }).maxCost).toBe(250_000);
+    expect(validateConnectionForm({ ...valid, maxCost: "-1" }).maxCost).toBeDefined();
+    expect(validateConnectionForm({ ...valid, maxCost: "lots" }).maxCost).toBeDefined();
+    expect(validateConnectionForm({ ...valid, maxCost: "1e6" }).maxCost).toBeDefined();
+    expect(validateConnectionForm({ ...valid, maxCost: "1500.5" }).maxCost).toBeUndefined();
+  });
+});

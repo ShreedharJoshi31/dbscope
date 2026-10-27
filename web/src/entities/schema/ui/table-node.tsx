@@ -1,6 +1,6 @@
 import type { Node, NodeProps } from "@xyflow/react";
 import { cn } from "cn";
-import { ChevronDown, ChevronRight, Layers } from "lucide-react";
+import { ChevronDown, ChevronRight, CircleCheck, Info, Layers, OctagonX, TriangleAlert } from "lucide-react";
 import { memo } from "react";
 import { type ColumnMark, nodeVisual, type OverlayEntry, useCanvasStore } from "@/entities/schema/model/canvas-store";
 import { relationKey } from "@/entities/schema/model/keys";
@@ -38,6 +38,29 @@ const OVERLAY_TONE: Record<OverlayEntry["tone"], string> = {
   warn: "text-status-warn-fg border-status-warn-fg",
   danger: "text-status-danger-fg border-status-danger-fg",
 };
+
+const OVERLAY_ICON = { info: Info, success: CircleCheck, warn: TriangleAlert, danger: OctagonX } as const;
+
+/** Icon + text + token colour, never colour alone (UX rule 7); details in the tooltip and accessible name. */
+function OverlayBadge({ entry }: { entry: OverlayEntry }) {
+  const Icon = OVERLAY_ICON[entry.tone];
+  const details = entry.details?.join("\n");
+  return (
+    <span
+      data-testid="overlay-badge"
+      data-overlay-tone={entry.tone}
+      title={details || undefined}
+      className={cn(
+        "flex shrink-0 items-center gap-0.5 rounded-xs border px-1 text-2xs font-semibold",
+        OVERLAY_TONE[entry.tone],
+      )}
+    >
+      <Icon aria-hidden className="size-3" />
+      {entry.label}
+      {details && <span className="sr-only">. {entry.details?.join(". ")}</span>}
+    </span>
+  );
+}
 
 /**
  * Invisible elements at the precomputed handle positions. React Flow still
@@ -127,14 +150,7 @@ function Header({ id, data }: { id: string; data: TableNodeData }) {
           {relation.schema} · <span className="font-mono">{rowEstimateLabel(relation.rowEstimate)}</span>
         </span>
       </div>
-      {overlay && (
-        <span
-          data-overlay-tone={overlay.tone}
-          className={cn("shrink-0 rounded-xs border px-1 text-2xs font-semibold", OVERLAY_TONE[overlay.tone])}
-        >
-          {overlay.label}
-        </span>
-      )}
+      {overlay && <OverlayBadge entry={overlay} />}
       <button
         type="button"
         tabIndex={-1}
@@ -159,6 +175,7 @@ const MARK_CLASS: Record<string, string> = {
   "current-match": "border-status-info-fg ring-2 ring-status-info-fg",
   match: "border-status-info-fg outline-dashed outline-1 outline-offset-2 outline-status-info-fg",
   chain: "border-accent-fg",
+  highlight: "border-accent-fg ring-1 ring-accent-fg",
 };
 
 function useVisual(id: string): { mark: string; dim: boolean } {

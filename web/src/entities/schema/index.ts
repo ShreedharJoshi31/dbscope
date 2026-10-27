@@ -9,6 +9,9 @@ export {
   derive,
   edgeVisual,
   type FocusHops,
+  flowEdgesFor,
+  type HeatState,
+  MAX_FLOW_EDGES,
   type NodeMark,
   nodeVisual,
   type OverlayEntry,
@@ -30,6 +33,14 @@ export {
   relationshipChain,
   type SchemaGraph,
 } from "@/entities/schema/model/graph";
+export {
+  clearCanvasOverlay,
+  describeScan,
+  hasCanvasOverlay,
+  heatmapFromOverlay,
+  highlightTables,
+  showQueryOverlay,
+} from "@/entities/schema/model/heatmap";
 export {
   fkIdOfPairEdge,
   type HandleSide,

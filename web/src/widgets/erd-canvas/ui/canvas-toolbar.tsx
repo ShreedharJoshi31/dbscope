@@ -2,6 +2,7 @@ import { cn } from "cn";
 import {
   ChevronsDownUp,
   ChevronsUpDown,
+  Eraser,
   Focus,
   type LucideIcon,
   Map as MapIcon,
@@ -10,8 +11,9 @@ import {
   Waypoints,
 } from "lucide-react";
 import type { ReactNode, Ref } from "react";
-import { type FocusHops, useCanvasStore } from "@/entities/schema";
+import { clearCanvasOverlay, type FocusHops, hasCanvasOverlay, useCanvasStore } from "@/entities/schema";
 import { ariaKeyShortcut, type KeyCombo, SHORTCUTS } from "@/shared/config/shortcuts";
+import { announce } from "@/shared/lib/announcer";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
 import { ShortcutKeys } from "@/shared/ui/shortcut-keys";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/shared/ui/tooltip";
@@ -85,6 +87,7 @@ export function CanvasToolbar(props: CanvasToolbarProps) {
   const focus = useCanvasStore((s) => s.focus);
   const hops = useCanvasStore((s) => s.focusHops);
   const hasSelection = useCanvasStore((s) => s.selectedId !== null);
+  const hasOverlay = useCanvasStore(hasCanvasOverlay);
   const { showInferred, minimap, set } = useCanvasPrefs();
 
   return (
@@ -149,6 +152,22 @@ export function CanvasToolbar(props: CanvasToolbarProps) {
         onClick={() => set({ minimap: !minimap })}
       />
       <ToolButton icon={RotateCcw} label="Reset layout" onClick={props.onResetLayout} disabled={props.layoutRunning} />
+      {hasOverlay && (
+        <>
+          <Divider />
+          <ToolButton
+            icon={Eraser}
+            label="Clear the query overlay"
+            combo={SHORTCUTS.canvasClear.combo}
+            onClick={() => {
+              clearCanvasOverlay();
+              announce("Cleared the query overlay.");
+            }}
+          >
+            Clear overlay
+          </ToolButton>
+        </>
+      )}
     </div>
   );
 }

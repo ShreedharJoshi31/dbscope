@@ -1,10 +1,11 @@
 import { isMacPlatform } from "@/shared/lib/platform";
 
-/** `mod` is Cmd on macOS and Ctrl elsewhere. */
+/** `mod` is Cmd on macOS and Ctrl elsewhere; `alt` is Option on macOS. */
 export interface KeyCombo {
   key: string;
   mod?: boolean;
   shift?: boolean;
+  alt?: boolean;
 }
 
 export type ShortcutId =
@@ -20,11 +21,23 @@ export type ShortcutId =
   | "canvasMoveSelection"
   | "canvasOpenDetails"
   | "canvasFollowFk"
-  | "canvasClear";
+  | "canvasClear"
+  | "runQuery"
+  | "cancelQuery"
+  | "explainQuery"
+  | "newSqlTab"
+  | "focusAssistant";
 
-export type ShortcutGroup = "General" | "Panels" | "Navigation" | "Canvas";
+export type ShortcutGroup = "General" | "Panels" | "Navigation" | "Query" | "Assistant" | "Canvas";
 
-export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = ["General", "Panels", "Navigation", "Canvas"];
+export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
+  "General",
+  "Panels",
+  "Navigation",
+  "Query",
+  "Assistant",
+  "Canvas",
+];
 
 export interface ShortcutDefinition {
   combo: KeyCombo;
@@ -56,7 +69,26 @@ export const SHORTCUTS: Record<ShortcutId, ShortcutDefinition> = {
     label: "Follow the selected table's foreign key (Shift+Tab goes back)",
     group: "Canvas",
   },
-  canvasClear: { combo: { key: "Escape" }, label: "Clear search, focus mode or selection", group: "Canvas" },
+  canvasClear: {
+    combo: { key: "Escape" },
+    label: "Clear search, focus mode, selection or the query overlay",
+    group: "Canvas",
+  },
+  runQuery: { combo: { key: "Enter", mod: true }, label: "Run the query in the SQL tab", group: "Query" },
+  cancelQuery: { combo: { key: ".", mod: true }, label: "Cancel the running query", group: "Query" },
+  // Not Ctrl+Shift+E: Firefox opens its network panel on it.
+  explainQuery: {
+    combo: { key: "Enter", mod: true, shift: true },
+    label: "Explain the query (plan only, nothing runs)",
+    group: "Query",
+  },
+  // Cmd/Ctrl+N and +T are reserved by browsers; Alt keeps it free.
+  newSqlTab: { combo: { key: "n", mod: true, alt: true }, label: "New SQL tab", group: "Query" },
+  focusAssistant: {
+    combo: { key: "a", mod: true, alt: true },
+    label: "Ask the assistant (focus the question box)",
+    group: "Assistant",
+  },
 };
 
 const KEY_NAMES: Record<string, string> = {
@@ -75,6 +107,7 @@ function keyLabel(key: string): string {
 export function comboKeys(combo: KeyCombo, mac = isMacPlatform()): string[] {
   const keys: string[] = [];
   if (combo.mod) keys.push(mac ? "⌘" : "Ctrl");
+  if (combo.alt) keys.push(mac ? "⌥" : "Alt");
   if (combo.shift) keys.push(mac ? "⇧" : "Shift");
   keys.push(keyLabel(combo.key));
   return keys;
@@ -89,6 +122,7 @@ export function formatCombo(combo: KeyCombo, mac = isMacPlatform()): string {
 export function ariaKeyShortcut(combo: KeyCombo, mac = isMacPlatform()): string {
   const parts: string[] = [];
   if (combo.mod) parts.push(mac ? "Meta" : "Control");
+  if (combo.alt) parts.push("Alt");
   if (combo.shift) parts.push("Shift");
   parts.push(combo.key.length === 1 ? combo.key.toUpperCase() : combo.key);
   return parts.join("+");

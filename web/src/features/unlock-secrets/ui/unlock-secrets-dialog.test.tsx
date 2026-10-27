@@ -7,6 +7,11 @@ import { apiFetch } from "@/shared/api";
 import { renderWithProviders } from "@/test/render";
 import { server } from "@/test/server";
 
+function Probe() {
+  const q = useQuery({ queryKey: ["probe"], queryFn: () => apiFetch<{ ok: boolean }>("/api/probe"), retry: false });
+  return <p>{q.isSuccess ? "probe ok" : q.isError ? "probe failed" : "probe loading"}</p>;
+}
+
 describe("UnlockSecretsDialog", () => {
   it("asks for the passphrase while the vault is locked and closes once unlocked", async () => {
     let locked = true;
@@ -55,10 +60,6 @@ describe("UnlockSecretsDialog", () => {
           : HttpResponse.json({ ok: true });
       }),
     );
-    function Probe() {
-      const q = useQuery({ queryKey: ["probe"], queryFn: () => apiFetch<{ ok: boolean }>("/api/probe"), retry: false });
-      return <p>{q.isSuccess ? "probe ok" : q.isError ? "probe failed" : "probe loading"}</p>;
-    }
     const { user } = renderWithProviders(
       <>
         <UnlockSecretsDialog />

@@ -68,6 +68,18 @@
           }
         }
       }
+    },
+    {
+      "includes": ["src/widgets/results-dock/ui/result-grid.tsx", "src/widgets/results-dock/ui/column-header.tsx"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useSemanticElements": "off",
+            "useFocusableInteractive": "off",
+            "useKeyWithClickEvents": "off"
+          }
+        }
+      }
     }
   ]
 }

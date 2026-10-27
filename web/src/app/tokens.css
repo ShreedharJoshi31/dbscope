@@ -55,6 +55,15 @@
   --env-prod-banner-bg: light-dark(#a40e26, #b62324);
   --env-prod-banner-fg: light-dark(#ffffff, #ffffff);
 
+  /* SQL syntax: aliases of colours above, so the verified contrast carries over */
+  --syntax-keyword: var(--accent-fg);
+  --syntax-string: var(--status-success-fg);
+  --syntax-number: var(--env-staging-fg);
+  --syntax-type: var(--env-local-fg);
+  --syntax-function: var(--env-prod-fg);
+  --syntax-comment: var(--text-muted);
+  --syntax-punctuation: var(--text-muted);
+
   /* Modal backdrop (not in the doc table; needed by dialogs and drawers) */
   --overlay-backdrop: light-dark(rgb(31 35 40 / 0.2), rgb(1 4 9 / 0.6));
   --shadow-color: light-dark(rgb(31 35 40 / 0.12), rgb(1 4 9 / 0.6));

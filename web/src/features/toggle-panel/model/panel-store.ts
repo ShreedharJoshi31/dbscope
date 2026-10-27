@@ -2,6 +2,8 @@ import { create } from "zustand";
 import { safeLocalStorage } from "@/shared/lib/storage";
 
 export type PanelId = "explorer" | "dock" | "assistant";
+/** The left panel shows the schema explorer or the query history. */
+export type ExplorerView = "schema" | "history";
 
 const PANELS_KEY = "dbscope.panels";
 const DEFAULT_OPEN: Record<PanelId, boolean> = { explorer: true, dock: false, assistant: true };
@@ -25,6 +27,9 @@ interface PanelState {
   /** Below 1280px the assistant is an overlay drawer with its own open flag. */
   assistantDrawer: boolean;
   assistantMode: "panel" | "drawer";
+  explorerView: ExplorerView;
+  /** Shows a view in the left panel; when that view is already showing, closes the panel. */
+  toggleExplorerView: (view: ExplorerView) => void;
   setOpen: (panel: PanelId, open: boolean) => void;
   setAssistantDrawer: (open: boolean) => void;
   setAssistantMode: (mode: "panel" | "drawer") => void;
@@ -35,6 +40,16 @@ export const usePanelStore = create<PanelState>((set, get) => ({
   open: readOpen(),
   assistantDrawer: false,
   assistantMode: "panel",
+  explorerView: "schema",
+  toggleExplorerView: (view) => {
+    const state = get();
+    if (state.open.explorer && state.explorerView === view) {
+      state.setOpen("explorer", false);
+      return;
+    }
+    set({ explorerView: view });
+    state.setOpen("explorer", true);
+  },
   setOpen: (panel, open) => {
     if (get().open[panel] === open) return;
     const next = { ...get().open, [panel]: open };
@@ -58,6 +73,10 @@ export const usePanelStore = create<PanelState>((set, get) => ({
 
 export function togglePanel(panel: PanelId): void {
   usePanelStore.getState().toggle(panel);
+}
+
+export function toggleExplorerView(view: ExplorerView): void {
+  usePanelStore.getState().toggleExplorerView(view);
 }
 
 export function useIsPanelVisible(panel: PanelId): boolean {

@@ -1,16 +1,45 @@
-import { useEffect } from "react";
-import { useActiveConnectionStore } from "@/entities/connection";
+import { useEffect, useRef } from "react";
+import { useActiveConnection, useActiveConnectionStore } from "@/entities/connection";
+import { type SqlTab, useRunStore, useSqlTabsScope } from "@/entities/query";
+import { useWorkspaceStore } from "@/entities/schema";
 import { ConnectionFormDialog } from "@/features/add-connection";
 import { DeleteConnectionDialog } from "@/features/delete-connection";
+import { GlossaryDialog } from "@/features/edit-glossary";
+import { LlmSettingsDialog } from "@/features/llm-settings";
+import { RunConfirmDialog } from "@/features/run-query";
 import { switchConnection } from "@/features/switch-connection";
+import { usePanelStore } from "@/features/toggle-panel";
 import { AppShell } from "@/widgets/app-shell";
 import { AssistantPanel } from "@/widgets/assistant-panel";
 import { CommandPalette, CommandPaletteTrigger } from "@/widgets/command-palette";
 import { ErdCanvas } from "@/widgets/erd-canvas";
+import { QueryHistory } from "@/widgets/query-history";
 import { ResultsDock } from "@/widgets/results-dock";
 import { SchemaExplorer } from "@/widgets/schema-explorer";
+import { SqlEditor } from "@/widgets/sql-editor";
+
+const renderSqlTab = (tab: SqlTab) => <SqlEditor tab={tab} />;
+
+/** SQL tabs are kept per connection (and separately for the sample workspace). */
+function useTabScope() {
+  const { profile } = useActiveConnection();
+  const sample = useWorkspaceStore((s) => s.source === "sample");
+  useSqlTabsScope(sample ? "sample" : (profile?.id ?? null));
+}
+
+/** The dock is collapsed until there is something to show; a run or "Open in results" opens it. */
+function useOpenDockOnRun() {
+  const revision = useRunStore((s) => s.revision);
+  const first = useRef(revision);
+  useEffect(() => {
+    if (revision !== first.current) usePanelStore.getState().setOpen("dock", true);
+  }, [revision]);
+}
 
 export function WorkbenchPage() {
+  useTabScope();
+  useOpenDockOnRun();
+
   // Arriving from onboarding leaves focus on <body>; start keyboard users in the workspace.
   useEffect(() => {
     if (document.activeElement === document.body) {
@@ -24,11 +53,16 @@ export function WorkbenchPage() {
       <AppShell
         search={<CommandPaletteTrigger />}
         explorer={<SchemaExplorer />}
+        history={<QueryHistory />}
         erd={<ErdCanvas />}
+        renderSqlTab={renderSqlTab}
         dock={<ResultsDock />}
         assistant={<AssistantPanel />}
       />
       <CommandPalette />
+      <RunConfirmDialog />
+      <LlmSettingsDialog />
+      <GlossaryDialog />
       <ConnectionFormDialog
         onSaved={(profile, mode) => {
           if (mode === "create") switchConnection(profile);

@@ -8,7 +8,7 @@ import { type PanelId, usePanelStore } from "@/features/toggle-panel";
  * open: a panel that mounts (page load, or the layout switching at 1280px)
  * is expanded or collapsed to match it. Drags and keyboard resizes update it.
  */
-export function useSyncedPanel(id: PanelId) {
+export function useSyncedPanel(id: PanelId, openSize?: number) {
   const panelRef = usePanelRef();
   const open = usePanelStore((s) => s.open[id]);
 
@@ -16,10 +16,14 @@ export function useSyncedPanel(id: PanelId) {
     (shouldBeOpen: boolean) => {
       const panel = panelRef.current;
       if (!panel) return;
-      if (shouldBeOpen && panel.isCollapsed()) panel.expand();
+      if (shouldBeOpen && panel.isCollapsed()) {
+        panel.expand();
+        // A panel that was never opened expands only to its minimum; give it a useful size.
+        if (openSize && panel.getSize().inPixels < openSize * 0.6) panel.resize(openSize);
+      }
       if (!shouldBeOpen && !panel.isCollapsed()) panel.collapse();
     },
-    [panelRef],
+    [panelRef, openSize],
   );
 
   useEffect(() => apply(open), [open, apply]);

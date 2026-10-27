@@ -1,4 +1,5 @@
 export { resolveActiveProfile, useActiveConnectionStore } from "@/entities/connection/model/active-connection";
+export { costLimit, DEFAULT_MAX_COST } from "@/entities/connection/model/cost-limit";
 export {
   defaultStatementTimeoutMs,
   ENV_META,

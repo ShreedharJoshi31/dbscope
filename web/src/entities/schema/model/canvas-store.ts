@@ -18,10 +18,22 @@ export interface OverlayEntry {
   label: string;
   /** 0..1, for heatmaps. */
   intensity?: number;
+  /** Tooltip lines, e.g. the plan's reasons and scans. */
+  details?: readonly string[];
 }
 
+/** A query overlay's extra state: joined relation pairs get animated edges; others are dimmed. */
+export interface HeatState {
+  joins: readonly { from: string; to: string }[];
+  /** Relations the query touched; everything else is dimmed. */
+  involved: ReadonlySet<string>;
+}
+
+/** Joined foreign keys animated at most; more would be noise and cost paint time. */
+export const MAX_FLOW_EDGES = 20;
+
 export type FocusHops = 1 | 2 | 3;
-export type NodeMark = "selected" | "current-match" | "match" | "chain" | "focus-root";
+export type NodeMark = "selected" | "current-match" | "match" | "chain" | "focus-root" | "highlight";
 export type ColumnMark = "current-match" | "match" | "endpoint";
 
 export interface RevealRequest {
@@ -37,6 +49,8 @@ interface Derived {
   keep: ReadonlySet<string> | null;
   /** The hovered or selected foreign key. */
   activeEdge: string | null;
+  /** Foreign keys joined by the last query plan, drawn with moving particles. */
+  flowEdges: ReadonlySet<string>;
 }
 
 export interface CanvasState {
@@ -48,6 +62,9 @@ export interface CanvasState {
   focusHops: FocusHops;
   search: { query: string; matches: SearchMatch[]; index: number };
   overlay: Readonly<Record<string, OverlayEntry>>;
+  heat: HeatState | null;
+  /** Tables an assistant answer named ("N tables" badge); others are dimmed. */
+  highlight: ReadonlySet<string> | null;
   reveal: RevealRequest | null;
   detailsOpen: boolean;
   derived: Derived;
@@ -63,14 +80,41 @@ export interface CanvasState {
   clearSearch: () => void;
   setDetailsOpen: (open: boolean) => void;
   /** Esc: clears the innermost active state. Returns what it cleared, or null. */
-  clearOne: () => "search" | "focus" | "edge" | "details" | "selection" | null;
+  clearOne: () => "search" | "focus" | "edge" | "details" | "selection" | "overlay" | null;
   setOverlay: (entries: Record<string, OverlayEntry>) => void;
   patchOverlay: (id: string, entry: OverlayEntry | null) => void;
+  /** Writes a query heatmap: badges, animated joins and dimming in one store update. */
+  setHeatmap: (entries: Record<string, OverlayEntry>, heat: HeatState) => void;
+  setHighlight: (ids: Iterable<string> | null) => void;
+  /** Removes badges, animated joins, dimming and highlights. */
+  clearOverlay: () => void;
 }
 
 const EMPTY_SEARCH = { query: "", matches: [] as SearchMatch[], index: -1 };
 
-type Inputs = Pick<CanvasState, "graph" | "selectedId" | "hoverEdge" | "selectedEdge" | "focus" | "search">;
+type Inputs = Pick<
+  CanvasState,
+  "graph" | "selectedId" | "hoverEdge" | "selectedEdge" | "focus" | "search" | "heat" | "highlight"
+>;
+
+/** Foreign keys that connect each joined pair, in either direction, capped at MAX_FLOW_EDGES. */
+export function flowEdgesFor(graph: SchemaGraph, joins: HeatState["joins"]): Set<string> {
+  const out = new Set<string>();
+  for (const { from, to } of joins) {
+    if (from === to) continue;
+    const candidates = [
+      ...(graph.outgoing.get(from) ?? []).filter((e) => e.parent === to),
+      ...(graph.outgoing.get(to) ?? []).filter((e) => e.parent === from),
+    ];
+    for (const e of candidates) {
+      if (out.size >= MAX_FLOW_EDGES) return out;
+      out.add(e.id);
+    }
+  }
+  return out;
+}
+
+const NO_FLOW: ReadonlySet<string> = new Set();
 
 function markColumns(
   marks: Map<string, Map<string, ColumnMark>>,
@@ -99,11 +143,28 @@ function deriveEdge(
   }
 }
 
-export function derive({ graph, selectedId, hoverEdge, selectedEdge, focus, search }: Inputs): Derived {
+export function derive({
+  graph,
+  selectedId,
+  hoverEdge,
+  selectedEdge,
+  focus,
+  search,
+  heat,
+  highlight,
+}: Inputs): Derived {
   const nodeMarks = new Map<string, NodeMark>();
   const columnMarks = new Map<string, Map<string, ColumnMark>>();
   let keep: Set<string> | null = null;
   const activeEdge = hoverEdge ?? selectedEdge;
+
+  // A query overlay or answer highlight dims the rest, unless focus mode or a search decides what stays.
+  let queryKeep: Set<string> | null = heat && heat.involved.size > 0 ? new Set(heat.involved) : null;
+  if (highlight) {
+    // An answer highlights the tables it names; its result's plan may scan others. Both stay visible.
+    queryKeep = new Set([...(queryKeep ?? []), ...highlight]);
+    for (const id of highlight) nodeMarks.set(id, "highlight");
+  }
 
   if (graph && focus) {
     keep = neighboursWithin(graph, focus.root, focus.hops);
@@ -124,7 +185,9 @@ export function derive({ graph, selectedId, hoverEdge, selectedEdge, focus, sear
   const edge = activeEdge ? graph?.edgeById.get(activeEdge) : undefined;
   if (graph && edge) deriveEdge(edge, graph, nodeMarks, columnMarks);
 
-  return { nodeMarks, columnMarks, keep, activeEdge: edge ? activeEdge : null };
+  keep ??= queryKeep;
+  const flowEdges = graph && heat ? flowEdgesFor(graph, heat.joins) : NO_FLOW;
+  return { nodeMarks, columnMarks, keep, activeEdge: edge ? activeEdge : null, flowEdges };
 }
 
 let revealNonce = 0;
@@ -145,9 +208,11 @@ export const useCanvasStore = create<CanvasState>((set, get) => {
     focusHops: 1,
     search: EMPTY_SEARCH,
     overlay: {},
+    heat: null,
+    highlight: null,
     reveal: null,
     detailsOpen: false,
-    derived: { nodeMarks: new Map(), columnMarks: new Map(), keep: null, activeEdge: null },
+    derived: { nodeMarks: new Map(), columnMarks: new Map(), keep: null, activeEdge: null, flowEdges: NO_FLOW },
 
     setGraph: (graph) => {
       const s = get();
@@ -235,10 +300,17 @@ export const useCanvasStore = create<CanvasState>((set, get) => {
         update({ selectedId: null });
         return "selection";
       }
+      if (s.heat || s.highlight || Object.keys(s.overlay).length > 0) {
+        update({ overlay: {}, heat: null, highlight: null });
+        return "overlay";
+      }
       return null;
     },
 
     setOverlay: (overlay) => set({ overlay }),
+    setHeatmap: (overlay, heat) => update({ overlay, heat }),
+    setHighlight: (ids) => update({ highlight: ids ? new Set(ids) : null }),
+    clearOverlay: () => update({ overlay: {}, heat: null, highlight: null }),
     patchOverlay: (id, entry) => {
       const next = { ...get().overlay };
       if (entry) next[id] = entry;
@@ -255,8 +327,14 @@ export function nodeVisual(s: CanvasState, id: string): string {
   return dim ? `${mark}|dim` : mark;
 }
 
-export function edgeVisual(s: CanvasState, fkId: string, child: string, parent: string): "active" | "dim" | "" {
+export function edgeVisual(
+  s: CanvasState,
+  fkId: string,
+  child: string,
+  parent: string,
+): "active" | "flow" | "dim" | "" {
   if (s.derived.activeEdge === fkId) return "active";
+  if (s.derived.flowEdges.has(fkId)) return "flow";
   const keep = s.derived.keep;
   if (keep && (!keep.has(child) || !keep.has(parent))) return "dim";
   return "";

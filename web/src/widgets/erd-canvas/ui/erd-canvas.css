@@ -28,6 +28,17 @@
   stroke-width: 2.25;
 }
 
+/* A foreign key the last query plan joined on: emphasized; particles move along it unless motion is reduced. */
+.erd-canvas .react-flow__edge-path.erd-edge-flow {
+  stroke: var(--accent-fg);
+  stroke-width: 2;
+}
+
+.erd-canvas .erd-edge-particles circle {
+  fill: var(--accent-fg);
+  pointer-events: none;
+}
+
 .erd-canvas .react-flow__edge-path.erd-edge-dim {
   opacity: 0.15;
 }
