@@ -29,8 +29,9 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
-    // The bundle is embedded in the Go binary and served from 127.0.0.1, so size warnings at 500 kB are noise.
-    chunkSizeWarningLimit: 800,
+    // The bundle is embedded in the Go binary and served from 127.0.0.1, so size warnings are noise;
+    // the largest file is elk-worker (~1.5 MB), the layout engine loaded lazily in a worker.
+    chunkSizeWarningLimit: 1600,
   },
   test: {
     environment: "happy-dom",
