@@ -1,0 +1,74 @@
+{
+  "name": "dbscope",
+  "displayName": "dbscope",
+  "description": "Lock and rewrite risk for PostgreSQL migrations, shown as you edit them.",
+  "version": "0.1.0",
+  "publisher": "dbscope",
+  "private": true,
+  "license": "UNLICENSED",
+  "packageManager": "pnpm@12.15.0",
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": ["Linters"],
+  "main": "./dist/extension.js",
+  "activationEvents": ["onLanguage:sql"],
+  "contributes": {
+    "commands": [
+      { "command": "dbscope.checkMigrations", "title": "dbscope: Check migrations in this folder" },
+      { "command": "dbscope.openWorkbench", "title": "dbscope: Open workbench" }
+    ],
+    "configuration": {
+      "title": "dbscope",
+      "properties": {
+        "dbscope.path": {
+          "type": "string",
+          "default": "dbscope",
+          "description": "The dbscope binary: a name on PATH or an absolute path."
+        },
+        "dbscope.migrations": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["**/migrations/**/*.sql", "**/migrate/**/*.sql"],
+          "description": "Glob patterns for migration files. Saving one checks every migration in its folder, in order."
+        },
+        "dbscope.schemaDump": {
+          "type": "string",
+          "default": "",
+          "description": "A pg_dump --schema-only file to check against, relative to the workspace folder. Used when the DSN variable is not set."
+        },
+        "dbscope.stats": {
+          "type": "string",
+          "default": "",
+          "description": "A \"dbscope stats export\" file that adds table sizes to the schema dump."
+        },
+        "dbscope.dsnEnv": {
+          "type": "string",
+          "default": "DBSCOPE_DSN",
+          "description": "The environment variable that holds the database URL. The URL itself is never stored in settings."
+        },
+        "dbscope.checkOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Check a migration's folder when a migration file is saved."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist/extension.js --minify",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:vscode": "node test/run-vscode.mjs",
+    "package": "pnpm build && vsce package --no-dependencies --out dist/dbscope.vsix"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/vscode": "1.100.0",
+    "@vscode/test-electron": "2.5.2",
+    "@vscode/vsce": "3.6.0",
+    "esbuild": "0.25.10",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5"
+  }
+}

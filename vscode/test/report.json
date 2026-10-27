@@ -1,0 +1,137 @@
+{
+  "pgVersion": 170000,
+  "rating": "critical",
+  "statements": [
+    {
+      "file": "vscode/test/fixture/db/migrations/0001_add_status.sql",
+      "line": 1,
+      "column": 1,
+      "endLine": 1,
+      "sql": "SET lock_timeout = '2s'",
+      "kind": "SET",
+      "tx": "none",
+      "locks": [],
+      "work": "none",
+      "lockTimeout": false,
+      "score": 0,
+      "rating": "low",
+      "findings": []
+    },
+    {
+      "file": "vscode/test/fixture/db/migrations/0001_add_status.sql",
+      "line": 2,
+      "column": 1,
+      "endLine": 2,
+      "sql": "ALTER TABLE orders ADD COLUMN status text DEFAULT 'new' NOT NULL",
+      "kind": "ALTER TABLE ADD COLUMN",
+      "tx": "none",
+      "locks": [
+        {
+          "relation": "public.orders",
+          "mode": "ACCESS EXCLUSIVE"
+        }
+      ],
+      "work": "none",
+      "lockTimeout": true,
+      "score": 1,
+      "rating": "low",
+      "findings": []
+    },
+    {
+      "file": "vscode/test/fixture/db/migrations/0002_risky.sql",
+      "line": 1,
+      "column": 1,
+      "endLine": 1,
+      "sql": "ALTER TABLE users ALTER COLUMN email TYPE varchar(100)",
+      "kind": "ALTER TABLE ALTER COLUMN TYPE",
+      "tx": "none",
+      "locks": [
+        {
+          "relation": "public.users",
+          "mode": "ACCESS EXCLUSIVE"
+        }
+      ],
+      "work": "rewrite",
+      "lockTimeout": false,
+      "score": 16,
+      "rating": "critical",
+      "findings": [
+        {
+          "ruleId": "DBS-TYPE-REWRITE",
+          "rating": "critical",
+          "message": "ALTER COLUMN email TYPE rewrites public.users and rebuilds its indexes: text to character varying(100) adds or lowers a length limit, so every value is checked",
+          "safeAlternative": "Add a new column of the new type, write to both, backfill in batches, switch reads, then drop the old column"
+        },
+        {
+          "ruleId": "DBS-TYPE-NARROWING",
+          "rating": "medium",
+          "message": "public.users.email: text to character varying(100) adds or lowers a length limit, so every value is checked",
+          "safeAlternative": "Check that every existing value fits and that writers are updated first"
+        },
+        {
+          "ruleId": "DBS-NO-LOCK-TIMEOUT",
+          "rating": "critical",
+          "message": "requests ACCESS EXCLUSIVE on public.users without a lock_timeout; while it waits, later queries on the table queue behind it",
+          "safeAlternative": "SET lock_timeout = '2s' before it (SET LOCAL inside the transaction) and retry the migration on timeout"
+        }
+      ]
+    },
+    {
+      "file": "vscode/test/fixture/db/migrations/0002_risky.sql",
+      "line": 2,
+      "column": 1,
+      "endLine": 2,
+      "sql": "CREATE INDEX orders_user_ix ON orders (user_id)",
+      "kind": "CREATE INDEX",
+      "tx": "none",
+      "locks": [
+        {
+          "relation": "public.orders",
+          "mode": "SHARE"
+        }
+      ],
+      "work": "index_build",
+      "lockTimeout": false,
+      "score": 8,
+      "rating": "high",
+      "findings": [
+        {
+          "ruleId": "DBS-INDEX-NOT-CONCURRENT",
+          "rating": "high",
+          "message": "CREATE INDEX on public.orders holds SHARE (blocks writes) for the whole build",
+          "safeAlternative": "CREATE INDEX CONCURRENTLY outside a transaction block"
+        },
+        {
+          "ruleId": "DBS-NO-LOCK-TIMEOUT",
+          "rating": "high",
+          "message": "requests SHARE on public.orders without a lock_timeout; while it waits, later queries on the table queue behind it",
+          "safeAlternative": "SET lock_timeout = '2s' before it (SET LOCAL inside the transaction) and retry the migration on timeout"
+        }
+      ]
+    }
+  ],
+  "diff": {
+    "added": [],
+    "dropped": [],
+    "altered": [
+      "public.orders",
+      "public.users"
+    ],
+    "columns": [
+      {
+        "relation": "public.orders",
+        "column": "status",
+        "change": "added"
+      },
+      {
+        "relation": "public.users",
+        "column": "email",
+        "change": "altered"
+      }
+    ]
+  },
+  "impact": {},
+  "unanalyzable": [],
+  "warnings": null,
+  "base": "dump"
+}
