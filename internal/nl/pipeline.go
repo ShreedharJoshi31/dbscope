@@ -326,7 +326,8 @@ func (r *runner) run(ctx context.Context) {
 			return
 		}
 		output, raw, repaired = fixed, fixedRaw, true
-		r.out.Output, r.out.SQL = &output, output.SQL
+		// Recorded even if the repaired SQL fails too, so evals can tell a failed repair from none.
+		r.out.Output, r.out.SQL, r.out.Repaired = &output, output.SQL, true
 		if !r.emitAnswer(output, true) {
 			return
 		}

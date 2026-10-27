@@ -364,6 +364,9 @@ func testDBRepair(t *testing.T, db fixtureDB) {
 	if out.Err == nil || len(h.fake.Requests()) != 2 || h.rec.find("error")[0]["code"] != "database" {
 		t.Fatalf("second error: %v %s", out.Err, h.rec.names())
 	}
+	if !out.Repaired {
+		t.Fatal("a repair that failed again must still be reported as attempted")
+	}
 	if e := h.rec.find("error")[0]; e["sqlstate"] != "22012" {
 		t.Fatalf("error %v", e)
 	}
