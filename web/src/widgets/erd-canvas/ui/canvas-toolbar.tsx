@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import type { ReactNode, Ref } from "react";
 import { clearCanvasOverlay, type FocusHops, hasCanvasOverlay, useCanvasStore } from "@/entities/schema";
+import { WorkloadControl } from "@/features/show-workload";
 import { ariaKeyShortcut, type KeyCombo, SHORTCUTS } from "@/shared/config/shortcuts";
 import { announce } from "@/shared/lib/announcer";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
@@ -71,6 +72,7 @@ const LAYOUT_OPTIONS = (Object.keys(LAYOUT_LABELS) as LayoutAlgorithm[]).map((va
 const HOP_OPTIONS = ([1, 2, 3] as const).map((n) => ({ value: String(n) as "1" | "2" | "3", label: String(n) }));
 
 export interface CanvasToolbarProps {
+  profileId: string | undefined;
   searchRef: Ref<HTMLInputElement>;
   onExitSearch: () => void;
   algorithm: LayoutAlgorithm;
@@ -152,6 +154,12 @@ export function CanvasToolbar(props: CanvasToolbarProps) {
         onClick={() => set({ minimap: !minimap })}
       />
       <ToolButton icon={RotateCcw} label="Reset layout" onClick={props.onResetLayout} disabled={props.layoutRunning} />
+      {props.profileId && (
+        <>
+          <Divider />
+          <WorkloadControl profileId={props.profileId} />
+        </>
+      )}
       {hasOverlay && (
         <>
           <Divider />

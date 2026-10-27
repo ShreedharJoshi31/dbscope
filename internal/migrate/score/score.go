@@ -1,13 +1,15 @@
 // Package score turns a classified statement into a number and a rating
 // (docs/MIGRATIONS.md, "Scoring"):
 //
-//	score = L·W·Z + Q + 3T + 2H
+//	score = L·W·Z + Q + 3T + 2H + 2K
 //
 // L is the lock class of the relation (0-3), W the work (0 catalog only,
 // 1 scan or index build, 2 rewrite), Z the size tier of the data the
 // statement processes, Q = 1 when L >= 2 (lock-queue exposure), T = 1 when
 // L >= 2 and no lock_timeout is in effect, H = 1 when ACCESS EXCLUSIVE is
-// already held earlier in the same transaction. The statement's score is
+// already held earlier in the same transaction, K = 1 when L >= 2 on a hot
+// table (one serving a large share of the database's reads, so a lock queue
+// on it stalls much of the application). The statement's score is
 // the maximum over the relations it locks. Bands: Low 0-2, Medium 3-6,
 // High 7-11, Critical 12+.
 //
@@ -89,15 +91,19 @@ type Inputs struct {
 	L, W, Z     int
 	LockTimeout bool
 	Held        bool
+	Hot         bool
 }
 
-// Score computes L·W·Z + Q + 3T + 2H.
+// Score computes L·W·Z + Q + 3T + 2H + 2K.
 func Score(in Inputs) int {
 	s := in.L * in.W * in.Z
 	if in.L >= 2 {
 		s++ // Q
 		if !in.LockTimeout {
 			s += 3 // T
+		}
+		if in.Hot {
+			s += 2 // K
 		}
 	}
 	if in.Held {

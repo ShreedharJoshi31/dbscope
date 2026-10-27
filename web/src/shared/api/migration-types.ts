@@ -90,6 +90,8 @@ export interface ImpactItem {
   /** fk_child: "s.t (constraint)"; trigger/policy: "name ON s.t"; function: "s.f(args)"; query: a summary. */
   name: string;
   certainty: "catalog" | "heuristic";
+  /** kind query: how often it ran, from pg_stat_statements. */
+  calls?: number;
 }
 
 export interface Unanalyzable {

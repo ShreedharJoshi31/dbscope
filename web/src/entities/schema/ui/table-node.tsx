@@ -77,6 +77,16 @@ function OverlayBadge({ entry }: { entry: OverlayEntry }) {
     >
       <Icon aria-hidden className="size-3" />
       {entry.label}
+      {entry.intensity !== undefined && (
+        // A heat bar; the label already states the number, so it is decorative.
+        <span aria-hidden className="ml-0.5 h-1.5 w-6 overflow-hidden rounded-full bg-current/20">
+          <span
+            data-testid="overlay-intensity"
+            className="block h-full rounded-full bg-current"
+            style={{ width: `${Math.round(Math.max(0.08, Math.min(1, entry.intensity)) * 100)}%` }}
+          />
+        </span>
+      )}
       {details && <span className="sr-only">. {entry.details?.join(". ")}</span>}
     </span>
   );

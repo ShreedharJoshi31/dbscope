@@ -114,7 +114,11 @@ func Text(w io.Writer, rep *migrate.Report) error {
 		for _, k := range keys {
 			fmt.Fprintf(ew, "  %s\n", k)
 			for _, it := range rep.Impact[k] {
-				fmt.Fprintf(ew, "      %-16s %s (%s)\n", it.Kind, it.Name, it.Certainty)
+				detail := it.Certainty
+				if it.Calls > 0 {
+					detail = fmt.Sprintf("%s, %d calls", it.Certainty, it.Calls)
+				}
+				fmt.Fprintf(ew, "      %-16s %s (%s)\n", it.Kind, it.Name, detail)
 			}
 		}
 	}

@@ -111,6 +111,30 @@ Profile create/update/test-by-id with a locked vault → `423 {"error":{"code":"
 - `PUT /api/profiles/{id}/layout` body `{"key":"...","positions":{...},"collapsed":[...]}` → `204`
   `layoutKey` is chosen by the UI (e.g. the sorted schema list); max 1 MiB body.
 
+### Workload
+
+Design: `docs/WORKLOAD.md`.
+
+- `GET /api/profiles/{id}/workload` → `200 WorkloadSnapshot` (read-only; one transaction with the profile's statement timeout)
+
+```ts
+type WorkloadSnapshot = {
+  generatedAt: string; inRecovery: boolean; tableStatsReset?: string;
+  statements: { status: "ok" | "not_installed" | "not_loaded" | "unavailable"; message?: string; since?: string;
+    dealloc: number; totalCalls: number; totalTimeMs: number; hiddenCalls: number; unattributedCalls: number;
+    unreadCalls: number; read: number };
+  tables: Record<string /* schema.table */, { seqScans: number; idxScans: number; rowsWritten: number; liveRows: number;
+    queryCalls: number; queryTimeMs: number; columns?: Record<string, { queries: number; calls: number }>;
+    wildcardCalls?: number; topQueries?: { queryId: string; text: string; calls: number; totalMs: number; meanMs: number }[] }>;
+};
+```
+
+Errors as for `/schema` (`502 upstream`, `504 timeout`, `423`). `pg_stat_statements` problems are
+reported in `statements.status`, never as an error.
+
+Migration `impact` items of kind `query` carry `calls`. `dbscope stats export` relations carry `scans`
+and `rowsWritten`, and the file `totalScans`, `totalRowsWritten`, `activitySince` and `inRecovery`.
+
 ### Team file (shared state)
 
 Design and format: `docs/SHARING.md`.

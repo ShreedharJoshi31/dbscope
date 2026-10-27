@@ -56,7 +56,19 @@ The test fails if `rules` data disagrees with the recorded ground truth for any 
 - W work: 0 catalog only · 1 scan or index build · 2 rewrite
 - Z size tier (pages × block size): 0 < 10 MB · 1 < 1 GB · 2 < 10 GB · 3 < 50 GB · 4 ≥ 50 GB; unknown → 2
 - Q = 1 if L ≥ 2 (lock-queue exposure); T = 1 if L ≥ 2 and no lock_timeout in effect; H = 1 if ACCESS EXCLUSIVE is already held earlier in the same transaction
-- score = L·W·Z + Q + 3T + 2H → Low 0-2 · Medium 3-6 · High 7-11 · Critical ≥ 12
+- K = 1 if the lock stops traffic on a busy table. ACCESS EXCLUSIVE stops reads and writes, so the
+  table counts as busy with at least 5% of the database's table scans (sequential plus index); the
+  SHARE-class locks stop only writes, so it counts as busy with at least 5% of the database's row
+  writes. Either way at least 1,000 of them, and a partitioned table counts its partitions'. The
+  finding is `DBS-HOT-TABLE`, giving the share and since when the counters run. Counters come from a
+  live base or a `dbscope stats export` file (`scans`, `rowsWritten`, `totalScans`,
+  `totalRowsWritten`, `activitySince`, `inRecovery`); without database totals the share is of the
+  schemas read, and the finding says so. A schema dump alone has no counters, so K is 0. On a replica
+  they count only that replica's reads and no writes.
+- score = L·W·Z + Q + 3T + 2H + 2K → Low 0-2 · Medium 3-6 · High 7-11 · Critical ≥ 12
+
+Query dependents found in `pg_stat_statements` carry their call counts. Workload on the canvas is
+described in [WORKLOAD.md](WORKLOAD.md).
 
 Overrides: statements that will fail (CONCURRENTLY in a transaction, ADD … NOT NULL without default
 on a non-empty table, unparseable) → Critical. Breaking changes (drop/rename column or table, type

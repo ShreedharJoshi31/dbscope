@@ -133,10 +133,10 @@ WHERE tt.attnum IS NOT NULL
                   AND d.refclassid = 'pg_class'::regclass AND d.refobjid = tt.rel AND d.refobjsubid = tt.attnum))
 ORDER BY 1, 2, 3`
 
-// statementsQuery reads up to 2000 of this database's statement texts,
-// most-called first.
-const statementsQuery = `SELECT query FROM pg_stat_statements
-WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
+// statementsQuery reads up to 2000 of this database's top-level statement
+// texts, most-called first, from the extension's schema (%s).
+const statementsQuery = `SELECT query, calls FROM %s.pg_stat_statements
+WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database()) AND toplevel
   AND query IS NOT NULL AND query <> '<insufficient privilege>'
 ORDER BY calls DESC LIMIT 2000`
 
@@ -188,8 +188,10 @@ func (l *Live) Impact(ctx context.Context, targets []Target) (Result, []string, 
 // statStatements matches pg_stat_statements texts against the targets. It
 // never fails the analysis: any problem becomes the returned warning.
 func statStatements(ctx context.Context, tx pgx.Tx, targets []Target, out Result) string {
-	var present bool
-	if err := tx.QueryRow(ctx, "SELECT to_regclass('pg_stat_statements') IS NOT NULL").Scan(&present); err != nil || !present {
+	// Its schema need not be on the search_path.
+	var nsp string
+	if err := tx.QueryRow(ctx, `SELECT n.nspname FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace
+		WHERE e.extname = 'pg_stat_statements'`).Scan(&nsp); err != nil {
 		return "pg_stat_statements is not installed in this database; query matches were skipped"
 	}
 	sp, err := tx.Begin(ctx)
@@ -197,11 +199,11 @@ func statStatements(ctx context.Context, tx pgx.Tx, targets []Target, out Result
 		return "pg_stat_statements was skipped: " + err.Error()
 	}
 	defer sp.Rollback(context.WithoutCancel(ctx))
-	rows, err := sp.Query(ctx, statementsQuery)
-	var texts []string
+	rows, err := sp.Query(ctx, fmt.Sprintf(statementsQuery, pgx.Identifier{nsp}.Sanitize()))
+	var texts []QueryText
 	if err == nil {
-		var q string
-		_, err = pgx.ForEachRow(rows, []any{&q}, func() error { texts = append(texts, q); return nil })
+		var q QueryText
+		_, err = pgx.ForEachRow(rows, []any{&q.Text, &q.Calls}, func() error { texts = append(texts, q); return nil })
 	}
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -214,6 +216,12 @@ func statStatements(ctx context.Context, tx pgx.Tx, targets []Target, out Result
 	return ""
 }
 
+// QueryText is one pg_stat_statements statement and how often it ran.
+type QueryText struct {
+	Text  string
+	Calls int64
+}
+
 // maxQueryMatches caps query matches per target.
 const maxQueryMatches = 20
 
@@ -221,8 +229,9 @@ const maxQueryMatches = 20
 // target whose relation it reads (RangeVar) and, for column targets, whose
 // column it names (ColumnRef). Unqualified names match any schema, so the
 // matches are heuristic.
-func MatchQueries(texts []string, targets []Target, out Result) {
-	for _, text := range texts {
+func MatchQueries(texts []QueryText, targets []Target, out Result) {
+	for _, qt := range texts {
+		text := qt.Text
 		tree, err := pgquery.Parse(text)
 		if err != nil {
 			continue
@@ -259,7 +268,7 @@ func MatchQueries(texts []string, targets []Target, out Result) {
 				}
 			}
 			if n < maxQueryMatches {
-				out.add(key, Item{Kind: "query", Name: name, Certainty: Heuristic})
+				out.add(key, Item{Kind: "query", Name: name, Certainty: Heuristic, Calls: qt.Calls})
 			}
 		}
 	}

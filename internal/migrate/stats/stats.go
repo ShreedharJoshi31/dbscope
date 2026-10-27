@@ -41,6 +41,15 @@ type File struct {
 	CurrentRole string        `json:"currentRole"`
 	Catalog     apply.Catalog `json:"catalog"`
 	ExportedAt  time.Time     `json:"exportedAt"`
+	// ActivitySince is when the per-table activity counters (Relation.Scans,
+	// RowsWritten) were last reset; InRecovery means they came from a
+	// replica, which counts only its own reads and no writes.
+	ActivitySince *time.Time `json:"activitySince,omitempty"`
+	InRecovery    bool       `json:"inRecovery,omitempty"`
+	// TotalScans and TotalRowsWritten cover every table in the database, so
+	// a relation's share is of the whole database, not only Schemas.
+	TotalScans       int64 `json:"totalScans,omitempty"`
+	TotalRowsWritten int64 `json:"totalRowsWritten,omitempty"`
 }
 
 // Relation is one table, partition or materialized view.
@@ -54,6 +63,11 @@ type Relation struct {
 	TableBytes  int64  `json:"tableBytes"`
 	IndexBytes  int64  `json:"indexBytes"`
 	Partition   bool   `json:"partition,omitempty"`
+	// Scans (sequential plus index) and RowsWritten (inserted, updated,
+	// deleted) since File.ActivitySince, from pg_stat_all_tables: how much
+	// traffic would queue behind a lock on it.
+	Scans       int64 `json:"scans,omitempty"`
+	RowsWritten int64 `json:"rowsWritten,omitempty"`
 }
 
 // Index is one index's size.
@@ -88,14 +102,25 @@ type DB interface {
 const nonSystem = `n.nspname <> 'information_schema' AND n.nspname NOT LIKE 'pg\_%'`
 
 const headerQuery = `SELECT current_setting('server_version_num')::int, current_setting('block_size')::int, current_user::text,
-       ARRAY(SELECT n.nspname::text FROM pg_namespace n WHERE ` + nonSystem + ` AND has_schema_privilege(n.oid, 'USAGE') ORDER BY 1)`
+       ARRAY(SELECT n.nspname::text FROM pg_namespace n WHERE ` + nonSystem + ` AND has_schema_privilege(n.oid, 'USAGE') ORDER BY 1),
+       pg_is_in_recovery(), (SELECT pg_stat_get_db_stat_reset_time(oid) FROM pg_database WHERE datname = current_database())`
 
 const relationsQuery = `SELECT n.nspname::text, c.relname::text, c.relkind::text, c.relpages::int8, c.reltuples::float8,
        coalesce((SELECT sum(ic.relpages)::int8 FROM pg_index i JOIN pg_class ic ON ic.oid = i.indexrelid
-                 WHERE i.indrelid = c.oid), 0), c.relispartition
+                 WHERE i.indrelid = c.oid), 0), c.relispartition,
+       pg_stat_get_numscans(c.oid) + coalesce((SELECT sum(pg_stat_get_numscans(i.indexrelid))::int8 FROM pg_index i
+                 WHERE i.indrelid = c.oid), 0),
+       pg_stat_get_tuples_inserted(c.oid) + pg_stat_get_tuples_updated(c.oid) + pg_stat_get_tuples_deleted(c.oid)
 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE c.relkind IN ('r','p','m') AND n.nspname = ANY($1::text[])
 ORDER BY 1, 2`
+
+// totalsQuery sums every table's activity, the denominator of a table's share.
+const totalsQuery = `SELECT coalesce(sum(pg_stat_get_numscans(c.oid)), 0)::int8,
+       coalesce(sum(pg_stat_get_tuples_inserted(c.oid) + pg_stat_get_tuples_updated(c.oid) + pg_stat_get_tuples_deleted(c.oid))
+                FILTER (WHERE c.relkind IN ('r', 'm')), 0)::int8
+FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relkind IN ('r', 'm', 'i') AND ` + nonSystem
 
 const indexesQuery = `SELECT n.nspname::text, ic.relname::text, c.relname::text, ic.relpages::int8
 FROM pg_index i
@@ -143,7 +168,7 @@ func Read(ctx context.Context, q Querier, schemas []string) (*File, []string, er
 	f := &File{Format: Format, ExportedAt: time.Now().UTC().Truncate(time.Second), Catalog: apply.Catalog{
 		ConstrainedDomains: map[string]bool{}, DefaultPartitions: map[string]apply.QName{}, Clustered: map[string]bool{}}}
 	var defaults []string
-	if err := q.QueryRow(ctx, headerQuery).Scan(&f.ServerVersion, &f.BlockSize, &f.CurrentRole, &defaults); err != nil {
+	if err := q.QueryRow(ctx, headerQuery).Scan(&f.ServerVersion, &f.BlockSize, &f.CurrentRole, &defaults, &f.InRecovery, &f.ActivitySince); err != nil {
 		return nil, nil, fmt.Errorf("stats header: %w", err)
 	}
 	f.Schemas = slices.Clone(schemas)
@@ -160,7 +185,7 @@ func Read(ctx context.Context, q Querier, schemas []string) (*File, []string, er
 	var r Relation
 	var tuples float64
 	var indexPages int64
-	if err := each(ctx, q, relationsQuery, []any{f.Schemas}, []any{&r.Schema, &r.Name, &r.Kind, &r.Pages, &tuples, &indexPages, &r.Partition}, func() {
+	if err := each(ctx, q, relationsQuery, []any{f.Schemas}, []any{&r.Schema, &r.Name, &r.Kind, &r.Pages, &tuples, &indexPages, &r.Partition, &r.Scans, &r.RowsWritten}, func() {
 		x := r
 		x.TableBytes, x.IndexBytes = r.Pages*bs, indexPages*bs
 		x.RowEstimate = nil
@@ -181,6 +206,10 @@ func Read(ctx context.Context, q Querier, schemas []string) (*File, []string, er
 	}); err != nil {
 		return nil, nil, fmt.Errorf("stats indexes: %w", err)
 	}
+	// Optional: without them a table's share is of the schemas read.
+	_ = savepoint(ctx, q, func() error {
+		return q.QueryRow(ctx, totalsQuery).Scan(&f.TotalScans, &f.TotalRowsWritten)
+	})
 	var warnings []string
 	var s Setting
 	var cfg string

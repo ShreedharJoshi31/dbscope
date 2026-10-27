@@ -9,7 +9,9 @@ import (
 	"github.com/dbscope/dbscope/internal/migrate/ingest"
 	"github.com/dbscope/dbscope/internal/migrate/rules"
 	"github.com/dbscope/dbscope/internal/migrate/score"
+	"github.com/dbscope/dbscope/internal/migrate/stats"
 	"github.com/dbscope/dbscope/internal/sample"
+	"github.com/dbscope/dbscope/internal/schema"
 )
 
 // golden is one statement's expected outcome against the sample schema
@@ -321,6 +323,8 @@ func TestScoreExamples(t *testing.T) {
 		{score.Inputs{L: 1, W: 1, Z: 4}, 4, score.Medium},
 		{score.Inputs{L: 0, W: 2, Z: 4}, 0, score.Low},
 		{score.Inputs{L: 2, W: 1, Z: 1, LockTimeout: true, Held: true}, 5, score.Medium},
+		{score.Inputs{L: 3, W: 0, Z: 2, LockTimeout: true, Hot: true}, 3, score.Medium},
+		{score.Inputs{L: 1, W: 1, Z: 1, Hot: true}, 1, score.Low},
 	} {
 		if got := score.Score(c.in); got != c.want || score.Band(got) != c.band {
 			t.Errorf("%+v: %d %s, want %d %s", c.in, got, score.Band(got), c.want, c.band)
@@ -353,5 +357,83 @@ func TestReportBasics(t *testing.T) {
 	}
 	if !rep.Exceeds(score.Medium) || rep.Exceeds(score.High) {
 		t.Errorf("rating %s", rep.Rating)
+	}
+}
+
+func TestHotTableRaisesTheScore(t *testing.T) {
+	m, err := sample.Model()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rel := m.Relations[0].QName()
+	run := func(scans, writes map[string]int64, dbWide bool, sql string) Statement {
+		t.Helper()
+		b := SampleBase(m)
+		b.Scans, b.Writes, b.DatabaseTotals = scans, writes, dbWide
+		for _, n := range scans {
+			b.TotalScans += n
+		}
+		for _, n := range writes {
+			b.TotalWrites += n
+		}
+		rep, err := Analyze(t.Context(), b, Request{Files: []ingest.Input{{Name: "m.sql", SQL: sql}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return rep.Statements[len(rep.Statements)-1]
+	}
+	message := func(s Statement) string {
+		for _, f := range s.Findings {
+			if f.RuleID == "DBS-HOT-TABLE" {
+				return f.Message
+			}
+		}
+		return ""
+	}
+	busyReads := map[string]int64{rel.String(): 6000, "other.table": 6000}
+	alter := fmt.Sprintf("SET lock_timeout = '2s';\nALTER TABLE %s ADD COLUMN flag int", rel)
+	quiet := run(nil, nil, false, alter)
+	hot := run(busyReads, nil, true, alter)
+	if hot.Score != quiet.Score+2 || message(quiet) != "" {
+		t.Fatalf("quiet %d %v, hot %d %v", quiet.Score, ids(quiet), hot.Score, ids(hot))
+	}
+	if got := message(hot); !strings.Contains(got, "has 50% of this database's table scans (6000 scans since the statistics were last reset); reads and writes queue") {
+		t.Fatalf("message %q", got)
+	}
+	if got := message(run(busyReads, nil, false, alter)); !strings.Contains(got, "of the table scans in the schemas read") {
+		t.Fatalf("schemas-only message %q", got)
+	}
+	// Few scans in absolute terms, or a lock that stops nothing: not hot.
+	if s := run(map[string]int64{rel.String(): 900}, nil, true, alter); message(s) != "" {
+		t.Fatal("900 scans made the table hot")
+	}
+	if s := run(busyReads, nil, true, fmt.Sprintf("SELECT 1 FROM %s", rel)); message(s) != "" {
+		t.Fatal("a read was flagged")
+	}
+	// A SHARE lock (CREATE INDEX) stops writes only: busy reads do not make it hot, busy writes do.
+	index := fmt.Sprintf("SET lock_timeout = '2s';\nCREATE INDEX hot_ix ON %s (id)", rel)
+	if s := run(busyReads, nil, true, index); message(s) != "" {
+		t.Fatalf("reads made a SHARE lock hot: %q", message(s))
+	}
+	busyWrites := map[string]int64{rel.String(): 3000, "other.table": 1000}
+	if got := message(run(nil, busyWrites, true, index)); !strings.Contains(got, "75% of this database's row writes (3000 rows written") || !strings.Contains(got, "writes queue behind the lock (reads continue)") {
+		t.Fatalf("SHARE lock on a write-heavy table: %q", got)
+	}
+}
+
+func TestPartitionedTablesSumTheirPartitions(t *testing.T) {
+	q := func(n string) schema.QualifiedName { return schema.QualifiedName{Schema: "app", Name: n} }
+	m := &schema.Model{Schemas: []string{"app"}, Relations: []schema.Relation{
+		{Schema: "app", Name: "events", Kind: schema.KindPartitionedTable, Partitions: []schema.QualifiedName{q("events_2025"), q("events_2026")}},
+		{Schema: "app", Name: "events_2025", Kind: schema.KindTable},
+		{Schema: "app", Name: "events_2026", Kind: schema.KindPartitionedTable, Partitions: []schema.QualifiedName{q("events_2026_h1")}},
+		{Schema: "app", Name: "events_2026_h1", Kind: schema.KindTable},
+	}}
+	b := FromStats(m, &stats.File{BlockSize: 8192, Relations: []stats.Relation{
+		{Schema: "app", Name: "events_2025", Kind: "r", Scans: 3000, RowsWritten: 10, Partition: true},
+		{Schema: "app", Name: "events_2026_h1", Kind: "r", Scans: 4000, RowsWritten: 20, Partition: true},
+	}})
+	if b.Scans["app.events"] != 7000 || b.Writes["app.events"] != 30 || b.Scans["app.events_2026"] != 4000 {
+		t.Fatalf("scans %v writes %v", b.Scans, b.Writes)
 	}
 }

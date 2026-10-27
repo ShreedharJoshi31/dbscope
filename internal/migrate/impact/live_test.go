@@ -176,11 +176,14 @@ func TestFromModel(t *testing.T) {
 
 func TestMatchQueries(t *testing.T) {
 	out := Result{}
-	MatchQueries([]string{"SELECT email FROM users", "SELECT 1", "not sql at all", "UPDATE other.users SET email = $1",
-		"WITH x AS (SELECT id FROM app.users) SELECT * FROM x"},
-		[]Target{{Relation: q("app", "users"), Column: "email"}, {Relation: q("app", "users")}}, out)
-	if got := len(out["app.users.email"]); got != 1 {
-		t.Fatalf("email matches %+v", out["app.users.email"])
+	var texts []QueryText
+	for i, s := range []string{"SELECT email FROM users", "SELECT 1", "not sql at all", "UPDATE other.users SET email = $1",
+		"WITH x AS (SELECT id FROM app.users) SELECT * FROM x"} {
+		texts = append(texts, QueryText{Text: s, Calls: int64(100 * (i + 1))})
+	}
+	MatchQueries(texts, []Target{{Relation: q("app", "users"), Column: "email"}, {Relation: q("app", "users")}}, out)
+	if got := out["app.users.email"]; len(got) != 1 || got[0].Calls != 100 {
+		t.Fatalf("email matches %+v", got)
 	}
 	if got := len(out["app.users"]); got != 2 {
 		t.Fatalf("relation matches %+v", out["app.users"])

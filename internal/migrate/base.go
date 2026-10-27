@@ -42,6 +42,57 @@ type Base struct {
 	// Impact is the live dependents source; nil derives from Model.
 	Impact   Impacter
 	Warnings []string
+	// Scans (sequential plus index) and Writes (rows inserted, updated,
+	// deleted) per relation since ActivitySince, keyed "schema.name"; a
+	// partitioned table has its partitions'. Empty without activity counters
+	// (a schema dump alone).
+	Scans, Writes map[string]int64
+	// TotalScans and TotalWrites are the database's, or when unknown the sum
+	// over the schemas read (DatabaseTotals false).
+	TotalScans, TotalWrites int64
+	DatabaseTotals          bool
+	ActivitySince           *time.Time
+	InRecovery              bool
+}
+
+// Hot tables: at least this share of the database's activity, and at least
+// minHotCount events, so a nearly idle database has no hot tables.
+const (
+	hotShare    = 0.05
+	minHotCount = 1000
+)
+
+// hotness is how much traffic waits on a lock of class L on a relation:
+// ACCESS EXCLUSIVE stops reads, so its scans count; the SHARE-class locks
+// stop only writes, so its row writes count.
+type hotness struct {
+	hot   bool
+	share float64
+	n     int64
+	reads bool
+	// of names what share is of, e.g. "this database's table scans".
+	of string
+}
+
+func (b *Base) hot(rel apply.QName, L int) hotness {
+	h := hotness{reads: L >= 3}
+	unit := "row writes"
+	n, total := b.Writes[rel.String()], b.TotalWrites
+	if h.reads {
+		unit = "table scans"
+		n, total = b.Scans[rel.String()], b.TotalScans
+	}
+	h.of = "this database's " + unit
+	if !b.DatabaseTotals {
+		h.of = "the " + unit + " in the schemas read"
+	}
+	h.n = n
+	if L < 2 || total == 0 || n < minHotCount {
+		return h
+	}
+	h.share = float64(n) / float64(total)
+	h.hot = h.share >= hotShare
+	return h
 }
 
 // LiveBase introspects a database: structure, sizes, role/database
@@ -81,9 +132,15 @@ func FromStats(m *schema.Model, f *stats.File) *Base {
 	if m.ServerVersion == 0 {
 		m.ServerVersion = f.ServerVersion
 	}
+	b.ActivitySince, b.InRecovery = f.ActivitySince, f.InRecovery
+	b.Scans, b.Writes = map[string]int64{}, map[string]int64{}
+	var schemaScans, schemaWrites int64
 	for _, r := range f.Relations {
 		key := r.Schema + "." + r.Name
 		b.Sizes[key] = Size{Table: r.TableBytes, Indexes: r.IndexBytes}
+		b.Scans[key], b.Writes[key] = r.Scans, r.RowsWritten
+		schemaScans += r.Scans
+		schemaWrites += r.RowsWritten
 		if rel := m.Relation(schema.QualifiedName{Schema: r.Schema, Name: r.Name}); rel != nil && !r.Partition {
 			if rel.RowEstimate == nil && r.RowEstimate != nil {
 				v := *r.RowEstimate
@@ -92,6 +149,29 @@ func FromStats(m *schema.Model, f *stats.File) *Base {
 			if rel.Pages == 0 {
 				rel.Pages = r.Pages
 			}
+		}
+	}
+	b.TotalScans, b.TotalWrites, b.DatabaseTotals = f.TotalScans, f.TotalRowsWritten, f.TotalScans > 0
+	if !b.DatabaseTotals {
+		b.TotalScans, b.TotalWrites = schemaScans, schemaWrites
+	}
+	// The executor scans and writes the leaf partitions, so a partitioned
+	// table's activity is theirs, nested levels included.
+	var sum func(rel *schema.Relation) (int64, int64)
+	sum = func(rel *schema.Relation) (int64, int64) {
+		k := rel.QName().String()
+		scans, writes := b.Scans[k], b.Writes[k]
+		for _, p := range rel.Partitions {
+			if child := m.Relation(p); child != nil {
+				s, w := sum(child)
+				scans, writes = scans+s, writes+w
+			}
+		}
+		return scans, writes
+	}
+	for i := range m.Relations {
+		if rel := &m.Relations[i]; len(rel.Partitions) > 0 {
+			b.Scans[rel.QName().String()], b.Writes[rel.QName().String()] = sum(rel)
 		}
 	}
 	// A partitioned parent's size is the sum of its partitions.

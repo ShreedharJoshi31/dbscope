@@ -16,6 +16,7 @@ import (
 	"github.com/dbscope/dbscope/internal/migrate"
 	"github.com/dbscope/dbscope/internal/query/exec"
 	"github.com/dbscope/dbscope/internal/schema"
+	"github.com/dbscope/dbscope/internal/workload"
 )
 
 // SchemaSource reads database structure and runs guarded queries for a
@@ -31,6 +32,8 @@ type SchemaSource interface {
 	// sizes, role/database timeouts, and a live impact source on the same
 	// pool. ctx bounds the whole analysis, including the impact queries.
 	MigrationBase(ctx context.Context, p conn.Profile, password string) (*migrate.Base, error)
+	// Workload reads table and statement statistics, attributed to m's tables.
+	Workload(ctx context.Context, p conn.Profile, password string, m *schema.Model) (*workload.Snapshot, error)
 	// Forget drops anything held for the profile, e.g. after it changed.
 	Forget(profileID string)
 	// Close releases everything and waits for it to be released.
@@ -162,4 +165,14 @@ func (ps *pools) Query(ctx context.Context, p conn.Profile, password string, req
 		return nil, err
 	}
 	return exec.Run(ctx, pool, req)
+}
+
+func (ps *pools) Workload(ctx context.Context, p conn.Profile, password string, m *schema.Model) (*workload.Snapshot, error) {
+	ctx, cancel := context.WithTimeout(ctx, statementTimeout(p)+connectSlack)
+	defer cancel()
+	pool, err := ps.get(ctx, p, password)
+	if err != nil {
+		return nil, err
+	}
+	return workload.Read(ctx, pool, m, statementTimeout(p))
 }

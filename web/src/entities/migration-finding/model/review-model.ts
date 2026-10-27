@@ -208,6 +208,8 @@ export interface ImpactLink {
   certainty: ImpactItem["certainty"];
   /** The changed relation or column it depends on: "shop.customers" or "shop.customers.email". */
   via: string;
+  /** A query's calls, from pg_stat_statements. */
+  calls?: number | undefined;
 }
 
 export function relationChanges(diff: MigrationDiff): Record<string, RelationChange> {
@@ -261,7 +263,14 @@ export function impactByRelation(report: Pick<AnalyzeReport, "impact" | "diff">)
     const relation = columnKeys.get(key) ?? key;
     const list = out[relation] ?? [];
     for (const item of items ?? []) {
-      list.push({ nodeId: impactNodeId(item), kind: item.kind, name: item.name, certainty: item.certainty, via: key });
+      list.push({
+        nodeId: impactNodeId(item),
+        kind: item.kind,
+        name: item.name,
+        certainty: item.certainty,
+        via: key,
+        calls: item.calls,
+      });
     }
     out[relation] = list;
   }

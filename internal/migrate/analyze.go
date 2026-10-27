@@ -160,7 +160,8 @@ func analyzeStatement(st *apply.State, tm *timeouts.Machine, b *Base, f ingest.F
 	w := eff.Work.W()
 	isHeld := hold != nil && inTx && (len(eff.Locks) > 0 || eff.Work != rules.None)
 	best := score.Score(score.Inputs{Held: isHeld})
-	var exposed []string
+	var exposed, hotRels, hotLines []string
+	hotReads := false
 	var largest int64 = -1
 	for _, l := range eff.Locks {
 		r.Locks = append(r.Locks, Lock{Relation: l.Relation.String(), Mode: l.Mode.String()})
@@ -168,7 +169,18 @@ func analyzeStatement(st *apply.State, tm *timeouts.Machine, b *Base, f ingest.F
 			continue // created by this migration: nobody else uses it yet
 		}
 		L := l.Mode.Class()
-		best = max(best, score.Score(score.Inputs{L: L, W: w, Z: z, LockTimeout: ts.LockTimeout, Held: isHeld}))
+		h := b.hot(l.Relation, L)
+		h.hot = h.hot && !l.Index
+		if h.hot && !slices.Contains(hotRels, l.Relation.String()) {
+			hotRels = append(hotRels, l.Relation.String())
+			count := fmt.Sprintf("%d rows written", h.n)
+			if h.reads {
+				count = plural(int(h.n), "scan")
+			}
+			hotLines = append(hotLines, fmt.Sprintf("%s has %d%% of %s (%s%s)", l.Relation, int(100*h.share+0.5), h.of, count, activitySince(b)))
+			hotReads = hotReads || h.reads
+		}
+		best = max(best, score.Score(score.Inputs{L: L, W: w, Z: z, LockTimeout: ts.LockTimeout, Held: isHeld, Hot: h.hot}))
 		if L >= 2 && !ts.LockTimeout {
 			exposed = append(exposed, fmt.Sprintf("%s on %s", l.Mode, l.Relation))
 		}
@@ -218,6 +230,19 @@ func analyzeStatement(st *apply.State, tm *timeouts.Machine, b *Base, f ingest.F
 		p.findings = append(p.findings, rules.Finding{ID: "DBS-AE-HELD", Class: rules.Risk,
 			Message: fmt.Sprintf("runs while ACCESS EXCLUSIVE on %s (taken at line %d) is still held, so its run time adds to the outage", hold.rel, hold.line),
 			Safe:    "Commit right after the statement that takes ACCESS EXCLUSIVE, or run this statement first"})
+	}
+	if len(hotLines) > 0 {
+		replica := ""
+		if b.InRecovery {
+			replica = " (counted on a replica, so only its reads)"
+		}
+		blocked := "writes queue behind the lock (reads continue)"
+		if hotReads {
+			blocked = "reads and writes queue behind the lock"
+		}
+		p.findings = append(p.findings, rules.Finding{ID: "DBS-HOT-TABLE", Class: rules.Risk,
+			Message: fmt.Sprintf("locks a busy table: %s%s; %s for as long as it is held or waited for", strings.Join(hotLines, "; "), replica, blocked),
+			Safe:    "Run it at the quietest time, keep the lock short (lock_timeout, no other work in the transaction), or use a form that takes a weaker lock"})
 	}
 	if len(exposed) > 0 {
 		p.findings = append(p.findings, rules.Finding{ID: "DBS-NO-LOCK-TIMEOUT", Class: rules.Risk,
@@ -380,4 +405,12 @@ func describe(items []impact.Item) string {
 		s += fmt.Sprintf(" and %d more", len(items)-show)
 	}
 	return s
+}
+
+// activitySince says how long the scan counters cover.
+func activitySince(b *Base) string {
+	if b.ActivitySince == nil {
+		return " since the statistics were last reset"
+	}
+	return " since " + b.ActivitySince.UTC().Format("2006-01-02")
 }

@@ -178,3 +178,23 @@ func (s *server) sampleSchema(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(b)
 }
+
+// workload reads the connection's traffic statistics (docs/WORKLOAD.md),
+// attributed to the tables of its current schema.
+func (s *server) workload(w http.ResponseWriter, r *http.Request) {
+	p, password, ok := s.profileWithSecret(w, r)
+	if !ok {
+		return
+	}
+	m, err := s.source.Introspect(r.Context(), p, password)
+	if err != nil {
+		s.upstreamError(w, r, err)
+		return
+	}
+	snap, err := s.source.Workload(r.Context(), p, password, m)
+	if err != nil {
+		s.upstreamError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, snap)
+}

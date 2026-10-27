@@ -22,6 +22,7 @@ import (
 	"github.com/dbscope/dbscope/internal/query/exec"
 	"github.com/dbscope/dbscope/internal/query/plan"
 	"github.com/dbscope/dbscope/internal/schema"
+	"github.com/dbscope/dbscope/internal/workload"
 )
 
 func TestMain(m *testing.M) { pgtest.Main(m) }
@@ -89,6 +90,17 @@ func (f *fakeSource) MigrationBase(ctx context.Context, p conn.Profile, password
 		return nil, err
 	}
 	return &migrate.Base{Model: m, Source: "live"}, nil
+}
+
+func (f *fakeSource) Workload(_ context.Context, _ conn.Profile, password string, m *schema.Model) (*workload.Snapshot, error) {
+	if err := f.record(password); err != nil {
+		return nil, err
+	}
+	s := &workload.Snapshot{Statements: workload.Statements{Status: workload.StatusNotInstalled}, Tables: map[string]*workload.Table{}}
+	for _, r := range m.Relations {
+		s.Tables[r.QName().String()] = &workload.Table{SeqScans: 4, IdxScans: 1}
+	}
+	return s, nil
 }
 
 func (f *fakeSource) Forget(id string) {
@@ -197,6 +209,21 @@ func TestSchemaAndInferredFKs(t *testing.T) {
 	}
 }
 
+func TestWorkloadEndpoint(t *testing.T) {
+	e, f := fakeEnv(t)
+	p := e.createProfile(`{"name":"a","host":"h","database":"d","user":"u","env":"local","password":"` + testPass + `"}`)
+	w := e.do("GET", "/api/profiles/"+p.ID+"/workload", "")
+	expect(t, w, 200, "")
+	snap := decodeBody[workload.Snapshot](t, w)
+	if snap.Statements.Status != workload.StatusNotInstalled || snap.Tables["public.users"] == nil || snap.Tables["public.users"].SeqScans != 4 {
+		t.Fatalf("snapshot %+v", snap)
+	}
+	if f.passwords[len(f.passwords)-1] != testPass {
+		t.Fatal("the source did not get the password")
+	}
+	expect(t, e.do("GET", "/api/profiles/missing/workload", ""), 404, "not_found")
+}
+
 func TestSchemaRoutesUnknownProfile(t *testing.T) {
 	e, _ := fakeEnv(t)
 	base := "/api/profiles/missing"
@@ -225,7 +252,7 @@ func TestSchemaUpstreamErrors(t *testing.T) {
 		{errClosed, 503, "internal", ""},
 	} {
 		f.err = c.err
-		for _, route := range []string{"/namespaces", "/schema"} {
+		for _, route := range []string{"/namespaces", "/schema", "/workload"} {
 			w := e.do("GET", "/api/profiles/"+p.ID+route, "")
 			expect(t, w, c.status, c.code)
 			if got := decodeBody[struct{ Error apiError }](t, w).Error.Detail; got != c.detail {
@@ -239,7 +266,7 @@ func TestSchemaClosedPort(t *testing.T) {
 	e := keyringEnv(t) // real pools
 	p := e.createProfile(`{"name":"t","host":"127.0.0.1","port":` + strconv.Itoa(closedPort(t)) +
 		`,"database":"d","user":"u","env":"local","sslMode":"disable","password":"` + testPass + `"}`)
-	for _, route := range []string{"/namespaces", "/schema"} {
+	for _, route := range []string{"/namespaces", "/schema", "/workload"} {
 		w := e.do("GET", "/api/profiles/"+p.ID+route, "")
 		expect(t, w, 502, "upstream")
 		if d := decodeBody[struct{ Error apiError }](t, w).Error.Detail; d != "network" {

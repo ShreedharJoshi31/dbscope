@@ -8,6 +8,7 @@ import {
   useCanvasStore,
 } from "@/entities/schema";
 import { announce } from "@/shared/lib/announcer";
+import { formatCompact } from "@/shared/lib/format-number";
 import { Button } from "@/shared/ui/button";
 
 const ICON = { added: SquarePlus, altered: SquarePen, dropped: SquareMinus } as const;
@@ -133,6 +134,7 @@ export function MigrationLegend() {
                     {item.name}
                   </span>
                   <span className="ml-auto shrink-0 text-2xs text-text-muted">
+                    {item.calls ? `${formatCompact(item.calls)} calls · ` : ""}
                     {item.certainty}
                     {item.via !== root ? ` · via ${item.via.slice(root.length + 1)}` : ""}
                   </span>

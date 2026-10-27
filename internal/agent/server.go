@@ -111,6 +111,7 @@ func New(cfg Config) (*Agent, error) {
 	mux.HandleFunc("GET /api/llm/models", s.llmModels)
 	mux.HandleFunc("GET /api/profiles/{id}/glossary", s.getGlossary)
 	mux.HandleFunc("PUT /api/profiles/{id}/glossary", s.putGlossary)
+	mux.HandleFunc("GET /api/profiles/{id}/workload", s.workload)
 	mux.HandleFunc("GET /api/profiles/{id}/shared", s.exportShared)
 	mux.HandleFunc("POST /api/profiles/{id}/shared/preview", s.previewShared)
 	mux.HandleFunc("POST /api/profiles/{id}/shared/import", s.importShared)

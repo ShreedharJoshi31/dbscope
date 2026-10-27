@@ -140,6 +140,15 @@ PostgreSQL 17 grammar. Rules and scoring: [docs/MIGRATIONS.md](docs/MIGRATIONS.m
 
 ![Migration review](web/e2e/__screenshots__/chromium-darwin/migration-tab-light.png)
 
+## Workload
+
+**Workload** in the canvas toolbar shades each table by how much real traffic
+uses it: query time or calls from `pg_stat_statements`, or scans and writes
+from PostgreSQL's table counters (which need nothing installed). Migration
+review uses the same counters: a lock that stops the reads or writes of a table
+carrying a large share of the database's traffic raises the statement's risk. Details:
+[docs/WORKLOAD.md](docs/WORKLOAD.md).
+
 ## Sharing with your team
 
 Canvas layouts, accepted or rejected inferred foreign keys and the assistant

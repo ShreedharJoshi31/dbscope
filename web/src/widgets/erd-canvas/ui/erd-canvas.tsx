@@ -32,7 +32,13 @@ function Loaded({ model, layoutKey, profileId, sample }: LoadedProps) {
   if (storage.restored === undefined) return <Loading label="Restoring the saved layout…" />;
   return (
     <Suspense fallback={<Loading label="Loading the canvas…" />}>
-      <CanvasView graph={graph} layoutKey={layoutKey} restored={storage.restored} schedule={storage.schedule} />
+      <CanvasView
+        graph={graph}
+        layoutKey={layoutKey}
+        restored={storage.restored}
+        schedule={storage.schedule}
+        profileId={sample ? undefined : profileId}
+      />
     </Suspense>
   );
 }

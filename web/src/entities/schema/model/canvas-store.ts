@@ -43,6 +43,8 @@ export interface DiffImpact {
   certainty: ImpactItem["certainty"];
   /** The changed relation or column it depends on. */
   via: string;
+  /** A query's calls, from pg_stat_statements. */
+  calls?: number | undefined;
 }
 
 /**

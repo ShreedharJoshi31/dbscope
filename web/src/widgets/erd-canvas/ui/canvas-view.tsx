@@ -58,6 +58,8 @@ interface CanvasViewProps {
   layoutKey: string;
   restored: CanvasLayoutInput | null | undefined;
   schedule: (layout: CanvasLayoutInput) => void;
+  /** The connection the canvas shows; undefined for the sample schema. */
+  profileId?: string | undefined;
 }
 
 /** The lazily loaded canvas root; it owns its React Flow store. */
@@ -71,7 +73,7 @@ export function CanvasView(props: CanvasViewProps) {
   );
 }
 
-function CanvasViewInner({ graph, layoutKey, restored, schedule }: CanvasViewProps) {
+function CanvasViewInner({ graph, layoutKey, restored, schedule, profileId }: CanvasViewProps) {
   const theme = useResolvedTheme();
   const { showInferred, minimap, algorithm: preferred, set: setPrefs } = useCanvasPrefs();
   const algorithm = preferred ?? defaultAlgorithm(graph.relations.length);
@@ -189,6 +191,7 @@ function CanvasViewInner({ graph, layoutKey, restored, schedule }: CanvasViewPro
   return (
     <div className="erd-canvas flex h-full min-h-0 flex-col">
       <CanvasToolbar
+        profileId={profileId}
         searchRef={searchRef}
         onExitSearch={focusPane}
         algorithm={algorithm}

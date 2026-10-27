@@ -1,4 +1,5 @@
 import {
+  Activity,
   ChevronsDownUp,
   ChevronsUpDown,
   FlaskConical,
@@ -22,6 +23,7 @@ import {
   useWorkspaceStore,
 } from "@/entities/schema";
 import { openSample } from "@/features/load-schema";
+import { toggleWorkload, useWorkloadView } from "@/features/show-workload";
 import { formatCombo, type KeyCombo, SHORTCUTS } from "@/shared/config/shortcuts";
 import { CommandGroup, CommandItem, CommandShortcut } from "@/shared/ui/command";
 
@@ -55,6 +57,7 @@ const COMMANDS: CanvasCommand[] = [
 export function CanvasCommandItems({ run }: { run: (action: () => void) => () => void }) {
   const available = useCanvasCommands((s) => s.handlers);
   const sample = useWorkspaceStore((s) => s.source === "sample");
+  const workloadOn = useWorkloadView((s) => s.on);
 
   return (
     <CommandGroup heading="Canvas">
@@ -65,6 +68,12 @@ export function CanvasCommandItems({ run }: { run: (action: () => void) => () =>
           {c.combo && <CommandShortcut className="font-mono tracking-normal">{formatCombo(c.combo)}</CommandShortcut>}
         </CommandItem>
       ))}
+      {!sample && Object.keys(available).length > 0 && (
+        <CommandItem value="workload heat pg_stat_statements traffic hot tables" onSelect={run(toggleWorkload)}>
+          <Activity aria-hidden />
+          {workloadOn ? "Hide the workload on the canvas" : "Show the workload on the canvas"}
+        </CommandItem>
+      )}
       {sample ? (
         <CommandItem value="exit sample schema" onSelect={run(closeSampleWorkspace)}>
           <LogOut aria-hidden />

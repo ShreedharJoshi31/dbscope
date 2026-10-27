@@ -20,3 +20,4 @@ export * from "@/shared/api/share-api";
 export { readSseStream, type SseEvent } from "@/shared/api/sse";
 export { bootstrapToken, getToken, reloadOnNewToken } from "@/shared/api/token";
 export type * from "@/shared/api/types";
+export * from "@/shared/api/workload-api";

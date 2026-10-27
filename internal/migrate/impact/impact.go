@@ -25,6 +25,8 @@ type Item struct {
 	Kind      string `json:"kind"`
 	Name      string `json:"name"`
 	Certainty string `json:"certainty"` // catalog | heuristic
+	// Calls is how often a query ran, from pg_stat_statements (kind query).
+	Calls int64 `json:"calls,omitempty"`
 }
 
 const (
@@ -50,8 +52,11 @@ func (t Target) Key() string {
 type Result map[string][]Item
 
 func (r Result) add(key string, it Item) {
-	for _, x := range r[key] {
+	for i, x := range r[key] {
 		if x.Kind == it.Kind && x.Name == it.Name {
+			// The same query text under several roles, or two texts with one
+			// summary: their calls add up.
+			r[key][i].Calls += it.Calls
 			return
 		}
 	}
