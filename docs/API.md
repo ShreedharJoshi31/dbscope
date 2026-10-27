@@ -256,3 +256,47 @@ Aborting the fetch cancels the LLM call and any running statement.
 Ask runs are recorded in query history once SQL exists, with `source: "ask"` and `question` (never rows); history
 entries gain `source: "query"|"ask"` and `question?`. Confirmation stops are recorded as `rejected` with
 `errorCode` `cost_confirmation_required` / `rows_confirmation_required`.
+
+## Phase 4
+
+Design: `docs/MIGRATIONS.md`.
+
+`POST /api/profiles/{id}/migrations/analyze` and `POST /api/sample/migrations/analyze` (against the sample schema)
+
+```ts
+interface AnalyzeRequest {
+  files: { name: string; sql: string }[];   // 1..200 files, each ≤ 1 MiB; analyzed in the order given after framework ordering
+  txMode?: "auto" | "file" | "statement" | "none";  // default auto (detect framework/directives)
+  assumeLockTimeout?: boolean;              // the deploy tool sets lock_timeout itself
+}
+interface AnalyzeReport {
+  pgVersion: number;                        // server_version_num used for version-dependent rules
+  rating: Rating;                           // worst statement
+  statements: {
+    file: string; line: number; column: number; endLine: number; sql: string;
+    kind: string;                           // e.g. "ALTER TABLE ADD COLUMN", "CREATE INDEX CONCURRENTLY"
+    tx: "none" | "implicit" | "explicit" | "framework";
+    locks: { relation: string; mode: string }[];   // "schema.name", PostgreSQL lock mode name
+    work: "none" | "scan" | "index_build" | "rewrite";
+    sizeBytes?: number;                     // largest locked relation, when known
+    lockTimeout: boolean;                   // a lock_timeout is in effect for this statement
+    score: number; rating: Rating;
+    findings: { ruleId: string; rating: Rating; message: string; safeAlternative?: string }[];
+  }[];
+  diff: { added: string[]; dropped: string[]; altered: string[];   // relation keys
+          columns: { relation: string; column: string; change: "added" | "dropped" | "altered" | "renamed" }[] };
+  impact: Record<string, { kind: "fk_child" | "view" | "matview" | "function" | "trigger" | "policy" | "index" | "query"; name: string; certainty: "catalog" | "heuristic" }[]>;
+  unanalyzable: { file: string; line: number; message: string }[];
+}
+type Rating = "low" | "medium" | "high" | "critical";
+```
+
+Errors: `400 validation` (no files, too large), `423`, `502 upstream` / `504 timeout` while reading the base schema.
+
+CLI (no agent needed):
+```
+dbscope migrate check PATH... [--dsn URL | --schema-dump FILE [--stats FILE]] [--pg-version N]
+                       [--fail-on low|medium|high|critical] [--format text|json|sarif|github]
+                       [--tx-mode auto|file|statement|none] [--assume-lock-timeout]
+dbscope stats export --dsn URL [--schemas a,b] > stats.json   # sizes, row estimates, version, role timeouts; no row data
+```
