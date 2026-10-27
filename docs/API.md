@@ -241,7 +241,7 @@ Events, in order (any may be followed by `error`, which ends the stream):
 | event | data |
 |---|---|
 | `status` | `{"stage":"retrieving|generating|checking|running|repairing|summarizing"}` |
-| `context` | `{"provider","model","schemaMode":"full|retrieved","tables":["s.t",...],"omittedColumns":["s.t.password"],"sends":"schema|schema+profile|schema+rows"}` |
+| `context` | `{"provider","model","schemaMode":"full|retrieved","tables":["s.t",...],"omittedColumns":["s.t.password"],"sends":"schema|schema+rows"}` |
 | `answer` | `{"kind":"sql|clarify","sql","explanationSteps":[],"assumptions":[{"label","sqlFragment"}],"tables":[],"clarifyingQuestion"?:{"question","options":[]},"repaired":bool}` (sent again after a repair) |
 | `needs_confirmation` | `{"reason":"cost","estimatedCost","estimatedRows","conversationId"}` or `{"reason":"rows","conversationId"}` — stream ends; re-send the same question with the same `conversationId` and the confirm flag (the shown answer is reused, no new model call) |
 | `result` | the Phase 2 `QueryResult` |

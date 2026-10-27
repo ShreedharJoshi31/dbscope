@@ -13,7 +13,7 @@ question (+ conversation, glossary, assumption overrides, clarification answer)
   → guard+EXPLAIN Phase 2 guard, function rule, cost gate (409 → ask the user to confirm)
   → execute       Phase 2 executor (read-only, cursor-bounded, ROLLBACK)
   → repair ×1     only on a guard syntax/function rejection or a database error, with the redacted error
-  → summarize     per the profile's summary mode
+  → summarize     per the profile's summary mode (profile: computed locally, no model call)
 ```
 
 No self-consistency or multi-candidate voting: the research shows large cost for little or
@@ -92,7 +92,7 @@ API keys live in the secrets vault (`llm:anthropic`, `llm:openai_compat`), never
 | Mode | Sent to the model | Notes |
 |---|---|---|
 | `off` | nothing | the card shows rows only |
-| `profile` | row count, truncated flag; per column: name, type, null %, distinct count; min/max/avg for numeric and date/time columns only; text columns only min/max length | default |
+| `profile` | nothing: dbscope writes the summary itself from the profile (row count; numeric/date ranges; distinct counts; empty %) | default. A model given only a profile invents row values (observed with qwen2.5-coder:7b: made-up customer names), so it is not asked |
 | `rows` | first `maxRowsToLLM` rows (as JSON) | on `prod-replica`, requires `confirmRows: true` once per agent run before rows leave the machine |
 
 ## Evaluation

@@ -174,10 +174,8 @@ func llmErr(err error) error {
 }
 
 func (r *runner) sends() string {
-	switch r.env.SummaryMode {
-	case conn.SummaryProfile:
-		return "schema+profile"
-	case conn.SummaryRows:
+	// Profile summaries are computed locally, so only rows mode sends result data.
+	if r.env.SummaryMode == conn.SummaryRows {
 		return "schema+rows"
 	}
 	return "schema"
@@ -464,8 +462,13 @@ func (r *runner) summarize(ctx context.Context, res *exec.Result) {
 	var block, mode string
 	switch r.env.SummaryMode {
 	case conn.SummaryProfile:
-		b, _ := json.Marshal(summarize.Compute(res))
-		block, mode = "<result_profile>\n"+string(b)+"\n</result_profile>", "profile"
+		// A model given only a profile invents the row values it cannot see
+		// (observed with qwen2.5-coder:7b: made-up customer names), so the
+		// profile summary is written from the profile itself.
+		if r.emit("summary", map[string]string{"text": summarize.Describe(summarize.Compute(res)), "mode": "profile"}) {
+			r.done()
+		}
+		return
 	case conn.SummaryRows:
 		b, _ := json.Marshal(summarize.FirstRows(res, max(r.env.MaxRowsToLLM, 1)))
 		block, mode = "<result_rows>\n"+string(b)+"\n</result_rows>", "rows"

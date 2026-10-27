@@ -320,7 +320,7 @@ func TestAskRoute(t *testing.T) {
 		t.Fatalf("status %d headers %v", w.Code, w.Header())
 	}
 	evs := parseSSE(t, w.Body.String())
-	want := "status:retrieving context status:generating answer status:checking status:running result status:summarizing summary done"
+	want := "status:retrieving context status:generating answer status:checking status:running result summary done"
 	if got := eventNames(evs); got != want {
 		t.Fatalf("events\n got %s\nwant %s", got, want)
 	}
@@ -328,7 +328,7 @@ func TestAskRoute(t *testing.T) {
 		Provider, Model, SchemaMode, Sends string
 		Tables, OmittedColumns             []string
 	}](t, evs, "context")
-	if ctx.Provider != "fake" || ctx.SchemaMode != "full" || ctx.Sends != "schema+profile" || len(ctx.Tables) != 2 || ctx.OmittedColumns == nil {
+	if ctx.Provider != "fake" || ctx.SchemaMode != "full" || ctx.Sends != "schema" || len(ctx.Tables) != 2 || ctx.OmittedColumns == nil {
 		t.Fatalf("context %+v", ctx)
 	}
 	res := lastEvent[exec.Result](t, evs, "result")
@@ -340,7 +340,7 @@ func TestAskRoute(t *testing.T) {
 		DurationMs     *float64
 		Usage          map[string]int64
 	}](t, evs, "done")
-	if done.ConversationID == "" || done.DurationMs == nil || done.Usage["inputTokens"] != 110 {
+	if done.ConversationID == "" || done.DurationMs == nil || done.Usage["inputTokens"] != 100 /* profile mode: no summary call */ {
 		t.Fatalf("done %+v", done)
 	}
 	// The run used the profile's settings and the vault password and key.
@@ -410,7 +410,7 @@ func TestAskRoute(t *testing.T) {
 	e.src.queryErr = nil
 	calls := len(e.fake.Requests())
 	evs = parseSSE(t, e.do("POST", base, `{"question":"all posts","confirmCost":true,"conversationId":"`+nc.ConversationID+`"}`).Body.String())
-	if !strings.HasSuffix(eventNames(evs), "result status:summarizing summary done") || len(e.fake.Requests()) != calls {
+	if !strings.HasSuffix(eventNames(evs), "result summary done") || len(e.fake.Requests()) != calls {
 		t.Fatalf("confirmed %s", eventNames(evs))
 	}
 	if !e.src.requests[len(e.src.requests)-1].ConfirmCost {

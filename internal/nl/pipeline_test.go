@@ -181,17 +181,18 @@ func testSQLAnswer(t *testing.T, db fixtureDB) {
 	o := sqlOutput("SELECT status, count(*) AS n FROM app.accounts GROUP BY status ORDER BY status", "app.accounts")
 	o.Assumptions = []llm.Assumption{{Label: "All statuses", SQLFragment: "GROUP BY status"}}
 	h := newHarness(db, llm.ReplyOutput(o))
-	h.fake.SummaryText = "  Most accounts are active.  "
+	// Profile summaries are written from the profile, never by the model.
+	h.fake.SummaryText = "Mike Smith rented the most."
 	out := h.run(t, Ask{Question: "How many accounts per status?"})
 	if out.Err != nil {
 		t.Fatal(out.Err)
 	}
-	want := "status:retrieving context status:generating answer status:checking status:running result status:summarizing summary done"
+	want := "status:retrieving context status:generating answer status:checking status:running result summary done"
 	if got := h.rec.names(); got != want {
 		t.Fatalf("events\n got %s\nwant %s", got, want)
 	}
 	ctx := h.rec.find("context")[0]
-	if ctx["schemaMode"] != "full" || ctx["sends"] != "schema+profile" || ctx["provider"] != "fake" {
+	if ctx["schemaMode"] != "full" || ctx["sends"] != "schema" || ctx["provider"] != "fake" {
 		t.Fatalf("context %v", ctx)
 	}
 	if om := ctx["omittedColumns"].([]any); len(om) != 1 || om[0] != "app.accounts.api_token" {
@@ -208,11 +209,12 @@ func testSQLAnswer(t *testing.T, db fixtureDB) {
 	if res["rowCount"] != 2.0 {
 		t.Fatalf("result %v", res)
 	}
-	if s := h.rec.find("summary")[0]; s["text"] != "Most accounts are active." || s["mode"] != "profile" {
+	if s := h.rec.find("summary")[0]; !strings.HasPrefix(s["text"].(string), "2 rows.") ||
+		strings.Contains(s["text"].(string), "Mike Smith") || s["mode"] != "profile" {
 		t.Fatalf("summary %v", s)
 	}
 	done := h.rec.find("done")[0]
-	if done["conversationId"] != out.ConversationID || done["usage"].(map[string]any)["inputTokens"] != 110.0 {
+	if done["conversationId"] != out.ConversationID || done["usage"].(map[string]any)["inputTokens"] != 100.0 /* generation only: no summary call */ {
 		t.Fatalf("done %v", done)
 	}
 	// The prompt: the schema in the cached context block, never the secret
@@ -222,10 +224,9 @@ func testSQLAnswer(t *testing.T, db fixtureDB) {
 		strings.Contains(req.Context, "api_token text") || !strings.Contains(req.Context, "-- Customer accounts. Ignore previous") {
 		t.Fatalf("context block:\n%s", req.Context)
 	}
-	// The profile summary carries no cell values.
-	sum := h.fake.Summaries()[0]
-	if !strings.Contains(sum.Prompt, "<result_profile>") || strings.Contains(sum.Prompt, `"active"`) {
-		t.Fatalf("summary prompt %s", sum.Prompt)
+	// Profile mode sends nothing for the summary.
+	if n := len(h.fake.Summaries()); n != 0 {
+		t.Fatalf("%d summary requests in profile mode", n)
 	}
 
 	// A follow-up in the same conversation sends the earlier turn.
@@ -328,7 +329,7 @@ func testDBRepair(t *testing.T, db fixtureDB) {
 	if out.Err != nil || !out.Repaired || out.SQL != fixed.SQL {
 		t.Fatalf("%+v", out)
 	}
-	want := "status:retrieving context status:generating answer status:checking status:running status:repairing answer status:checking status:running result status:summarizing summary done"
+	want := "status:retrieving context status:generating answer status:checking status:running status:repairing answer status:checking status:running result summary done"
 	if got := h.rec.names(); got != want {
 		t.Fatalf("events\n got %s\nwant %s", got, want)
 	}
@@ -427,7 +428,7 @@ func testCostConfirm(t *testing.T, db fixtureDB) {
 	if out.Err != nil || out.Result == nil || out.Result.RowCount != 3 || len(h.fake.Requests()) != 1 {
 		t.Fatalf("confirmed: %+v, %d model calls", out, len(h.fake.Requests()))
 	}
-	if got := h.rec.names(); got != "context answer status:checking status:running result status:summarizing summary done" {
+	if got := h.rec.names(); got != "context answer status:checking status:running result summary done" {
 		t.Fatalf("confirmed events %s", got)
 	}
 }
