@@ -161,7 +161,7 @@ Critical=filled danger (octagon with bar).
 1. First run: one connection form (paste URL or fields) + "Test connection". Env tag required; suggest `local` only for loopback hosts. "Open sample schema" works with no database.
 2. Prod-replica is loud and read-only: banner, `[PROD]` tab-title prefix, status bar with icon + text, enforced server-side.
 3. Statement classification uses the SQL parser, never regex.
-4. Generated SQL never runs silently; every run is explicit. Any rewrite dbscope applies (added LIMIT, timeout) is shown.
+4. Generated SQL runs only through the guarded read-only executor (docs/QUERY-SAFETY.md) and always shows the exact `executedSql` beside its result; a query over the profile's cost limit (always the case for expensive queries on prod-replica) stops and asks before running, and sample rows never leave the machine on prod-replica without an explicit confirmation. Any rewrite dbscope applies (timeouts, deparsing) is shown.
 5. Assistant answer card order: question restated → SQL (highlight, copy, open in editor) → step explanation → editable assumption chips → clarifying-question buttons → fact badges.
 6. Badges show facts (reads only, N tables (click → highlight), plan estimate), never model confidence.
 7. Status never by colour alone: icon + text label always. NULL renders as italic "NULL", distinct from empty string.
