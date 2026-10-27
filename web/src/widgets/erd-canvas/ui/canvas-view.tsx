@@ -5,7 +5,6 @@ import {
   BackgroundVariant,
   ConnectionMode,
   type EdgeMouseHandler,
-  MiniMap,
   type NodeMouseHandler,
   ReactFlow,
   ReactFlowProvider,
@@ -38,6 +37,7 @@ import { useCanvasKeyboard } from "@/widgets/erd-canvas/model/use-canvas-keyboar
 import { useCanvasModel } from "@/widgets/erd-canvas/model/use-canvas-model";
 import { useReveal } from "@/widgets/erd-canvas/model/use-reveal";
 import { useTestHook } from "@/widgets/erd-canvas/model/use-test-hook";
+import { CanvasMinimap } from "@/widgets/erd-canvas/ui/canvas-minimap";
 import { CanvasToolbar } from "@/widgets/erd-canvas/ui/canvas-toolbar";
 import { EdgeMarkers } from "@/widgets/erd-canvas/ui/edge-markers";
 import { FarEdges } from "@/widgets/erd-canvas/ui/far-edges";
@@ -249,17 +249,7 @@ function CanvasViewInner({ graph, layoutKey, restored, schedule, profileId }: Ca
             <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="var(--border-default)" />
             {far && <FarEdges nodes={model.nodes} edges={model.edges} />}
             <ZoomControls onFit={model.fitAll} />
-            {minimap && (
-              <MiniMap
-                pannable
-                zoomable
-                ariaLabel="Minimap of the ERD"
-                nodeColor="var(--border-control)"
-                nodeStrokeWidth={0}
-                maskColor="var(--overlay-backdrop)"
-                bgColor="var(--surface-subtle)"
-              />
-            )}
+            {minimap && <CanvasMinimap theme={theme} />}
           </ReactFlow>
         </TableNodeActionsContext>
         <LayoutStatusBanner status={model.status} onDismiss={model.dismissError} />

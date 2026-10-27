@@ -41,6 +41,34 @@ test.describe("ERD canvas", () => {
     await expect(page.getByRole("heading", { name: "Connect to PostgreSQL" })).toBeVisible();
   });
 
+  test("the minimap draws the tables and a click there moves the canvas", async ({ page }) => {
+    await openSample(page);
+    const minimap = page.getByTestId("erd-minimap");
+    await expect(minimap).toBeVisible();
+    // The table layer has drawn something besides its background.
+    const drawn = await minimap
+      .locator("canvas")
+      .first()
+      .evaluate((c: HTMLCanvasElement) => {
+        const ctx = c.getContext("2d");
+        if (!ctx) return 0;
+        const { data } = ctx.getImageData(0, 0, c.width, c.height);
+        const colours = new Set<number>();
+        for (let i = 0; i < data.length; i += 4) colours.add((data[i] << 16) | (data[i + 1] << 8) | (data[i + 2] ?? 0));
+        return colours.size;
+      });
+    expect(drawn).toBeGreaterThan(1);
+
+    const before = await viewport(page);
+    const box = await minimap.boundingBox();
+    if (!box) throw new Error("minimap not laid out");
+    await page.mouse.click(box.x + 15, box.y + 15);
+    await expect.poll(async () => (await viewport(page)).x).not.toBe(before.x);
+
+    await page.getByRole("toolbar", { name: "Canvas tools" }).getByRole("button", { name: "Hide minimap" }).click();
+    await expect(minimap).toHaveCount(0);
+  });
+
   test("search finds a column, Enter pans to it and Esc clears", async ({ page }) => {
     await openSample(page);
     const before = await viewport(page);

@@ -7,9 +7,6 @@
 
 .erd-canvas .react-flow {
   --xy-background-color: var(--surface-canvas);
-  --xy-minimap-background-color: var(--surface-subtle);
-  --xy-minimap-mask-background-color: var(--overlay-backdrop);
-  --xy-minimap-node-background-color: var(--border-default);
   --xy-selection-background-color: var(--surface-selected);
   --xy-selection-border: 1px dashed var(--border-focus);
 }
@@ -48,10 +45,11 @@
   outline: none;
 }
 
-.erd-canvas .react-flow__minimap {
+.erd-canvas .erd-minimap {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-6);
   overflow: hidden;
+  touch-action: none;
 }
 
 .erd-canvas .react-flow__attribution {

@@ -90,6 +90,36 @@ web/src/
   shared/     api/ (typed client + SSE reader), ui/ (shadcn components), lib/, config/
 ```
 
+## Canvas performance
+
+Measured by `web/e2e/perf.spec.ts` (the `perf` Playwright project: vsync and the frame cap off, so
+a frame interval is its real cost) on an Apple M2 with 8 GB, 2026-10-28. Medians, scripted pan
+with the zoom swinging:
+
+| Schema | Initial render | Overview (all tables drawn) | Header-only zoom | Detailed zoom |
+|---|---|---|---|---|
+| 300 tables, 600 FKs | 1.5 s (layered layout ~0.9 s in a worker) | – | 4 ms | 3 ms (7 ms densest) |
+| 1,500 tables, 3,000 FKs | 1.1 s | 15 ms (67 fps) | 20 ms (50 fps) | – |
+
+What keeps it there:
+
+- Level of detail by zoom (`entities/schema/ui/lod.ts`): column rows only at zoom ≥ 0.5; header-only
+  cards below; on schemas over 200 tables, name-only cards below 0.25 with every foreign key drawn as
+  one SVG path instead of 3,000 edge components.
+- React Flow culls off-screen nodes and edges except in the overview, where everything is on screen.
+- The minimap is two canvases (`widgets/erd-canvas/ui/canvas-minimap.tsx`): tables are drawn when the
+  layout changes, and a pan or zoom redraws only the viewport rectangle. React Flow's SVG minimap
+  re-rendered a rectangle per table on every frame: 24 ms a frame at 1,500 tables, against 7 ms with
+  this one (pan only, overview).
+- Layout runs in a worker; positions are saved per schema selection, so a reopen skips it.
+
+Limits measured on the same machine (overview, before any further work): 3,000 tables render in
+1.9 s and pan at 17 ms a frame, but each zoom step costs about 50 ms (p95 115 ms); 5,000 tables
+render in 2.7 s, pan at 27–30 ms and zoom at p95 165–180 ms. The cost there is the number of DOM
+cards the browser re-rasterises; removing their text below a readable size did not help. A
+canvas-drawn overview (tables and keys painted on one canvas below the overview zoom) is the next
+step for schemas that size.
+
 ## Agent security model
 
 - Bind `127.0.0.1` only; random 256-bit token per launch.

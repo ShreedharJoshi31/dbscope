@@ -181,6 +181,8 @@ test.describe("ERD performance", () => {
     info.annotations.push({ type: "perf-1500", description: JSON.stringify(result) });
     expect(stats.details).toEqual(["far"]);
     expect(stats.avgNodes).toBe(1500);
+    // 60 fps while panning and zooming the whole schema (24 ms before the canvas minimap).
+    expect(stats.medianMs).toBeLessThan(16.7);
     expect(headerStats.details).toEqual(["header"]);
     expect(readyMs).toBeGreaterThan(0);
     expect(readyMs).toBeLessThan(3000);
