@@ -35,18 +35,6 @@ export const ERROR_KIND_COPY: Record<TestErrorKind, { title: string; hint: strin
   },
 };
 
-/**
- * Server warnings that no checklist row already states. For a prod-replica
- * connection internal/conn/probe.go appends one warning when the server is a
- * primary and one when the role can write, last and in that order. The replica
- * and privileges rows already say both, so drop them by count, not by text.
- */
-function serverOnlyWarnings(result: TestResult, env: Env | undefined): string[] {
-  if (env !== "prod-replica") return result.warnings;
-  const covered = (result.isReplica === false ? 1 : 0) + (result.writePrivileges?.length ? 1 : 0);
-  return result.warnings.slice(0, Math.max(0, result.warnings.length - covered));
-}
-
 /** Turns a successful TestResult into an ordered, human-readable checklist. */
 export function buildChecklist(result: TestResult, env: Env | undefined): ChecklistItem[] {
   const items: ChecklistItem[] = [
@@ -114,7 +102,9 @@ export function buildChecklist(result: TestResult, env: Env | undefined): Checkl
     );
   }
 
-  serverOnlyWarnings(result, env).forEach((warning, index) => {
+  // The server warns only about facts no row above states (the replica and
+  // privilege rows come from structured fields).
+  result.warnings.forEach((warning, index) => {
     items.push({ id: `warning-${index}`, tone: "warn", text: warning });
   });
 

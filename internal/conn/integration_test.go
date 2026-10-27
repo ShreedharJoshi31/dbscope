@@ -178,11 +178,14 @@ func TestIntegrationSuccess(t *testing.T) {
 		t.Fatalf("privileges not capped: %d entries", len(res.WritePrivileges))
 	}
 
+	// The facts a prod-replica check needs come as fields, not duplicated as warnings.
 	p.Env = EnvProdReplica
 	res = Test(t.Context(), p, pass)
-	joined := strings.Join(res.Warnings, "\n")
-	if !strings.Contains(joined, "not in recovery") || !strings.Contains(joined, "write privileges") {
-		t.Fatalf("prod-replica warnings missing: %v", res.Warnings)
+	if res.IsReplica == nil || *res.IsReplica || len(res.WritePrivileges) == 0 {
+		t.Fatalf("prod-replica facts missing: replica=%v privileges=%v", res.IsReplica, res.WritePrivileges)
+	}
+	if len(res.Warnings) != 0 {
+		t.Fatalf("warnings duplicate the fields: %v", res.Warnings)
 	}
 }
 

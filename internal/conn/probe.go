@@ -98,15 +98,8 @@ func Test(ctx context.Context, p Profile, password string) TestResult {
 	} else {
 		res.PgStatStatements = &ok
 	}
-
-	if p.Env == EnvProdReplica {
-		if !replica {
-			res.Warnings = append(res.Warnings, "env is prod-replica but the server is not in recovery, so it appears to be a primary.")
-		}
-		if len(res.WritePrivileges) > 0 {
-			res.Warnings = append(res.Warnings, "env is prod-replica but this role has write privileges. A SELECT-only role is safer.")
-		}
-	}
+	// A prod-replica that is a primary, or a role that can write, is already
+	// reported through IsReplica and WritePrivileges; the UI warns from those.
 	return res
 }
 

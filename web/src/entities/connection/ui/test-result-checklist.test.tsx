@@ -39,15 +39,13 @@ describe("TestResultChecklist", () => {
         result={{
           ...healthy,
           pgStatStatements: false,
-          warnings: ["env is prod-replica but the server is not in recovery"],
+          warnings: ["the server reports an unusual setting"],
         }}
         env="local"
       />,
     );
     expect(screen.getByText(/pg_stat_statements: not available/)).toBeInTheDocument();
-    expect(screen.getByText("env is prod-replica but the server is not in recovery").closest("li")).toHaveTextContent(
-      /^Warning:/,
-    );
+    expect(screen.getByText("the server reports an unusual setting").closest("li")).toHaveTextContent(/^Warning:/);
   });
 
   it("explains an authentication failure with the server message, SQLSTATE and a hint", () => {
@@ -108,12 +106,8 @@ describe("TestResultChecklist", () => {
           isReplica: false,
           defaultReadOnly: false,
           writePrivileges: ["INSERT on public.orders"],
-          // Order as sent by internal/conn/probe.go.
-          warnings: [
-            sslWarning,
-            "env is prod-replica but the server is not in recovery, so it appears to be a primary.",
-            "env is prod-replica but this role has write privileges. A SELECT-only role is safer.",
-          ],
+          // The server states the replica and privilege facts only as fields.
+          warnings: [sslWarning],
         }}
         env="prod-replica"
       />,
