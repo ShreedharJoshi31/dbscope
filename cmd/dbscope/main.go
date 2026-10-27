@@ -32,6 +32,7 @@ const defaultPort = 4555
 
 const usage = `usage:
   dbscope ui [--port 4555] [--no-open] [--dev-origin URL]
+  dbscope eval nl --dataset DIR --dsn URL [--provider P --model M --base-url U] [--limit N] [--json]
   dbscope version
 `
 
@@ -47,6 +48,8 @@ func run(args []string) int {
 	switch args[0] {
 	case "ui":
 		return ui(args[1:])
+	case "eval":
+		return evalCmd(args[1:], os.Stdout, os.Stderr)
 	case "version":
 		fmt.Printf("dbscope %s %s/%s\n", agent.Version, runtime.GOOS, runtime.GOARCH)
 		return 0
@@ -105,11 +108,10 @@ func serve(log *slog.Logger, port int, portSet, noOpen bool, devOrigin string) e
 	defer ln.Close()
 	port = ln.Addr().(*net.TCPAddr).Port
 
-	cfgRoot, err := os.UserConfigDir()
+	dir, err := configDir()
 	if err != nil {
 		return err
 	}
-	dir := filepath.Join(cfgRoot, "dbscope")
 	st, err := store.Open(filepath.Join(dir, "dbscope.db"))
 	if err != nil {
 		return err

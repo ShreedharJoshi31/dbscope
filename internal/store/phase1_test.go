@@ -21,7 +21,7 @@ func TestMigrationsRecorded(t *testing.T) {
 		versions = append(versions, v)
 	}
 	rows.Close()
-	if !slices.Equal(versions, []int{1, 2, 3}) {
+	if !slices.Equal(versions, []int{1, 2, 3, 4}) {
 		t.Fatalf("migrations %v", versions)
 	}
 	var fk int

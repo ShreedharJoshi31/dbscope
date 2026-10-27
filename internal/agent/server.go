@@ -9,7 +9,9 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"sync"
 
+	"github.com/dbscope/dbscope/internal/nl"
 	qguard "github.com/dbscope/dbscope/internal/query/guard"
 	"github.com/dbscope/dbscope/internal/secrets"
 	"github.com/dbscope/dbscope/internal/store"
@@ -32,13 +34,21 @@ type Config struct {
 	// Schema reads database structure and runs queries; nil keeps a pgx
 	// pool per profile.
 	Schema SchemaSource
+	// NewProvider builds the LLM client from the saved settings and the
+	// vault's key; nil uses the real Anthropic and OpenAI-compatible clients.
+	NewProvider ProviderFactory
 }
 
 type server struct {
-	store  *store.Store
-	vault  *secrets.Vault
-	log    *slog.Logger
-	source SchemaSource
+	store       *store.Store
+	vault       *secrets.Vault
+	log         *slog.Logger
+	source      SchemaSource
+	newProvider ProviderFactory
+	convs       *nl.Conversations
+	// rowsConfirmed holds the prod-replica profiles whose rows the user
+	// agreed to send to the model during this agent run.
+	rowsConfirmed sync.Map
 }
 
 // Agent is the agent's HTTP handler. Close releases its database pools.
@@ -62,7 +72,11 @@ func New(cfg Config) (*Agent, error) {
 	case cfg.Store == nil || cfg.Secrets == nil:
 		return nil, errors.New("agent: Store and Secrets are required")
 	}
-	s := &server{store: cfg.Store, vault: cfg.Secrets, log: cfg.Logger, source: cfg.Schema}
+	s := &server{store: cfg.Store, vault: cfg.Secrets, log: cfg.Logger, source: cfg.Schema,
+		newProvider: cfg.NewProvider, convs: nl.NewConversations()}
+	if s.newProvider == nil {
+		s.newProvider = newProvider
+	}
 	if s.log == nil {
 		s.log = slog.New(slog.DiscardHandler)
 	}
@@ -91,6 +105,13 @@ func New(cfg Config) (*Agent, error) {
 	mux.HandleFunc("POST /api/profiles/{id}/query", s.runQuery)
 	mux.HandleFunc("POST /api/profiles/{id}/explain", s.runExplain)
 	mux.HandleFunc("GET /api/profiles/{id}/history", s.history)
+	mux.HandleFunc("GET /api/llm/settings", s.getLLMSettings)
+	mux.HandleFunc("PUT /api/llm/settings", s.putLLMSettings)
+	mux.HandleFunc("POST /api/llm/test", s.testLLM)
+	mux.HandleFunc("GET /api/llm/models", s.llmModels)
+	mux.HandleFunc("GET /api/profiles/{id}/glossary", s.getGlossary)
+	mux.HandleFunc("PUT /api/profiles/{id}/glossary", s.putGlossary)
+	mux.HandleFunc("POST /api/profiles/{id}/ask", s.ask)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "no such API route")
 	})

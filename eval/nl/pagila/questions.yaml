@@ -1,0 +1,304 @@
+name: pagila
+description: >
+  Pagila (DVD rental sample database, devrimgunduz/pagila at commit 23f7fe7a, PostgreSQL License).
+  32 answerable questions stratified by feature, 5 ambiguous (expected answer: a clarifying question)
+  and 3 unanswerable from this schema. Every gold query was executed against the pinned dump;
+  `result` records its row count and order-independent checksum (eval.Checksum).
+schemas: [public]
+questions:
+  # ---------------------------------------------------------------- joins
+  - id: j01
+    category: joins
+    result: {rows: 143, checksum: "fc0a4c6dd3e1b6ba"}
+    question: List the titles of all films in the Comedy category, alphabetically.
+    gold: |
+      SELECT f.title FROM public.film f
+      JOIN public.film_category fc ON fc.film_id = f.film_id
+      JOIN public.category c ON c.category_id = fc.category_id
+      WHERE c.name = 'Comedy' ORDER BY f.title
+  - id: j02
+    category: joins
+    result: {rows: 10, checksum: "aa2cacace5291c19"}
+    question: Which actors appear in the film ACADEMY DINOSAUR? Give first and last names.
+    gold: |
+      SELECT a.first_name, a.last_name FROM public.actor a
+      JOIN public.film_actor fa ON fa.actor_id = a.actor_id
+      JOIN public.film f ON f.film_id = fa.film_id
+      WHERE f.title = 'ACADEMY DINOSAUR'
+  - id: j03
+    category: joins
+    result: {rows: 5, checksum: "b46941d7d92bd974"}
+    question: Which 5 countries have the most customers, and how many customers does each have?
+    gold: |
+      SELECT co.country, count(*) AS customers FROM public.customer cu
+      JOIN public.address a ON a.address_id = cu.address_id
+      JOIN public.city ci ON ci.city_id = a.city_id
+      JOIN public.country co ON co.country_id = ci.country_id
+      GROUP BY co.country ORDER BY customers DESC, co.country LIMIT 5
+    note: Ranks 6 and 7 tie (Brazil, Russian Federation), so the cut is taken at 5.
+  - id: j04
+    category: joins
+    result: {rows: 64, checksum: "b8595b6a80381067"}
+    question: Which distinct film titles has the customer MARY SMITH rented?
+    gold: |
+      SELECT DISTINCT f.title FROM public.rental r
+      JOIN public.customer c ON c.customer_id = r.customer_id
+      JOIN public.inventory i ON i.inventory_id = r.inventory_id
+      JOIN public.film f ON f.film_id = i.film_id
+      WHERE c.first_name = 'MARY' AND c.last_name = 'SMITH'
+  - id: j05
+    category: joins
+    result: {rows: 2, checksum: "4b3846492bbbf59e"}
+    question: How many rentals were made from each store's inventory?
+    gold: |
+      SELECT i.store_id, count(*) AS rentals FROM public.rental r
+      JOIN public.inventory i ON i.inventory_id = r.inventory_id
+      GROUP BY i.store_id ORDER BY i.store_id
+  - id: j06
+    category: joins
+    result: {rows: 1, checksum: "37b33918b19b0901"}
+    question: In which city is store 1 located?
+    gold: |
+      SELECT ci.city FROM public.store s
+      JOIN public.address a ON a.address_id = s.address_id
+      JOIN public.city ci ON ci.city_id = a.city_id
+      WHERE s.store_id = 1
+  - id: j07
+    category: joins
+    result: {rows: 87, checksum: "f4042de48c774f39"}
+    question: List the titles and rental rates of the films whose language is Italian.
+    gold: |
+      SELECT f.title, f.rental_rate FROM public.film f
+      JOIN public.language l ON l.language_id = f.language_id
+      WHERE l.name = 'Italian'
+  # ----------------------------------------------------------- aggregates
+  - id: a01
+    category: aggregates
+    result: {rows: 5, checksum: "d55f4ba6db2cb1da"}
+    question: How many films are there for each MPAA rating?
+    gold: SELECT rating, count(*) AS films FROM public.film GROUP BY rating
+  - id: a02
+    category: aggregates
+    result: {rows: 16, checksum: "b59bf51ac6a9ff78"}
+    question: What is the average film length in each category, rounded to two decimals?
+    gold: |
+      SELECT c.name, round(avg(f.length), 2) AS avg_length FROM public.category c
+      JOIN public.film_category fc ON fc.category_id = c.category_id
+      JOIN public.film f ON f.film_id = fc.film_id
+      GROUP BY c.name
+  - id: a03
+    category: aggregates
+    result: {rows: 5, checksum: "13d54480275ea998"}
+    question: Show the first name, last name and total amount paid of the five customers who paid the most.
+    gold: |
+      SELECT c.first_name, c.last_name, sum(p.amount) AS total FROM public.customer c
+      JOIN public.payment p ON p.customer_id = c.customer_id
+      GROUP BY c.customer_id, c.first_name, c.last_name
+      ORDER BY total DESC, c.customer_id LIMIT 5
+  - id: a04
+    category: aggregates
+    result: {rows: 2, checksum: "e16137278a1e7f20"}
+    question: How many customers are registered at each store?
+    gold: SELECT store_id, count(*) AS customers FROM public.customer GROUP BY store_id
+  - id: a05
+    category: aggregates
+    result: {rows: 3, checksum: "c11fd60e4fef7bd4"}
+    question: Which categories contain more than 150 films? Show the category and its number of films.
+    gold: |
+      SELECT c.name, count(*) AS films FROM public.category c
+      JOIN public.film_category fc ON fc.category_id = c.category_id
+      GROUP BY c.name HAVING count(*) > 150
+  - id: a06
+    category: aggregates
+    result: {rows: 1, checksum: "d022a48c7b82bbb7"}
+    question: What is the total amount of all payments ever received?
+    gold: SELECT sum(amount) FROM public.payment
+  # -------------------------------------------------------------- windows
+  - id: w01
+    category: windows
+    result: {rows: 27, checksum: "a957a9b664225c5e"}
+    question: For each category, which film is the longest? Include every film tied for the longest, with the category name, title and length.
+    gold: |
+      SELECT name, title, length FROM (
+        SELECT c.name, f.title, f.length, rank() OVER (PARTITION BY c.name ORDER BY f.length DESC) AS r
+        FROM public.category c
+        JOIN public.film_category fc ON fc.category_id = c.category_id
+        JOIN public.film f ON f.film_id = fc.film_id) ranked
+      WHERE r = 1
+  - id: w02
+    category: windows
+    result: {rows: 12, checksum: "4a183bd04e42e184"}
+    question: For each month of 2023, show the month, that month's total payments, and the running total since January 2023.
+    gold: |
+      SELECT date_trunc('month', payment_date) AS month, sum(amount) AS monthly,
+             sum(sum(amount)) OVER (ORDER BY date_trunc('month', payment_date)) AS running_total
+      FROM public.payment
+      WHERE payment_date >= '2023-01-01' AND payment_date < '2024-01-01'
+      GROUP BY date_trunc('month', payment_date) ORDER BY month
+  - id: w03
+    category: windows
+    result: {rows: 15, checksum: "e280e1801c3eb69a"}
+    question: For each rating, list the three longest films, breaking ties by title. Show rating, title and length.
+    gold: |
+      SELECT rating, title, length FROM (
+        SELECT rating, title, length, row_number() OVER (PARTITION BY rating ORDER BY length DESC, title) AS n
+        FROM public.film) t
+      WHERE n <= 3
+  - id: w04
+    category: windows
+    result: {rows: 12, checksum: "25d5658874b1f2cd"}
+    question: For each month of 2025, show the number of rentals and the change from the previous month.
+    gold: |
+      SELECT date_trunc('month', rental_date) AS month, count(*) AS rentals,
+             count(*) - lag(count(*)) OVER (ORDER BY date_trunc('month', rental_date)) AS change
+      FROM public.rental
+      WHERE rental_date >= '2025-01-01' AND rental_date < '2026-01-01'
+      GROUP BY date_trunc('month', rental_date) ORDER BY month
+  - id: w05
+    category: windows
+    result: {rows: 521, checksum: "7239078188a4056b"}
+    question: Which film titles have a rental rate above the average rental rate of films with the same rating?
+    gold: |
+      SELECT title FROM (
+        SELECT title, rental_rate, avg(rental_rate) OVER (PARTITION BY rating) AS avg_rate FROM public.film) t
+      WHERE rental_rate > avg_rate
+  # ---------------------------------------------------------- date ranges
+  - id: d01
+    category: dates
+    result: {rows: 1, checksum: "3e0c6e0830200da4"}
+    question: How many rentals were made in March 2024?
+    gold: SELECT count(*) FROM public.rental WHERE rental_date >= '2024-03-01' AND rental_date < '2024-04-01'
+  - id: d02
+    category: dates
+    result: {rows: 5, checksum: "73b9b893904a25c3"}
+    question: What were the total payments per calendar year? Show the year as a number.
+    gold: |
+      SELECT extract(year FROM payment_date) AS year, sum(amount) AS total
+      FROM public.payment GROUP BY 1 ORDER BY 1
+  - id: d03
+    category: dates
+    result: {rows: 1, checksum: "b17751d32761cb08"}
+    question: How many rentals were returned more than 7 days after they were rented?
+    gold: SELECT count(*) FROM public.rental WHERE return_date - rental_date > interval '7 days'
+  - id: d04
+    category: dates
+    result: {rows: 12, checksum: "4ac9a5e782c852cc"}
+    question: Which customers (first and last name) rented a film on 24 December 2025?
+    gold: |
+      SELECT DISTINCT c.first_name, c.last_name FROM public.rental r
+      JOIN public.customer c ON c.customer_id = r.customer_id
+      WHERE r.rental_date >= '2025-12-24' AND r.rental_date < '2025-12-25'
+  - id: d05
+    category: dates
+    result: {rows: 1, checksum: "64c754f94128695b"}
+    question: How many payments were made on a Saturday or Sunday during 2022?
+    gold: |
+      SELECT count(*) FROM public.payment
+      WHERE payment_date >= '2022-01-01' AND payment_date < '2023-01-01'
+        AND extract(isodow FROM payment_date) IN (6, 7)
+  # ---------------------------------------------------------------- nulls
+  - id: n01
+    category: nulls
+    result: {rows: 1, checksum: "b59046ae0ea97c71"}
+    question: How many rentals have not been returned yet?
+    gold: SELECT count(*) FROM public.rental WHERE return_date IS NULL
+  - id: n02
+    category: nulls
+    result: {rows: 42, checksum: "8291dd14fc8cd62c"}
+    question: Which film titles are not stocked in any store's inventory?
+    gold: |
+      SELECT f.title FROM public.film f
+      WHERE NOT EXISTS (SELECT 1 FROM public.inventory i WHERE i.film_id = f.film_id)
+  - id: n03
+    category: nulls
+    result: {rows: 1, checksum: "0e8c6eb52c48005f"}
+    question: How many addresses have no second address line, whether it is missing or empty?
+    gold: SELECT count(*) FROM public.address WHERE address2 IS NULL OR address2 = ''
+    note: 4 rows hold NULL and 999 hold an empty string.
+  - id: n04
+    category: nulls
+    result: {rows: 1, checksum: "5a9be212833d44fa"}
+    question: How many customers have never made a payment?
+    gold: |
+      SELECT count(*) FROM public.customer c
+      WHERE NOT EXISTS (SELECT 1 FROM public.payment p WHERE p.customer_id = c.customer_id)
+  # ------------------------------------------------------ distinct traps
+  - id: x01
+    category: distinct
+    result: {rows: 1, checksum: "b1e596fc38f98630"}
+    question: How many different customers rented at least one film in 2025?
+    gold: |
+      SELECT count(DISTINCT customer_id) FROM public.rental
+      WHERE rental_date >= '2025-01-01' AND rental_date < '2026-01-01'
+  - id: x02
+    category: distinct
+    result: {rows: 1, checksum: "48673bd3627dc5f2"}
+    question: How many distinct actor full names (first plus last name) are there?
+    gold: SELECT count(*) FROM (SELECT DISTINCT first_name, last_name FROM public.actor) t
+    note: 200 actor rows but 199 distinct names.
+  - id: x03
+    category: distinct
+    result: {rows: 1, checksum: "9b9fe509d2603ea8"}
+    question: How many films have been rented at least once?
+    gold: |
+      SELECT count(DISTINCT i.film_id) FROM public.rental r
+      JOIN public.inventory i ON i.inventory_id = r.inventory_id
+  - id: x04
+    category: distinct
+    result: {rows: 1, checksum: "848c37335cbac5a7"}
+    question: How many films are in the Action category or the Comedy category (count each film once)?
+    gold: |
+      SELECT count(DISTINCT fc.film_id) FROM public.film_category fc
+      JOIN public.category c ON c.category_id = fc.category_id
+      WHERE c.name IN ('Action', 'Comedy')
+    note: Most films have several categories, so a plain count double-counts.
+  - id: x05
+    category: distinct
+    result: {rows: 108, checksum: "a5a3537a16feeff9"}
+    question: List each country that has at least one customer, alphabetically.
+    gold: |
+      SELECT DISTINCT co.country FROM public.customer cu
+      JOIN public.address a ON a.address_id = cu.address_id
+      JOIN public.city ci ON ci.city_id = a.city_id
+      JOIN public.country co ON co.country_id = ci.country_id
+      ORDER BY co.country
+  # ------------------------------------------------------------ ambiguous
+  - id: amb1
+    category: ambiguous
+    question: What were our best months?
+    ambiguous: true
+    note: Best by revenue or by number of rentals, and how many months.
+  - id: amb2
+    category: ambiguous
+    question: Who are our top customers?
+    ambiguous: true
+    note: By amount paid or by number of rentals.
+  - id: amb3
+    category: ambiguous
+    question: Show me the most popular films.
+    ambiguous: true
+    note: By rentals, by revenue, or by copies in inventory.
+  - id: amb4
+    category: ambiguous
+    question: What is the revenue per store?
+    ambiguous: true
+    note: A payment reaches a store through the staff member, the rented inventory, or the customer's home store; each gives a different answer.
+  - id: amb5
+    category: ambiguous
+    question: How many active customers do we have?
+    ambiguous: true
+    note: customer.active (integer) and customer.activebool disagree on 43 rows.
+  # --------------------------------------------------------- unanswerable
+  - id: u01
+    category: unanswerable
+    question: What is the average age of our customers?
+    unanswerable: true
+    note: No birth date is stored.
+  - id: u02
+    category: unanswerable
+    question: Which of our films won an Academy Award?
+    unanswerable: true
+  - id: u03
+    category: unanswerable
+    question: What is each staff member's monthly salary?
+    unanswerable: true

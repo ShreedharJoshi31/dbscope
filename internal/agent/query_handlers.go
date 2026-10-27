@@ -46,6 +46,11 @@ type runError struct {
 }
 
 func (e *runError) write(w http.ResponseWriter) {
+	writeJSON(w, e.status, map[string]any{"error": e.body()})
+}
+
+// body is the error envelope's inner object, also sent as an SSE error event.
+func (e *runError) body() map[string]any {
 	body := map[string]any{"code": e.code, "message": e.message}
 	if e.detail != "" {
 		body["detail"] = e.detail
@@ -60,7 +65,7 @@ func (e *runError) write(w http.ResponseWriter) {
 		body["estimatedCost"] = e.cost.EstimatedCost
 		body["estimatedRows"] = e.cost.EstimatedRows
 	}
-	writeJSON(w, e.status, map[string]any{"error": body})
+	return body
 }
 
 func (s *server) runQuery(w http.ResponseWriter, r *http.Request) {

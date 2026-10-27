@@ -94,8 +94,8 @@ func TestMigration0003OnExistingData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, q := range []string{`DROP TABLE query_history`, `ALTER TABLE profiles DROP COLUMN max_cost`,
-		`DELETE FROM schema_migrations WHERE version = 3`} {
+	for _, q := range []string{`DROP TABLE llm_settings`, `DROP TABLE glossary`, `DROP TABLE query_history`,
+		`ALTER TABLE profiles DROP COLUMN max_cost`, `DELETE FROM schema_migrations WHERE version >= 3`} {
 		if _, err := s.db.Exec(q); err != nil {
 			t.Fatal(err)
 		}

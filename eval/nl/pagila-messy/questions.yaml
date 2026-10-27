@@ -1,0 +1,177 @@
+name: pagila-messy
+description: >
+  Messy Pagila: the pinned Pagila dump rewritten by transform.sql into schema px with cryptic names,
+  no foreign keys, text timestamps, cents and coded values. glossary.yaml carries the meaning.
+  20 questions; each gold query is the Pagila gold query (source_id in the note) rewritten through the
+  mapping, executed against the transformed database and checked to give the same rows as the original.
+schemas: [px]
+questions:
+  - id: m01
+    category: joins
+    result: {rows: 143, checksum: "fc0a4c6dd3e1b6ba"}
+    question: List the titles of all films in the Comedy category, alphabetically.
+    gold: |
+      SELECT f.c2 FROM px.t_flm f
+      JOIN px.t_fc fc ON fc.c1 = f.c1
+      JOIN px.t_cat c ON c.c1 = fc.c2
+      WHERE c.c2 = 'Comedy' ORDER BY f.c2
+    note: pagila j01
+  - id: m02
+    category: joins
+    result: {rows: 10, checksum: "aa2cacace5291c19"}
+    question: Which actors appear in the film ACADEMY DINOSAUR? Give first and last names.
+    gold: |
+      SELECT a.c2, a.c3 FROM px.t_act a
+      JOIN px.t_fa fa ON fa.c1 = a.c1
+      JOIN px.t_flm f ON f.c1 = fa.c2
+      WHERE f.c2 = 'ACADEMY DINOSAUR'
+    note: pagila j02
+  - id: m03
+    category: joins
+    result: {rows: 5, checksum: "b46941d7d92bd974"}
+    question: Which 5 countries have the most customers, and how many customers does each have?
+    gold: |
+      SELECT co.c2, count(*) AS customers FROM px.t_cst cu
+      JOIN px.t_adr a ON a.c1 = cu.c6
+      JOIN px.t_cty ci ON ci.c1 = a.c4
+      JOIN px.t_ctr co ON co.c1 = ci.c3
+      GROUP BY co.c2 ORDER BY customers DESC, co.c2 LIMIT 5
+    note: pagila j03
+  - id: m04
+    category: joins
+    result: {rows: 2, checksum: "4b3846492bbbf59e"}
+    question: How many rentals were made from each store's inventory?
+    gold: |
+      SELECT i.c3, count(*) AS rentals FROM px.t_rnt r
+      JOIN px.t_inv i ON i.c1 = r.c3
+      GROUP BY i.c3 ORDER BY i.c3
+    note: pagila j05
+  - id: m05
+    category: joins
+    result: {rows: 87, checksum: "f4042de48c774f39"}
+    question: List the titles and rental rates of the films whose language is Italian.
+    gold: |
+      SELECT f.c2, f.c7 FROM px.t_flm f
+      JOIN px.t_lng l ON l.c1 = f.c5
+      WHERE l.c2 = 'Italian'
+    note: pagila j07; px.t_flm_old has different rates for 100 of these films (decoy)
+  - id: m06
+    category: aggregates
+    result: {rows: 5, checksum: "d55f4ba6db2cb1da"}
+    question: How many films are there for each MPAA rating? Show the rating as its letter code (G, PG, PG-13, R, NC-17).
+    gold: |
+      SELECT CASE c10 WHEN 1 THEN 'G' WHEN 2 THEN 'PG' WHEN 3 THEN 'PG-13' WHEN 4 THEN 'R' WHEN 5 THEN 'NC-17' END AS rating,
+             count(*) AS films
+      FROM px.t_flm GROUP BY c10
+    note: pagila a01; needs the rating codes from the glossary
+  - id: m07
+    category: aggregates
+    result: {rows: 5, checksum: "13d54480275ea998"}
+    question: Show the first name, last name and total amount paid in dollars of the five customers who paid the most.
+    gold: |
+      SELECT c.c3, c.c4, sum(p.c5) / 100.0 AS total FROM px.t_cst c
+      JOIN px.t_pmt p ON p.c2 = c.c1
+      GROUP BY c.c1, c.c3, c.c4
+      ORDER BY total DESC, c.c1 LIMIT 5
+    note: pagila a03; amounts are cents
+  - id: m08
+    category: aggregates
+    result: {rows: 1, checksum: "d022a48c7b82bbb7"}
+    question: What is the total amount, in dollars, of all payments ever received?
+    gold: SELECT sum(c5) / 100.0 FROM px.t_pmt
+    note: pagila a06
+  - id: m09
+    category: aggregates
+    result: {rows: 3, checksum: "c11fd60e4fef7bd4"}
+    question: Which categories contain more than 150 films? Show the category and its number of films.
+    gold: |
+      SELECT c.c2, count(*) AS films FROM px.t_cat c
+      JOIN px.t_fc fc ON fc.c2 = c.c1
+      GROUP BY c.c2 HAVING count(*) > 150
+    note: pagila a05
+  - id: m10
+    category: windows
+    result: {rows: 12, checksum: "de4f43874932b872"}
+    question: For each month of 2023, show the month, that month's total payments in dollars, and the running total since January 2023.
+    gold: |
+      SELECT date_trunc('month', c6::timestamp) AS month, sum(c5) / 100.0 AS monthly,
+             sum(sum(c5)) OVER (ORDER BY date_trunc('month', c6::timestamp)) / 100.0 AS running_total
+      FROM px.t_pmt
+      WHERE c6 >= '2023-01-01' AND c6 < '2024-01-01'
+      GROUP BY date_trunc('month', c6::timestamp) ORDER BY month
+    note: pagila w02; month is timestamp without time zone here (UTC text)
+  - id: m11
+    category: windows
+    result: {rows: 15, checksum: "94f075d72207897a"}
+    question: For each rating, list the three longest films, breaking ties by title. Show the rating code, title and length.
+    gold: |
+      SELECT c10, c2, c8 FROM (
+        SELECT c10, c2, c8, row_number() OVER (PARTITION BY c10 ORDER BY c8 DESC, c2) AS n FROM px.t_flm) t
+      WHERE n <= 3
+    note: pagila w03; the question asks for the code, so the 1-5 value is the answer
+  - id: m12
+    category: windows
+    result: {rows: 12, checksum: "eacf54ed429ff643"}
+    question: For each month of 2025, show the number of rentals and the change from the previous month.
+    gold: |
+      SELECT date_trunc('month', c2::timestamp) AS month, count(*) AS rentals,
+             count(*) - lag(count(*)) OVER (ORDER BY date_trunc('month', c2::timestamp)) AS change
+      FROM px.t_rnt
+      WHERE c2 >= '2025-01-01' AND c2 < '2026-01-01'
+      GROUP BY date_trunc('month', c2::timestamp) ORDER BY month
+    note: pagila w04
+  - id: m13
+    category: dates
+    result: {rows: 1, checksum: "3e0c6e0830200da4"}
+    question: How many rentals were made in March 2024?
+    gold: SELECT count(*) FROM px.t_rnt WHERE c2 >= '2024-03-01' AND c2 < '2024-04-01'
+    note: pagila d01; text comparison works because the format sorts like the timestamp
+  - id: m14
+    category: dates
+    result: {rows: 1, checksum: "b17751d32761cb08"}
+    question: How many rentals were returned more than 7 days after they were rented?
+    gold: SELECT count(*) FROM px.t_rnt WHERE c5::timestamp - c2::timestamp > interval '7 days'
+    note: pagila d03
+  - id: m15
+    category: dates
+    result: {rows: 1, checksum: "64c754f94128695b"}
+    question: How many payments were made on a Saturday or Sunday during 2022?
+    gold: |
+      SELECT count(*) FROM px.t_pmt
+      WHERE c6 >= '2022-01-01' AND c6 < '2023-01-01' AND extract(isodow FROM c6::timestamp) IN (6, 7)
+    note: pagila d05
+  - id: m16
+    category: nulls
+    result: {rows: 1, checksum: "b59046ae0ea97c71"}
+    question: How many rentals have not been returned yet?
+    gold: SELECT count(*) FROM px.t_rnt WHERE c5 IS NULL
+    note: pagila n01; px.t_rnt_arch is an empty decoy
+  - id: m17
+    category: nulls
+    result: {rows: 42, checksum: "8291dd14fc8cd62c"}
+    question: Which film titles are not stocked in any store's inventory?
+    gold: SELECT f.c2 FROM px.t_flm f WHERE NOT EXISTS (SELECT 1 FROM px.t_inv i WHERE i.c2 = f.c1)
+    note: pagila n02
+  - id: m18
+    category: distinct
+    result: {rows: 1, checksum: "b1e596fc38f98630"}
+    question: How many different customers rented at least one film in 2025?
+    gold: SELECT count(DISTINCT c4) FROM px.t_rnt WHERE c2 >= '2025-01-01' AND c2 < '2026-01-01'
+    note: pagila x01
+  - id: m19
+    category: distinct
+    result: {rows: 1, checksum: "848c37335cbac5a7"}
+    question: How many films are in the Action category or the Comedy category (count each film once)?
+    gold: |
+      SELECT count(DISTINCT fc.c1) FROM px.t_fc fc
+      JOIN px.t_cat c ON c.c1 = fc.c2
+      WHERE c.c2 IN ('Action', 'Comedy')
+    note: pagila x04
+  - id: m20
+    category: glossary
+    result: {rows: 1, checksum: "abb396baef13d916"}
+    question: How many active customers are there?
+    gold: SELECT count(*) FROM px.t_cst WHERE c7 = 'A'
+    note: >
+      Ambiguous on clean Pagila (amb5); the glossary defines "active customer" as status 'A', so here it has
+      one answer. Equals count(*) WHERE activebool on the original.

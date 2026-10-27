@@ -140,6 +140,8 @@ func (s *server) deleteProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.source.Forget(p.ID)
+	s.convs.Forget(p.ID)
+	s.rowsConfirmed.Delete(p.ID)
 	w.WriteHeader(http.StatusNoContent)
 }
 

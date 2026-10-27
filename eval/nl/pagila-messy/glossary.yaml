@@ -1,0 +1,49 @@
+# Business glossary for the messy Pagila schema (px). Loaded by
+# `dbscope eval nl` as the profile glossary. Without it the schema is close
+# to unreadable; that is the point of this dataset.
+glossary:
+  - term: film
+    definition: A movie title in the catalogue. Table px.t_flm; c1 film id, c2 title, c3 description, c4 release year, c5 language id (px.t_lng.c1), c6 rental duration in days, c7 rental rate in dollars, c8 length in minutes, c9 replacement cost in dollars, c10 rating code.
+    sql: px.t_flm
+  - term: rating
+    definition: MPAA rating, stored in px.t_flm.c10 as a code. 1 = G, 2 = PG, 3 = PG-13, 4 = R, 5 = NC-17.
+    sql: "px.t_flm.c10"
+  - term: old film list
+    definition: px.t_flm_old is a stale copy of 100 films with outdated rental rates. Never use it; px.t_flm is current.
+    sql: ""
+  - term: language
+    definition: Spoken language of a film. Table px.t_lng; c1 language id, c2 name.
+    sql: px.t_lng
+  - term: actor
+    definition: A performer. Table px.t_act; c1 actor id, c2 first name, c3 last name. px.t_fa links actors to films (c1 actor id, c2 film id).
+    sql: px.t_act JOIN px.t_fa ON px.t_fa.c1 = px.t_act.c1
+  - term: category
+    definition: A film genre. Table px.t_cat; c1 category id, c2 name. px.t_fc links films to categories (c1 film id, c2 category id); a film can have several.
+    sql: px.t_cat JOIN px.t_fc ON px.t_fc.c2 = px.t_cat.c1
+  - term: customer
+    definition: A person who rents films. Table px.t_cst; c1 customer id, c2 home store id, c3 first name, c4 last name, c5 email, c6 address id (px.t_adr.c1), c7 status, c8 sign-up date as text YYYYMMDD.
+    sql: px.t_cst
+  - term: active customer
+    definition: A customer whose status px.t_cst.c7 is 'A'. 'I' means inactive.
+    sql: "px.t_cst.c7 = 'A'"
+  - term: address
+    definition: Table px.t_adr; c1 address id, c2 street address, c3 district, c4 city id (px.t_cty.c1), c5 phone. Cities are px.t_cty (c1 id, c2 name, c3 country id) and countries px.t_ctr (c1 id, c2 name).
+    sql: px.t_adr JOIN px.t_cty ON px.t_cty.c1 = px.t_adr.c4 JOIN px.t_ctr ON px.t_ctr.c1 = px.t_cty.c3
+  - term: store
+    definition: A rental shop. Table px.t_sto; c1 store id, c2 manager staff id, c3 address id.
+    sql: px.t_sto
+  - term: inventory
+    definition: One physical copy of a film in a store. Table px.t_inv; c1 inventory id, c2 film id, c3 store id.
+    sql: px.t_inv
+  - term: rental
+    definition: One rental of one inventory copy. Table px.t_rnt; c1 rental id, c2 rental time, c3 inventory id, c4 customer id, c5 return time (NULL while not returned), c6 staff id. Times are UTC text 'YYYY-MM-DD HH24:MI:SS'; cast with ::timestamp.
+    sql: px.t_rnt
+  - term: rental archive
+    definition: px.t_rnt_arch is an empty archive table kept for compatibility. All rentals are in px.t_rnt.
+    sql: ""
+  - term: payment
+    definition: A customer payment for a rental. Table px.t_pmt; c1 payment id, c2 customer id, c3 staff id, c4 rental id, c5 amount in cents (divide by 100 for dollars), c6 payment time as UTC text 'YYYY-MM-DD HH24:MI:SS'.
+    sql: px.t_pmt
+  - term: revenue
+    definition: The sum of payment amounts, reported in dollars.
+    sql: sum(px.t_pmt.c5) / 100.0

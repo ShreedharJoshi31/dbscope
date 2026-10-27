@@ -14,7 +14,9 @@ type Secret string
 
 func (Secret) LogValue() slog.Value { return slog.StringValue(redacted) }
 
-var sensitiveKeys = []string{"password", "dsn", "token", "authorization", "api_key", "secret"}
+var sensitiveKeys = []string{"password", "dsn", "token", "authorization", "api_key", "secret",
+	// LLM API keys: the JSON field, the HTTP header and the vault names.
+	"apiKey", "x-api-key", "llm:anthropic", "llm:openai_compat"}
 
 // ReplaceAttr redacts attributes whose key names a credential, as a backstop
 // for values that were not wrapped in Secret.

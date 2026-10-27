@@ -243,12 +243,16 @@ Events, in order (any may be followed by `error`, which ends the stream):
 | `status` | `{"stage":"retrieving|generating|checking|running|repairing|summarizing"}` |
 | `context` | `{"provider","model","schemaMode":"full|retrieved","tables":["s.t",...],"omittedColumns":["s.t.password"],"sends":"schema|schema+profile|schema+rows"}` |
 | `answer` | `{"kind":"sql|clarify","sql","explanationSteps":[],"assumptions":[{"label","sqlFragment"}],"tables":[],"clarifyingQuestion"?:{"question","options":[]},"repaired":bool}` (sent again after a repair) |
-| `needs_confirmation` | `{"reason":"cost","estimatedCost","estimatedRows"}` or `{"reason":"rows"}` — stream ends; re-send with the confirm flag |
+| `needs_confirmation` | `{"reason":"cost","estimatedCost","estimatedRows","conversationId"}` or `{"reason":"rows","conversationId"}` — stream ends; re-send the same question with the same `conversationId` and the confirm flag (the shown answer is reused, no new model call) |
 | `result` | the Phase 2 `QueryResult` |
 | `summary` | `{"text","mode":"profile|rows"}` |
 | `done` | `{"conversationId","durationMs","usage":{"inputTokens","outputTokens","cacheReadTokens"}}` |
 | `error` | the standard error envelope body; plus `{"code":"llm", "detail":"auth|network|refusal|max_tokens|invalid_output|rate_limit"}` for provider failures |
 
 `400 validation` / `404` / `423` / `409 llm_not_configured` are returned as normal JSON before the stream starts.
+`GET /api/llm/settings` returns `423` while the vault is locked and a provider is set; `GET /api/llm/models` returns
+`502 upstream` (error kind in `detail`) when the provider fails. Prod-replica rows confirmation lasts for the agent process.
 Aborting the fetch cancels the LLM call and any running statement.
-Ask runs are recorded in query history with `source: "ask"` and the question (never rows).
+Ask runs are recorded in query history once SQL exists, with `source: "ask"` and `question` (never rows); history
+entries gain `source: "query"|"ask"` and `question?`. Confirmation stops are recorded as `rejected` with
+`errorCode` `cost_confirmation_required` / `rows_confirmation_required`.
