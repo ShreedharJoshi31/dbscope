@@ -32,6 +32,7 @@ const (
 	exitThreshold   = 1
 	exitUsage       = 2
 	exitUnavailable = 3
+	exitCommand     = 4
 )
 
 const migrateUsage = `usage:
@@ -39,11 +40,22 @@ const migrateUsage = `usage:
                         [--fail-on low|medium|high|critical] [--format text|json|sarif|github]
                         [--tx-mode auto|file|statement|none] [--assume-lock-timeout]
 
+  dbscope migrate capture --shadow URL [--dsn URL] [--out DIR] [--url-env NAME]...
+                          [--allow-nonempty-shadow] -- COMMAND [ARGS...]
+
 Analyzes migration files (or directories of them) against a base schema:
 a live database (--dsn, or the DBSCOPE_DSN environment variable), or a
 pg_dump --schema-only file optionally combined with a "dbscope stats export"
 file. Exits 1 when any statement is rated at or above --fail-on (default
 high), 2 on usage errors and 3 when the base schema cannot be read.
+
+capture runs an ORM's migrate command (bin/rails db:migrate, python manage.py
+migrate, alembic upgrade head, ...) against an empty throwaway --shadow
+database through a recording proxy and writes the SQL it ran as one .sql file
+per migration into --out, ready for migrate check. With --dsn, migrations that
+database has already applied are left out. Exits 3 when the shadow cannot be
+used and 4 when the command failed or never connected through dbscope.
+See docs/ORM-CAPTURE.md.
 `
 
 const statsUsage = `usage:
@@ -105,6 +117,9 @@ func openPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 }
 
 func migrateCmd(args []string, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "capture" {
+		return captureCmd(args[1:], stdout, stderr)
+	}
 	if len(args) == 0 || args[0] != "check" {
 		fmt.Fprint(stderr, migrateUsage)
 		return exitUsage

@@ -300,4 +300,11 @@ dbscope migrate check PATH... [--dsn URL | --schema-dump FILE [--stats FILE]] [-
                        [--fail-on low|medium|high|critical] [--format text|json|sarif|github]
                        [--tx-mode auto|file|statement|none] [--assume-lock-timeout]
 dbscope stats export --dsn URL [--schemas a,b] > stats.json   # sizes, row estimates, version, role timeouts; no row data
+dbscope migrate capture --shadow URL [--dsn URL] [--out DIR] [--url-env NAME]... [--allow-nonempty-shadow] -- COMMAND...
 ```
+
+`migrate capture` runs an ORM's migrate command against an empty `--shadow` database through a
+recording proxy and writes one `.sql` file per migration to `--out` (default `dbscope-capture`, must be
+empty). With `--dsn`, migrations that database has already applied are left out. Exit codes: `0`,
+`2` usage, `3` the shadow, `--dsn` or `--out` cannot be used, `4` the command failed or never connected
+through the proxy. Design and per-framework behaviour: [ORM-CAPTURE.md](ORM-CAPTURE.md).

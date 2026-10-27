@@ -113,6 +113,10 @@ function FilesMode({ picked, setPicked }: { picked: CollectedFiles | null; setPi
             Choose a folder…
           </Button>
         </div>
+        <p className="text-xs text-text-muted">
+          Rails, Django or Alembic? Run <code className="font-mono">dbscope migrate capture</code> to get the SQL they
+          run, then drop that folder here.
+        </p>
         <input
           ref={filesRef}
           type="file"

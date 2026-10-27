@@ -116,6 +116,22 @@ pg_dump --schema-only "$URL" > schema.sql
 ./bin/dbscope migrate check db/migrations --schema-dump schema.sql --stats stats.json --format github
 ```
 
+Rails, Django and Alembic migrations are code rather than SQL. `migrate capture`
+runs your own migrate command against an empty throwaway database through a
+recording proxy and writes the SQL it actually ran, one file per migration,
+with the transactions exactly as the framework used them:
+
+```bash
+createdb dbscope_shadow
+./bin/dbscope migrate capture --shadow postgres://localhost/dbscope_shadow --dsn "$STAGING_REPLICA_URL" \
+    --out captured -- bin/rails db:migrate
+./bin/dbscope migrate check captured --dsn "$STAGING_REPLICA_URL"
+```
+
+With `--dsn`, migrations already applied there are left out. Tested with Rails
+8.1, Django 6.1, Alembic 1.20, Drizzle and Prisma 6/7; details and limits in
+[docs/ORM-CAPTURE.md](docs/ORM-CAPTURE.md).
+
 Formats: `text`, `json`, `sarif` (GitHub code scanning) and `github` (inline
 annotations on pull requests). Lock and rewrite rules are checked against real
 PostgreSQL 14, 17 and 18 by the test suite. Migrations using PostgreSQL 18-only

@@ -19,6 +19,15 @@ Base schema, in order of preference: a live profile (introspection + `pg_class` 
 `pg_db_role_setting` timeouts), a `dbscope stats export` JSON file plus a `pg_dump --schema-only`
 file applied through the same engine, or the dump alone (sizes unknown → size tier 2).
 
+## ORM migrations
+
+Rails, Django and Alembic migrations are code; `dbscope migrate capture` records the SQL they run
+and writes plain files with the observed `BEGIN`/`COMMIT`, which ingest reads as explicit
+transactions ([ORM-CAPTURE.md](ORM-CAPTURE.md)). Prisma files are read directly, but the transaction
+rule for a multi-statement `migration.sql` depends on the Prisma version: Prisma 6 sends it as one
+query (one implicit transaction, which ingest assumes), Prisma 7 sends each statement on its own. For
+Prisma 7 use `--tx-mode statement`, or capture.
+
 ## Parser limit
 
 The only CGO-free parser (go-pgquery, verified 2026-10-27 at its newest build) uses the PG17 grammar.
