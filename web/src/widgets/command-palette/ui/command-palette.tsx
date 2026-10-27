@@ -18,6 +18,7 @@ import {
 } from "@/shared/ui/command";
 import { useCommandPalette } from "@/widgets/command-palette/model/palette-store";
 import { CanvasCommandItems } from "@/widgets/command-palette/ui/canvas-command-items";
+import { MigrationCommandItems } from "@/widgets/command-palette/ui/migration-command-items";
 import { AssistantCommandItems, QueryCommandItems } from "@/widgets/command-palette/ui/query-command-items";
 
 function Shortcut({ combo }: { combo: KeyCombo }) {
@@ -68,6 +69,7 @@ export function CommandPalette() {
           </CommandGroup>
           <QueryCommandItems run={run} />
           <AssistantCommandItems run={run} />
+          <MigrationCommandItems run={run} />
           <CanvasCommandItems run={run} />
           <CommandGroup heading="View">
             <CommandItem onSelect={run(toggleTheme)}>

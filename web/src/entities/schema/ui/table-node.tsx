@@ -1,8 +1,28 @@
 import type { Node, NodeProps } from "@xyflow/react";
 import { cn } from "cn";
-import { ChevronDown, ChevronRight, CircleCheck, Info, Layers, OctagonX, TriangleAlert } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  CircleCheck,
+  Info,
+  Layers,
+  Link2,
+  OctagonX,
+  SquareMinus,
+  SquarePen,
+  SquarePlus,
+  TriangleAlert,
+} from "lucide-react";
 import { memo } from "react";
-import { type ColumnMark, nodeVisual, type OverlayEntry, useCanvasStore } from "@/entities/schema/model/canvas-store";
+import {
+  type ColumnMark,
+  type DiffChange,
+  type DiffOverlay,
+  nodeVisual,
+  type OverlayEntry,
+  useCanvasStore,
+} from "@/entities/schema/model/canvas-store";
+import { DIFF_CHANGE_META } from "@/entities/schema/model/diff-overlay";
 import { relationKey } from "@/entities/schema/model/keys";
 import {
   type ColumnRow,
@@ -16,7 +36,7 @@ import { KindIcon } from "@/entities/schema/ui/kind-icon";
 import { useZoomDetail } from "@/entities/schema/ui/lod";
 import { rowEstimateLabel } from "@/entities/schema/ui/row-estimate";
 import { useTableNodeActions } from "@/entities/schema/ui/table-node-actions";
-import type { Relation } from "@/shared/api";
+import type { ColumnChangeKind, Relation } from "@/shared/api";
 
 /**
  * Edges anchor to `node.handles`, precomputed in sizing.ts together with
@@ -62,6 +82,127 @@ function OverlayBadge({ entry }: { entry: OverlayEntry }) {
   );
 }
 
+const DIFF_ICON = { added: SquarePlus, altered: SquarePen, dropped: SquareMinus } as const;
+
+type ColumnDiff = Readonly<Record<string, { change: ColumnChangeKind; to?: string | undefined }>>;
+
+function columnDiffLines(columns: ColumnDiff | undefined): string[] {
+  return Object.entries(columns ?? {}).map(([name, c]) =>
+    c.change === "renamed" && c.to ? `Column ${name} renamed to ${c.to}` : `Column ${name} ${c.change}`,
+  );
+}
+
+/** "added" / "altered" / "dropped" with its icon (UX rule 7); column changes in the tooltip and accessible name. */
+function DiffBadge({ change, columns }: { change: DiffChange; columns: ColumnDiff | undefined }) {
+  const meta = DIFF_CHANGE_META[change];
+  const Icon = DIFF_ICON[change];
+  const lines = [meta.description, ...columnDiffLines(columns)];
+  return (
+    <span
+      data-testid="diff-badge"
+      data-diff={change}
+      title={lines.join("\n")}
+      className={cn(
+        "flex shrink-0 items-center gap-0.5 rounded-xs border bg-surface-canvas px-1 text-2xs font-semibold",
+        OVERLAY_TONE[meta.tone],
+      )}
+    >
+      <Icon aria-hidden className="size-3" />
+      {meta.label}
+      <span className="sr-only">. {lines.join(". ")}</span>
+    </span>
+  );
+}
+
+/** Marks a node as depending on the selected migration change, with its certainty. */
+function ImpactChip({ heuristic }: { heuristic: boolean }) {
+  const certainty = heuristic ? "heuristic" : "catalog";
+  return (
+    <span
+      data-testid="impact-chip"
+      data-certainty={certainty}
+      title={`Depends on the selected change (${certainty}: ${heuristic ? "matched by name, may be wrong" : "recorded in the catalog"})`}
+      className={cn(
+        "flex shrink-0 items-center gap-0.5 rounded-xs border border-accent-fg bg-surface-canvas px-1 text-2xs font-semibold text-accent-fg",
+        heuristic && "border-dashed",
+      )}
+    >
+      <Link2 aria-hidden className="size-3" />
+      {certainty}
+      <span className="sr-only">. Depends on the selected change</span>
+    </span>
+  );
+}
+
+const DIFF_FRAME: Record<DiffChange, string> = {
+  added: "border-status-success-fg",
+  altered: "border-status-warn-fg",
+  dropped: "border-dashed border-status-danger-fg",
+};
+
+const COLUMN_DIFF: Record<ColumnChangeKind, { className: string; tone: string; icon: typeof SquarePlus }> = {
+  added: { className: "bg-status-success-subtle", tone: "text-status-success-fg", icon: SquarePlus },
+  altered: { className: "bg-status-warn-subtle", tone: "text-status-warn-fg", icon: SquarePen },
+  renamed: { className: "bg-status-warn-subtle", tone: "text-status-warn-fg", icon: SquarePen },
+  dropped: { className: "bg-status-danger-subtle", tone: "text-status-danger-fg", icon: SquareMinus },
+};
+
+function ColumnDiffLabel({ change, to }: { change: ColumnChangeKind; to?: string | undefined }) {
+  const meta = COLUMN_DIFF[change];
+  const Icon = meta.icon;
+  return (
+    <span
+      data-testid="column-diff"
+      data-diff={change}
+      className={cn(
+        "ml-auto flex max-w-[55%] min-w-0 shrink-0 items-center gap-0.5 pl-1 text-2xs font-semibold",
+        meta.tone,
+      )}
+    >
+      <Icon aria-hidden className="size-3 shrink-0" />
+      {change === "renamed" && to ? (
+        <span className="truncate">
+          renamed <span aria-hidden>→</span>
+          <span className="sr-only">to</span> <span className="font-mono">{to}</span>
+        </span>
+      ) : (
+        change
+      )}
+    </span>
+  );
+}
+
+const MAX_ADDED_ROWS = 3;
+
+/**
+ * Columns the migration adds are not in the model, so they have no row. They
+ * are drawn as a strip under the card (absolutely positioned: the node keeps
+ * its size and the layout does not move).
+ */
+function AddedColumns({ columns }: { columns: ColumnDiff | undefined }) {
+  const added = Object.entries(columns ?? {})
+    .filter(([, c]) => c.change === "added")
+    .map(([name]) => name);
+  if (added.length === 0) return null;
+  const shown = added.slice(0, MAX_ADDED_ROWS);
+  return (
+    <div
+      data-testid="added-columns"
+      className="pointer-events-none absolute inset-x-2 top-full flex flex-col rounded-b-md border border-t-0 border-dashed border-status-success-fg bg-surface-raised"
+    >
+      {shown.map((name) => (
+        <div key={name} data-column={name} data-diff="added" className="flex h-6 items-center gap-1 px-2 text-xs">
+          <span className="min-w-0 truncate font-mono text-text-primary">{name}</span>
+          <ColumnDiffLabel change="added" />
+        </div>
+      ))}
+      {added.length > shown.length && (
+        <div className="px-2 pb-1 text-2xs text-text-muted">+{added.length - shown.length} more added</div>
+      )}
+    </div>
+  );
+}
+
 /**
  * Invisible elements at the precomputed handle positions. React Flow still
  * re-measures a node now and then (when its wrapper mounts under
@@ -93,21 +234,45 @@ const COLUMN_MARK_CLASS: Record<ColumnMark, string> = {
     "bg-status-info-subtle font-semibold underline decoration-status-info-fg decoration-2 underline-offset-2",
 };
 
-function ColumnRowView({ row, mark }: { row: ColumnRow; mark: ColumnMark | undefined }) {
+interface ColumnRowProps {
+  row: ColumnRow;
+  mark: ColumnMark | undefined;
+  diff: { change: ColumnChangeKind; to?: string | undefined } | undefined;
+}
+
+function ColumnRowView({ row, mark, diff }: ColumnRowProps) {
   const { column, flags } = row;
   return (
     <div
       data-column={column.name}
       data-mark={mark}
+      data-diff={diff?.change}
       title={column.comment || undefined}
-      className={cn("flex h-6 items-center gap-1 px-2 text-xs", mark && COLUMN_MARK_CLASS[mark])}
+      className={cn(
+        "flex h-6 items-center gap-1 px-2 text-xs",
+        diff && COLUMN_DIFF[diff.change].className,
+        mark && COLUMN_MARK_CLASS[mark],
+      )}
     >
       <KeyIcon flags={flags} />
-      <span className="min-w-0 truncate font-mono text-text-primary">{column.name}</span>
-      <span className="ml-auto max-w-[40%] min-w-0 truncate pl-1 font-mono text-2xs text-text-muted">
-        {column.type}
+      <span
+        className={cn(
+          "min-w-0 truncate font-mono text-text-primary",
+          diff?.change === "dropped" && "line-through decoration-status-danger-fg",
+        )}
+      >
+        {column.name}
       </span>
-      <BadgeList badges={columnBadges(flags, column.generatedKind)} />
+      {diff ? (
+        <ColumnDiffLabel change={diff.change} to={diff.to} />
+      ) : (
+        <>
+          <span className="ml-auto max-w-[40%] min-w-0 truncate pl-1 font-mono text-2xs text-text-muted">
+            {column.type}
+          </span>
+          <BadgeList badges={columnBadges(flags, column.generatedKind)} />
+        </>
+      )}
     </div>
   );
 }
@@ -128,9 +293,14 @@ function FooterView({ footer }: { footer: FooterRow }) {
   );
 }
 
-function Header({ id, data }: { id: string; data: TableNodeData }) {
+const diffOf = (s: { diff: DiffOverlay | null }, id: string) => s.diff?.relations[id];
+const columnDiffOf = (s: { diff: DiffOverlay | null }, id: string) => s.diff?.columns[id];
+
+function Header({ id, data, mark }: { id: string; data: TableNodeData; mark: string }) {
   const { relation, collapsed } = data;
   const overlay = useCanvasStore((s) => s.overlay[id]);
+  const change = useCanvasStore((s) => diffOf(s, id));
+  const columns = useCanvasStore((s) => columnDiffOf(s, id));
   const { toggleCollapsed } = useTableNodeActions();
   const Chevron = collapsed ? ChevronRight : ChevronDown;
   return (
@@ -150,6 +320,8 @@ function Header({ id, data }: { id: string; data: TableNodeData }) {
           {relation.schema} · <span className="font-mono">{rowEstimateLabel(relation.rowEstimate)}</span>
         </span>
       </div>
+      {(mark === "impact" || mark === "impact-heuristic") && <ImpactChip heuristic={mark === "impact-heuristic"} />}
+      {change && <DiffBadge change={change} columns={columns} />}
       {overlay && <OverlayBadge entry={overlay} />}
       <button
         type="button"
@@ -176,6 +348,8 @@ const MARK_CLASS: Record<string, string> = {
   match: "border-status-info-fg outline-dashed outline-1 outline-offset-2 outline-status-info-fg",
   chain: "border-accent-fg",
   highlight: "border-accent-fg ring-1 ring-accent-fg",
+  impact: "outline-2 outline-offset-2 outline-accent-fg",
+  "impact-heuristic": "outline-2 outline-offset-2 outline-dashed outline-accent-fg",
 };
 
 function useVisual(id: string): { mark: string; dim: boolean } {
@@ -194,6 +368,7 @@ interface FarNodeProps {
 }
 
 function FarNode({ id, relation, mark, dim, collapsed }: FarNodeProps) {
+  const change = useCanvasStore((s) => diffOf(s, id));
   return (
     <div
       data-testid="table-node"
@@ -201,16 +376,19 @@ function FarNode({ id, relation, mark, dim, collapsed }: FarNodeProps) {
       data-kind={relation.stub ? "stub" : relation.kind}
       data-mark={mark || undefined}
       data-dim={dim || undefined}
+      data-diff={change}
       data-detail="far"
       data-collapsed={collapsed || undefined}
       className={cn(
         "h-full w-full overflow-hidden rounded-md border border-border-control bg-surface-subtle px-2 pt-2 font-mono text-lg font-semibold text-text-primary",
         relation.stub && "border-dashed text-text-muted",
+        change && cn("border-4", DIFF_FRAME[change]),
         MARK_CLASS[mark],
         dim && "opacity-25",
       )}
     >
       {relation.name}
+      {change && <span className="sr-only"> ({DIFF_CHANGE_META[change].label})</span>}
     </div>
   );
 }
@@ -220,6 +398,8 @@ function TableNodeView({ id, data }: NodeProps<TableNodeType>) {
   const detailed = zoom === "full";
   const { mark, dim } = useVisual(id);
   const columnMarks = useCanvasStore((s) => s.derived.columnMarks.get(id));
+  const change = useCanvasStore((s) => diffOf(s, id));
+  const columnDiff = useCanvasStore((s) => columnDiffOf(s, id));
   const { layout, relation } = data;
   if (zoom === "far") {
     return (
@@ -239,15 +419,27 @@ function TableNodeView({ id, data }: NodeProps<TableNodeType>) {
         data-collapsed={data.collapsed || undefined}
         data-mark={mark || undefined}
         data-dim={dim || undefined}
+        data-diff={change}
         data-detail={detailed ? "full" : "header"}
-        className={cn(FRAME, "border-border-control", MARK_CLASS[mark], dim && "opacity-25")}
+        className={cn(
+          FRAME,
+          "border-border-control",
+          change && cn("border-2", DIFF_FRAME[change]),
+          MARK_CLASS[mark],
+          dim && "opacity-25",
+        )}
       >
-        <Header id={id} data={data} />
+        <Header id={id} data={data} mark={mark} />
         {detailed ? (
           <>
             <div className="flex flex-col">
               {layout.rows.map((row) => (
-                <ColumnRowView key={row.column.name} row={row} mark={columnMarks?.get(row.column.name)} />
+                <ColumnRowView
+                  key={row.column.name}
+                  row={row}
+                  mark={columnMarks?.get(row.column.name)}
+                  diff={columnDiff?.[row.column.name]}
+                />
               ))}
             </div>
             {layout.footers.map((f) => (
@@ -260,6 +452,7 @@ function TableNodeView({ id, data }: NodeProps<TableNodeType>) {
           </div>
         )}
       </div>
+      {detailed && !dim && <AddedColumns columns={columnDiff} />}
       <HandleAnchors layout={layout} anchors={data.anchors} />
     </>
   );

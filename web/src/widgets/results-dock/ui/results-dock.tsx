@@ -1,15 +1,15 @@
-import { FileWarning, PanelBottomClose } from "lucide-react";
+import { PanelBottomClose } from "lucide-react";
 import type { ReactNode } from "react";
 import { type DockTab, useRunStore } from "@/entities/query";
 import { togglePanel } from "@/features/toggle-panel";
 import { formatCombo, SHORTCUTS } from "@/shared/config/shortcuts";
 import { Button } from "@/shared/ui/button";
-import { EmptyState } from "@/shared/ui/empty-state";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/shared/ui/tooltip";
 import { MessagesTab } from "@/widgets/results-dock/ui/messages-tab";
 import { PlanTab } from "@/widgets/results-dock/ui/plan-tab";
 import { ResultsTab } from "@/widgets/results-dock/ui/results-tab";
+import { RiskTab } from "@/widgets/results-dock/ui/risk-tab";
 
 function MessagesLabel() {
   const errors = useRunStore((s) => s.messages.filter((m) => m.level === "error").length);
@@ -30,17 +30,7 @@ const TABS: { value: DockTab; label: ReactNode; content: ReactNode }[] = [
   { value: "results", label: "Results", content: <ResultsTab /> },
   { value: "messages", label: <MessagesLabel />, content: <MessagesTab /> },
   { value: "plan", label: "Plan", content: <PlanTab /> },
-  {
-    value: "risk",
-    label: "Risk",
-    content: (
-      <EmptyState
-        icon={FileWarning}
-        title="No migration analysed"
-        description="Findings from migration analysis appear here, ordered from critical to low risk."
-      />
-    ),
-  },
+  { value: "risk", label: "Risk", content: <RiskTab /> },
 ];
 
 export function ResultsDock() {

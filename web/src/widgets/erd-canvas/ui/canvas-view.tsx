@@ -42,6 +42,7 @@ import { CanvasToolbar } from "@/widgets/erd-canvas/ui/canvas-toolbar";
 import { EdgeMarkers } from "@/widgets/erd-canvas/ui/edge-markers";
 import { FarEdges } from "@/widgets/erd-canvas/ui/far-edges";
 import { LayoutStatusBanner } from "@/widgets/erd-canvas/ui/layout-status";
+import { MigrationLegend } from "@/widgets/erd-canvas/ui/migration-legend";
 import { RelationshipEdge } from "@/widgets/erd-canvas/ui/relationship-edge";
 import { TableDetails } from "@/widgets/erd-canvas/ui/table-details";
 import { ZoomControls } from "@/widgets/erd-canvas/ui/zoom-controls";
@@ -259,6 +260,7 @@ function CanvasViewInner({ graph, layoutKey, restored, schedule }: CanvasViewPro
           </ReactFlow>
         </TableNodeActionsContext>
         <LayoutStatusBanner status={model.status} onDismiss={model.dismissError} />
+        <MigrationLegend />
         <TableDetails
           onClose={() => {
             useCanvasStore.getState().setDetailsOpen(false);

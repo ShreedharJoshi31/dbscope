@@ -17,6 +17,19 @@ interface Persisted {
   active: string;
 }
 
+/**
+ * A non-SQL centre tab (a migration review). Kept in memory only: its content
+ * (an analysis report) is not persisted, so after a reload the strip starts
+ * from the saved SQL tabs again.
+ */
+export interface DocTab {
+  id: string;
+  title: string;
+  kind: "migration";
+  /** The scope it was opened in; it shows only while that scope is active. */
+  scope: string | null;
+}
+
 /** Asks the tab's editor to focus and select a range (from the Messages tab). */
 export interface EditorReveal {
   tabId: string;
@@ -30,6 +43,10 @@ interface SqlTabsState extends Persisted {
   revealInEditor: (tabId: string, from?: number, to?: number) => void;
   /** Profile id, "sample", or null before the workbench knows. Tabs are kept per scope. */
   scope: string | null;
+  /** Migration tabs of every scope; CentreTabs shows the current scope's. */
+  docTabs: DocTab[];
+  /** Opens (or re-titles) a doc tab in the current scope and makes it active. */
+  openDocTab: (tab: Omit<DocTab, "scope">) => void;
   setScope: (scope: string | null) => void;
   /** Opens a new tab ("query-N.sql"), optionally with SQL, and makes it active. Returns its id. */
   openTab: (sql?: string) => string;
@@ -81,6 +98,7 @@ export const useSqlTabs = create<SqlTabsState>((set, get) => {
   return {
     ...EMPTY,
     scope: null,
+    docTabs: [],
     reveal: null,
     revealInEditor: (tabId, from = 0, to = from) => {
       if (!get().tabs.some((t) => t.id === tabId)) return;
@@ -92,6 +110,16 @@ export const useSqlTabs = create<SqlTabsState>((set, get) => {
       if (get().scope === scope) return;
       set({ scope, ...(scope ? readTabs(scope) : EMPTY) });
     },
+    openDocTab: (tab) => {
+      const { docTabs, scope } = get();
+      const exists = docTabs.some((t) => t.id === tab.id);
+      set({
+        docTabs: exists
+          ? docTabs.map((t) => (t.id === tab.id ? { ...t, ...tab } : t))
+          : [...docTabs, { ...tab, scope }],
+      });
+      commit({ active: tab.id });
+    },
     openTab: (sql = "") => {
       const { tabs, next } = get();
       const id = `q${next}`;
@@ -99,12 +127,14 @@ export const useSqlTabs = create<SqlTabsState>((set, get) => {
       return id;
     },
     closeTab: (id) => {
-      const { tabs, active } = get();
-      const index = tabs.findIndex((t) => t.id === id);
+      const { tabs, active, docTabs, scope } = get();
+      const strip = [...tabs.map((t) => t.id), ...docTabs.filter((t) => t.scope === scope).map((t) => t.id)];
+      const index = strip.indexOf(id);
       if (index === -1) return;
-      const rest = tabs.filter((t) => t.id !== id);
-      const neighbour = rest[Math.min(index, rest.length - 1)]?.id ?? ERD_TAB;
-      commit({ tabs: rest, active: active === id ? neighbour : active });
+      const rest = strip.filter((t) => t !== id);
+      const neighbour = rest[Math.min(index, rest.length - 1)] ?? ERD_TAB;
+      set({ docTabs: docTabs.filter((t) => t.id !== id) });
+      commit({ tabs: tabs.filter((t) => t.id !== id), active: active === id ? neighbour : active });
     },
     setSql: (id, sql) => {
       const { tabs } = get();
@@ -112,7 +142,9 @@ export const useSqlTabs = create<SqlTabsState>((set, get) => {
       commit({ tabs: tabs.map((t) => (t.id === id ? { ...t, sql } : t)) });
     },
     setActive: (id) => {
-      if (id !== ERD_TAB && !get().tabs.some((t) => t.id === id)) return;
+      const { tabs, docTabs, scope } = get();
+      const known = tabs.some((t) => t.id === id) || docTabs.some((t) => t.id === id && t.scope === scope);
+      if (id !== ERD_TAB && !known) return;
       commit({ active: id });
     },
   };
@@ -123,6 +155,11 @@ export function useSqlTabsScope(scope: string | null): void {
   useEffect(() => {
     useSqlTabs.getState().setScope(scope);
   }, [scope]);
+}
+
+/** The current scope's doc tabs, for the centre strip. */
+export function docTabsInScope(docTabs: readonly DocTab[], scope: string | null): DocTab[] {
+  return docTabs.filter((t) => t.scope === scope);
 }
 
 export function activeSqlTab(): SqlTab | undefined {

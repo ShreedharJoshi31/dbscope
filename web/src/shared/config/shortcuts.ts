@@ -26,9 +26,12 @@ export type ShortcutId =
   | "cancelQuery"
   | "explainQuery"
   | "newSqlTab"
-  | "focusAssistant";
+  | "focusAssistant"
+  | "migrationNext"
+  | "migrationPrevious"
+  | "migrationOpenDetail";
 
-export type ShortcutGroup = "General" | "Panels" | "Navigation" | "Query" | "Assistant" | "Canvas";
+export type ShortcutGroup = "General" | "Panels" | "Navigation" | "Query" | "Assistant" | "Canvas" | "Migration";
 
 export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
   "General",
@@ -37,6 +40,7 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
   "Query",
   "Assistant",
   "Canvas",
+  "Migration",
 ];
 
 export interface ShortcutDefinition {
@@ -71,7 +75,7 @@ export const SHORTCUTS: Record<ShortcutId, ShortcutDefinition> = {
   },
   canvasClear: {
     combo: { key: "Escape" },
-    label: "Clear search, focus mode, selection or the query overlay",
+    label: "Clear search, focus mode, selection, the query overlay or the migration overlay",
     group: "Canvas",
   },
   runQuery: { combo: { key: "Enter", mod: true }, label: "Run the query in the SQL tab", group: "Query" },
@@ -88,6 +92,14 @@ export const SHORTCUTS: Record<ShortcutId, ShortcutDefinition> = {
     combo: { key: "a", mod: true, alt: true },
     label: "Ask the assistant (focus the question box)",
     group: "Assistant",
+  },
+  // Single keys, as in code review tools; they never fire while typing in a field.
+  migrationNext: { combo: { key: "j" }, label: "Next statement (migration tab)", group: "Migration" },
+  migrationPrevious: { combo: { key: "k" }, label: "Previous statement (migration tab)", group: "Migration" },
+  migrationOpenDetail: {
+    combo: { key: "Enter" },
+    label: "Open the statement's detail (statement marker focused)",
+    group: "Migration",
   },
 };
 

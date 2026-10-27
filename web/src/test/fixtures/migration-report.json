@@ -1,0 +1,340 @@
+{
+  "pgVersion": 170000,
+  "rating": "critical",
+  "statements": [
+    {
+      "file": "0042_orders.sql",
+      "line": 2,
+      "column": 1,
+      "endLine": 2,
+      "sql": "ALTER TABLE shop.orders ADD COLUMN tracking_code text",
+      "kind": "ALTER TABLE ADD COLUMN",
+      "tx": "none",
+      "locks": [
+        {
+          "relation": "shop.orders",
+          "mode": "ACCESS EXCLUSIVE"
+        }
+      ],
+      "work": "none",
+      "sizeBytes": 164429824,
+      "lockTimeout": false,
+      "score": 4,
+      "rating": "medium",
+      "findings": [
+        {
+          "ruleId": "DBS-NO-LOCK-TIMEOUT",
+          "rating": "medium",
+          "message": "requests ACCESS EXCLUSIVE on shop.orders without a lock_timeout; while it waits, later queries on the table queue behind it",
+          "safeAlternative": "SET lock_timeout = '2s' before it (SET LOCAL inside the transaction) and retry the migration on timeout"
+        }
+      ]
+    },
+    {
+      "file": "0042_orders.sql",
+      "line": 3,
+      "column": 1,
+      "endLine": 3,
+      "sql": "CREATE INDEX orders_tracking_idx ON shop.orders (tracking_code)",
+      "kind": "CREATE INDEX",
+      "tx": "none",
+      "locks": [
+        {
+          "relation": "shop.orders",
+          "mode": "SHARE"
+        }
+      ],
+      "work": "index_build",
+      "sizeBytes": 164429824,
+      "lockTimeout": false,
+      "score": 6,
+      "rating": "medium",
+      "findings": [
+        {
+          "ruleId": "DBS-INDEX-NOT-CONCURRENT",
+          "rating": "medium",
+          "message": "CREATE INDEX on shop.orders holds SHARE (blocks writes) for the whole build",
+          "safeAlternative": "CREATE INDEX CONCURRENTLY outside a transaction block"
+        },
+        {
+          "ruleId": "DBS-NO-LOCK-TIMEOUT",
+          "rating": "medium",
+          "message": "requests SHARE on shop.orders without a lock_timeout; while it waits, later queries on the table queue behind it",
+          "safeAlternative": "SET lock_timeout = '2s' before it (SET LOCAL inside the transaction) and retry the migration on timeout"
+        }
+      ]
+    },
+    {
+      "file": "0042_orders.sql",
+      "line": 4,
+      "column": 1,
+      "endLine": 4,
+      "sql": "ALTER TABLE shop.customers RENAME COLUMN email TO email_address",
+      "kind": "ALTER TABLE RENAME COLUMN",
+      "tx": "none",
+      "locks": [
+        {
+          "relation": "shop.customers",
+          "mode": "ACCESS EXCLUSIVE"
+        }
+      ],
+      "work": "none",
+      "sizeBytes": 34783232,
+      "lockTimeout": false,
+      "score": 4,
+      "rating": "high",
+      "findings": [
+        {
+          "ruleId": "DBS-RENAME",
+          "rating": "high",
+          "message": "RENAME COLUMN email to email_address breaks clients that use the old name; depended on by view shop.order_summaries",
+          "safeAlternative": "Expand and contract: add the new name (a new column kept in sync, or a view with the old name), move clients, then remove the old one"
+        },
+        {
+          "ruleId": "DBS-NO-LOCK-TIMEOUT",
+          "rating": "medium",
+          "message": "requests ACCESS EXCLUSIVE on shop.customers without a lock_timeout; while it waits, later queries on the table queue behind it",
+          "safeAlternative": "SET lock_timeout = '2s' before it (SET LOCAL inside the transaction) and retry the migration on timeout"
+        }
+      ]
+    },
+    {
+      "file": "0042_orders.sql",
+      "line": 5,
+      "column": 1,
+      "endLine": 9,
+      "sql": "CREATE TABLE shop.parcel_events (\n  id bigint PRIMARY KEY,\n  order_id bigint NOT NULL REFERENCES shop.orders (id),\n  happened_at timestamptz NOT NULL\n)",
+      "kind": "CREATE TABLE",
+      "tx": "none",
+      "locks": [
+        {
+          "relation": "shop.orders",
+          "mode": "SHARE ROW EXCLUSIVE"
+        }
+      ],
+      "work": "none",
+      "sizeBytes": 164429824,
+      "lockTimeout": false,
+      "score": 4,
+      "rating": "medium",
+      "findings": [
+        {
+          "ruleId": "DBS-NO-LOCK-TIMEOUT",
+          "rating": "medium",
+          "message": "requests SHARE ROW EXCLUSIVE on shop.orders without a lock_timeout; while it waits, later queries on the table queue behind it",
+          "safeAlternative": "SET lock_timeout = '2s' before it (SET LOCAL inside the transaction) and retry the migration on timeout"
+        }
+      ]
+    },
+    {
+      "file": "0043_cleanup.sql",
+      "line": 1,
+      "column": 1,
+      "endLine": 1,
+      "sql": "SET lock_timeout = '2s'",
+      "kind": "SET",
+      "tx": "none",
+      "locks": [],
+      "work": "none",
+      "lockTimeout": false,
+      "score": 0,
+      "rating": "low",
+      "findings": []
+    },
+    {
+      "file": "0043_cleanup.sql",
+      "line": 2,
+      "column": 1,
+      "endLine": 2,
+      "sql": "DROP TABLE shop.shipments",
+      "kind": "DROP TABLE",
+      "tx": "none",
+      "locks": [
+        {
+          "relation": "shop.shipments",
+          "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "shop.orders",
+          "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "shop.warehouses",
+          "mode": "ACCESS EXCLUSIVE"
+        }
+      ],
+      "work": "none",
+      "sizeBytes": 164429824,
+      "lockTimeout": true,
+      "score": 1,
+      "rating": "critical",
+      "findings": [
+        {
+          "ruleId": "DBS-DROP-TABLE",
+          "rating": "critical",
+          "message": "DROP TABLE shop.shipments removes the table and its data; depended on by fk child shop.shipment_items (shipment_items_shipment_id_fkey)",
+          "safeAlternative": "Stop reading and writing it in the application first, deploy, then drop it in a later migration; keep a backup"
+        },
+        {
+          "ruleId": "DBS-WILL-FAIL",
+          "rating": "critical",
+          "message": "DROP TABLE shop.shipments fails without CASCADE: shop.shipment_items depend on it",
+          "safeAlternative": "Drop or change the dependent objects first, or use CASCADE knowingly"
+        }
+      ]
+    },
+    {
+      "file": "0043_cleanup.sql",
+      "line": 3,
+      "column": 1,
+      "endLine": 3,
+      "sql": "ALTER TABLE shop.orders ADD CONSTRAINT orders_total_positive CHECK (total_cents > 0) NOT ENFORCED",
+      "kind": "unparseable",
+      "tx": "none",
+      "locks": [],
+      "work": "none",
+      "lockTimeout": true,
+      "score": 0,
+      "rating": "critical",
+      "findings": [
+        {
+          "ruleId": "DBS-PARSE",
+          "rating": "critical",
+          "message": "syntax error: syntax error at or near \"ENFORCED\"; PostgreSQL 17 will reject this statement"
+        }
+      ]
+    },
+    {
+      "file": "0043_cleanup.sql",
+      "line": 4,
+      "column": 1,
+      "endLine": 4,
+      "sql": "ALTER TABLE shop.orders ALTER COLUMN currency TYPE varchar(3)",
+      "kind": "ALTER TABLE ALTER COLUMN TYPE",
+      "tx": "none",
+      "locks": [
+        {
+          "relation": "shop.orders",
+          "mode": "ACCESS EXCLUSIVE"
+        }
+      ],
+      "work": "rewrite",
+      "sizeBytes": 164429824,
+      "lockTimeout": true,
+      "score": 7,
+      "rating": "high",
+      "findings": [
+        {
+          "ruleId": "DBS-TYPE-REWRITE",
+          "rating": "high",
+          "message": "ALTER COLUMN currency TYPE rewrites shop.orders and rebuilds its indexes: character(3) to character varying(3) is not binary coercible",
+          "safeAlternative": "Add a new column of the new type, write to both, backfill in batches, switch reads, then drop the old column"
+        }
+      ]
+    }
+  ],
+  "diff": {
+    "added": ["shop.parcel_events"],
+    "dropped": ["shop.shipments"],
+    "altered": ["shop.customers", "shop.orders", "shop.shipment_items"],
+    "columns": [
+      {
+        "relation": "shop.customers",
+        "column": "email",
+        "change": "renamed",
+        "to": "email_address"
+      },
+      {
+        "relation": "shop.orders",
+        "column": "currency",
+        "change": "altered"
+      },
+      {
+        "relation": "shop.orders",
+        "column": "tracking_code",
+        "change": "added"
+      }
+    ]
+  },
+  "impact": {
+    "shop.customers": [
+      {
+        "kind": "fk_child",
+        "name": "shop.addresses (addresses_customer_id_fkey)",
+        "certainty": "catalog"
+      },
+      {
+        "kind": "fk_child",
+        "name": "shop.carts (carts_customer_id_fkey)",
+        "certainty": "catalog"
+      },
+      {
+        "kind": "fk_child",
+        "name": "shop.orders (orders_customer_id_fkey)",
+        "certainty": "catalog"
+      },
+      {
+        "kind": "fk_child",
+        "name": "shop.reviews (reviews_customer_id_fkey)",
+        "certainty": "catalog"
+      },
+      {
+        "kind": "view",
+        "name": "shop.order_summaries",
+        "certainty": "catalog"
+      }
+    ],
+    "shop.customers.email": [
+      {
+        "kind": "view",
+        "name": "shop.order_summaries",
+        "certainty": "heuristic"
+      }
+    ],
+    "shop.orders": [
+      {
+        "kind": "fk_child",
+        "name": "shop.order_items (order_items_order_id_fkey)",
+        "certainty": "catalog"
+      },
+      {
+        "kind": "fk_child",
+        "name": "shop.payments (payments_order_id_fkey)",
+        "certainty": "catalog"
+      },
+      {
+        "kind": "fk_child",
+        "name": "shop.shipments (shipments_order_id_fkey)",
+        "certainty": "catalog"
+      },
+      {
+        "kind": "view",
+        "name": "shop.order_summaries",
+        "certainty": "catalog"
+      }
+    ],
+    "shop.orders.currency": [
+      {
+        "kind": "view",
+        "name": "shop.order_summaries",
+        "certainty": "heuristic"
+      }
+    ],
+    "shop.shipments": [
+      {
+        "kind": "fk_child",
+        "name": "shop.shipment_items (shipment_items_shipment_id_fkey)",
+        "certainty": "catalog"
+      }
+    ]
+  },
+  "unanalyzable": [
+    {
+      "file": "0043_cleanup.sql",
+      "line": 3,
+      "message": "syntax error at or near \"ENFORCED\""
+    }
+  ],
+  "warnings": null,
+  "base": "sample"
+}

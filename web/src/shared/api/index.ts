@@ -9,6 +9,8 @@ export {
 } from "@/shared/api/errors";
 export * from "@/shared/api/llm-api";
 export type * from "@/shared/api/llm-types";
+export * from "@/shared/api/migration-api";
+export type * from "@/shared/api/migration-types";
 export * from "@/shared/api/queries";
 export * from "@/shared/api/query-api";
 export type * from "@/shared/api/query-types";

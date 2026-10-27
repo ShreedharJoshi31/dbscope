@@ -31,6 +31,8 @@ export {
 } from "@/entities/query/model/run-store";
 export {
   activeSqlTab,
+  type DocTab,
+  docTabsInScope,
   type EditorReveal,
   ERD_TAB,
   openSqlTab,

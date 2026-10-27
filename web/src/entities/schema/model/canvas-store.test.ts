@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { edgeVisual, MAX_FLOW_EDGES, nodeVisual, useCanvasStore } from "@/entities/schema/model/canvas-store";
+import { clearMigrationOverlay, showMigrationDiff } from "@/entities/schema/model/diff-overlay";
 import { buildSchemaGraph } from "@/entities/schema/model/graph";
 import { heatmapFromOverlay, showQueryOverlay } from "@/entities/schema/model/heatmap";
 import { sampleModel } from "@/test/fixtures";
@@ -12,6 +13,7 @@ afterEach(() => {
   store().clearSearch();
   store().select(null);
   store().clearOverlay();
+  store().setDiff(null);
   useCanvasStore.setState({ focus: null, focusHops: 1, hoverEdge: null, selectedEdge: null });
 });
 
@@ -156,5 +158,57 @@ describe("canvas store", () => {
     showQueryOverlay({ relations: { "shop.orders": { level: "warn", scans: [], reasons: [] } }, joins: [] });
     store().clearOverlay();
     expect(store()).toMatchObject({ heat: null, highlight: null, overlay: {} });
+  });
+
+  it("selecting a changed relation highlights its dependents by certainty; others stay undimmed otherwise", () => {
+    store().setGraph(graph);
+    showMigrationDiff({
+      sourceId: "m1",
+      label: "0042_orders.sql",
+      relations: { "shop.orders": "altered", "shop.parcel_events": "added" },
+      columns: { "shop.orders": { currency: { change: "altered" } } },
+      impact: {
+        "shop.orders": [
+          {
+            nodeId: "shop.payments",
+            kind: "fk_child",
+            name: "shop.payments (payments_order_id_fkey)",
+            certainty: "catalog",
+            via: "shop.orders",
+          },
+          {
+            nodeId: "shop.order_summaries",
+            kind: "view",
+            name: "shop.order_summaries",
+            certainty: "heuristic",
+            via: "shop.orders.currency",
+          },
+          { nodeId: null, kind: "function", name: "app.touch()", certainty: "catalog", via: "shop.orders" },
+          { nodeId: "gone.table", kind: "view", name: "gone.table", certainty: "catalog", via: "shop.orders" },
+        ],
+      },
+    });
+    // No selection: colours only, nothing dimmed.
+    expect(store().derived.keep).toBeNull();
+    store().select("shop.orders");
+    expect(store().derived.impactRoot).toBe("shop.orders");
+    expect(store().derived.nodeMarks.get("shop.payments")).toBe("impact");
+    expect(store().derived.nodeMarks.get("shop.order_summaries")).toBe("impact-heuristic");
+    expect(store().derived.nodeMarks.get("shop.orders")).toBe("selected");
+    expect([...(store().derived.keep ?? [])].sort()).toEqual(["shop.order_summaries", "shop.orders", "shop.payments"]);
+    expect(nodeVisual(store(), "app.users")).toBe("|dim");
+    // An unchanged table shows no impact.
+    store().select("app.users");
+    expect(store().derived.impactRoot).toBeNull();
+    // The query overlay is separate: clearing it keeps the diff; Esc clears the diff last.
+    showQueryOverlay({ relations: {}, joins: [] });
+    store().clearOverlay();
+    expect(store().diff).not.toBeNull();
+    store().select(null);
+    expect(store().clearOne()).toBe("migration");
+    expect(store().diff).toBeNull();
+    showMigrationDiff({ sourceId: "m1", label: "x", relations: {}, columns: {}, impact: {} });
+    clearMigrationOverlay();
+    expect(store().diff).toBeNull();
   });
 });

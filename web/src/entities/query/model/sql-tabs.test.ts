@@ -3,7 +3,7 @@ import { ERD_TAB, openSqlTab, readTabs, useSqlTabs } from "@/entities/query/mode
 
 const state = () => useSqlTabs.getState();
 
-afterEach(() => useSqlTabs.setState({ scope: null, tabs: [], next: 1, active: ERD_TAB, reveal: null }));
+afterEach(() => useSqlTabs.setState({ scope: null, tabs: [], docTabs: [], next: 1, active: ERD_TAB, reveal: null }));
 
 describe("SQL tabs", () => {
   it("numbers new tabs, persists their text per connection and restores them", () => {
@@ -63,5 +63,23 @@ describe("SQL tabs", () => {
     expect(state().active).toBe(a);
     state().revealInEditor("nope", 1);
     expect(state().reveal?.tabId).toBe(a);
+  });
+
+  it("migration tabs live in memory per scope, follow the SQL tabs and are not persisted", () => {
+    state().setScope("p1");
+    const q = openSqlTab();
+    state().openDocTab({ id: "m1", title: "0042_orders.sql", kind: "migration" });
+    expect(state().active).toBe("m1");
+    expect(readTabs("p1").active).toBe(ERD_TAB); // a doc tab id is not restored after a reload
+    state().setScope("p2");
+    expect(state().docTabs.filter((t) => t.scope === "p2")).toEqual([]);
+    state().setActive("m1"); // belongs to p1
+    expect(state().active).not.toBe("m1");
+    state().setScope("p1");
+    state().setActive("m1");
+    expect(state().active).toBe("m1");
+    state().closeTab("m1");
+    expect(state().active).toBe(q);
+    expect(state().docTabs).toEqual([]);
   });
 });

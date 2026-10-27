@@ -1,0 +1,85 @@
+{
+  "pgVersion": 180000,
+  "rating": "high",
+  "statements": [
+    {
+      "file": "V7__virtual.sql",
+      "line": 1,
+      "column": 1,
+      "endLine": 1,
+      "sql": "SET lock_timeout = '2s'",
+      "kind": "SET",
+      "tx": "framework",
+      "locks": [],
+      "work": "none",
+      "lockTimeout": false,
+      "score": 0,
+      "rating": "low",
+      "findings": []
+    },
+    {
+      "file": "V7__virtual.sql",
+      "line": 2,
+      "column": 1,
+      "endLine": 2,
+      "sql": "ALTER TABLE shop.orders ADD COLUMN total_units int GENERATED ALWAYS AS (total_cents / 100) VIRTUAL",
+      "kind": "unparseable",
+      "tx": "framework",
+      "locks": [],
+      "work": "none",
+      "lockTimeout": true,
+      "score": 0,
+      "rating": "high",
+      "findings": [
+        {
+          "ruleId": "DBS-PARSE",
+          "rating": "high",
+          "message": "cannot be analyzed with the PostgreSQL 17 grammar (syntax error at or near \"VIRTUAL\"); review it by hand"
+        }
+      ]
+    },
+    {
+      "file": "V7__virtual.sql",
+      "line": 3,
+      "column": 1,
+      "endLine": 3,
+      "sql": "ALTER TABLE shop.customers ALTER COLUMN email SET NOT NULL",
+      "kind": "ALTER TABLE ALTER COLUMN SET NOT NULL",
+      "tx": "framework",
+      "locks": [
+        {
+          "relation": "shop.customers",
+          "mode": "ACCESS EXCLUSIVE"
+        }
+      ],
+      "work": "scan",
+      "lockTimeout": true,
+      "score": 7,
+      "rating": "high",
+      "findings": [
+        {
+          "ruleId": "DBS-SET-NOT-NULL",
+          "rating": "high",
+          "message": "SET NOT NULL on shop.customers.email scans the whole table under ACCESS EXCLUSIVE",
+          "safeAlternative": "ADD CONSTRAINT email_not_null CHECK (email IS NOT NULL) NOT VALID; VALIDATE CONSTRAINT email_not_null; then SET NOT NULL (no scan) and drop the CHECK"
+        }
+      ]
+    }
+  ],
+  "diff": {
+    "added": [],
+    "dropped": [],
+    "altered": [],
+    "columns": []
+  },
+  "impact": {},
+  "unanalyzable": [
+    {
+      "file": "V7__virtual.sql",
+      "line": 2,
+      "message": "syntax error at or near \"VIRTUAL\""
+    }
+  ],
+  "warnings": null,
+  "base": "dump"
+}

@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect } from "react";
 import { useActiveConnection } from "@/entities/connection";
-import type { SqlTab } from "@/entities/query";
+import type { DocTab, SqlTab } from "@/entities/query";
 import { usePanelStore } from "@/features/toggle-panel";
 import { useMediaQuery } from "@/shared/lib/use-media-query";
 import { useDocumentTitle } from "@/widgets/app-shell/model/document-title";
@@ -20,12 +20,22 @@ interface AppShellProps {
   history: ReactNode;
   erd: ReactNode;
   renderSqlTab: (tab: SqlTab) => ReactNode;
+  renderDocTab: (tab: DocTab) => ReactNode;
   dock: ReactNode;
   assistant: ReactNode;
 }
 
 /** The workbench frame from docs/ARCHITECTURE.md; widgets fill its slots. */
-export function AppShell({ search, explorer, history, erd, renderSqlTab, dock, assistant }: AppShellProps) {
+export function AppShell({
+  search,
+  explorer,
+  history,
+  erd,
+  renderSqlTab,
+  renderDocTab,
+  dock,
+  assistant,
+}: AppShellProps) {
   const { profile } = useActiveConnection();
   const wide = useMediaQuery(WIDE_QUERY);
   const setAssistantMode = usePanelStore((s) => s.setAssistantMode);
@@ -50,7 +60,7 @@ export function AppShell({ search, explorer, history, erd, renderSqlTab, dock, a
           wide={wide}
           explorer={explorer}
           history={history}
-          centre={<CentreTabs erd={erd} renderSqlTab={renderSqlTab} />}
+          centre={<CentreTabs erd={erd} renderSqlTab={renderSqlTab} renderDocTab={renderDocTab} />}
           dock={dock}
           assistant={assistant}
         />

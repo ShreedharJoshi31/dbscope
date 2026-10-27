@@ -2,14 +2,17 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { ReactFlowProvider } from "@xyflow/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { columnChanges, impactByRelation, relationChanges } from "@/entities/migration-finding";
 import {
   buildSchemaGraph,
   clearCanvasOverlay,
+  clearMigrationOverlay,
   highlightTables,
+  showMigrationDiff,
   showQueryOverlay,
   useCanvasStore,
 } from "@/entities/schema";
-import { sampleModel } from "@/test/fixtures";
+import { migrationReport, sampleModel } from "@/test/fixtures";
 import { gridLayout } from "@/widgets/erd-canvas/model/layout/grid";
 import { useCanvasModel } from "@/widgets/erd-canvas/model/use-canvas-model";
 
@@ -32,6 +35,8 @@ afterEach(() => {
   act(() => {
     useCanvasStore.getState().setGraph(null);
     useCanvasStore.getState().clearOverlay();
+    useCanvasStore.getState().setDiff(null);
+    useCanvasStore.getState().select(null);
   });
 });
 
@@ -110,6 +115,42 @@ describe("useCanvasModel", () => {
     });
     expect(useCanvasStore.getState().derived.flowEdges.size).toBe(1);
     act(() => clearCanvasOverlay());
+
+    expect(result.current.nodes).toBe(nodes);
+    expect(result.current.edges).toBe(edges);
+    expect(runLayout).toHaveBeenCalledTimes(1);
+  });
+
+  it("a migration diff, its impact highlight and clearing it never rebuild nodes or edges or relayout", async () => {
+    const { result } = setup();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    const { nodes, edges } = result.current;
+    Object.freeze(nodes);
+    Object.freeze(edges);
+    for (const n of nodes) Object.freeze(n);
+    for (const e of edges) Object.freeze(e);
+    const report = migrationReport();
+
+    act(() => {
+      useCanvasStore.getState().setGraph(graph);
+      showMigrationDiff({
+        sourceId: "m1",
+        label: "2 migration files",
+        relations: relationChanges(report.diff),
+        columns: columnChanges(report.diff),
+        impact: impactByRelation(report),
+      });
+      useCanvasStore.getState().select("shop.customers", { reveal: true });
+    });
+    const derived = useCanvasStore.getState().derived;
+    expect(derived.impactRoot).toBe("shop.customers");
+    expect(derived.nodeMarks.get("shop.addresses")).toBe("impact");
+    expect(derived.nodeMarks.get("shop.order_summaries")).toBe("impact"); // catalog wins over the column heuristic
+    expect(derived.keep?.has("shop.products")).toBe(false);
+    // The new table is not added to the canvas.
+    expect(result.current.nodes.some((n) => n.id === "shop.parcel_events")).toBe(false);
+    act(() => clearMigrationOverlay());
+    expect(useCanvasStore.getState().derived.impactRoot).toBeNull();
 
     expect(result.current.nodes).toBe(nodes);
     expect(result.current.edges).toBe(edges);

@@ -6,6 +6,9 @@ export {
 export {
   type CanvasState,
   type ColumnMark,
+  type DiffChange,
+  type DiffImpact,
+  type DiffOverlay,
   derive,
   edgeVisual,
   type FocusHops,
@@ -19,6 +22,14 @@ export {
   type RevealRequest,
   useCanvasStore,
 } from "@/entities/schema/model/canvas-store";
+export {
+  clearMigrationOverlay,
+  DIFF_CHANGE_META,
+  type DiffChangeMeta,
+  hasMigrationOverlay,
+  partitionDiffRelations,
+  showMigrationDiff,
+} from "@/entities/schema/model/diff-overlay";
 export {
   buildSchemaGraph,
   type ColumnFlags,

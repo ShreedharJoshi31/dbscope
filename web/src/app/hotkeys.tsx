@@ -1,6 +1,7 @@
 import { useActiveConnection } from "@/entities/connection";
 import { openSqlTab } from "@/entities/query";
 import { runCanvasCommand } from "@/entities/schema";
+import { stepStatement } from "@/features/analyze-migration";
 import { stopAsk } from "@/features/ask-assistant";
 import { useQueryRunner } from "@/features/run-query";
 import { openShortcutSheet } from "@/features/show-shortcuts";
@@ -43,6 +44,9 @@ export function AppHotkeys({ workbench }: { workbench: boolean }) {
         // Single keys: useHotkeys never fires these while typing in a field.
         { combo: SHORTCUTS.canvasSearch.combo, handler: () => runCanvasCommand("focusSearch") },
         { combo: SHORTCUTS.canvasFocusMode.combo, handler: () => runCanvasCommand("toggleFocus") },
+        // Only while a migration tab is active (stepStatement does nothing otherwise).
+        { combo: SHORTCUTS.migrationNext.combo, handler: () => stepStatement(1) },
+        { combo: SHORTCUTS.migrationPrevious.combo, handler: () => stepStatement(-1) },
       ]
     : SHEET_ONLY;
   useHotkeys(bindings);

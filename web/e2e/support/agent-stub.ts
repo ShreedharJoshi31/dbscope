@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { handleMigrationRoute, type MigrationStubOptions, type MigrationStubState } from "./migration-stub";
 import { handlePhase23Route, newPhase23State, type Phase23Options } from "./phase23-stub";
 import { handleSchemaRoute, json, type SchemaStubOptions, type SchemaStubState } from "./schema-stub";
 
@@ -49,7 +50,7 @@ export function stubProfile(overrides: Partial<StubProfile> = {}): StubProfile {
   };
 }
 
-interface StubOptions extends SchemaStubOptions, Phase23Options {
+interface StubOptions extends SchemaStubOptions, Phase23Options, MigrationStubOptions {
   profiles?: StubProfile[];
 }
 
@@ -77,6 +78,7 @@ export async function stubAgent(page: Page, options: StubOptions = {}) {
     schemaRequests: 0,
   };
   const phase23 = newPhase23State(options);
+  const migrations: MigrationStubState = { requests: [] };
 
   await page.route("**/api/**", async (route) => {
     const request = route.request();
@@ -89,6 +91,7 @@ export async function stubAgent(page: Page, options: StubOptions = {}) {
 
     if (await handleSchemaRoute(route, pathname, method, options, schema)) return;
     if (await handlePhase23Route(route, pathname, method, options, phase23)) return;
+    if (await handleMigrationRoute(route, pathname, method, options, migrations)) return;
 
     if (pathname === "/api/health") return json(route, 200, { version: "dev", os: "darwin", arch: "arm64" });
     if (pathname === "/api/secrets/status") return json(route, 200, { backend: "keyring", locked: false });
@@ -144,7 +147,7 @@ export async function stubAgent(page: Page, options: StubOptions = {}) {
     return json(route, 404, { error: { code: "not_found", message: `no stub for ${method} ${pathname}` } });
   });
 
-  return { profiles, schema, phase23 };
+  return { profiles, schema, phase23, migrations };
 }
 
 /** Opens the UI the way `dbscope ui` does: with the session token in the fragment. */

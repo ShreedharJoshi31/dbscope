@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { type FkEdge, neighboursWithin, relationshipChain, type SchemaGraph } from "@/entities/schema/model/graph";
 import { type SearchMatch, searchGraph } from "@/entities/schema/model/search";
+import type { ColumnChangeKind, ImpactItem } from "@/shared/api";
 
 /**
  * Canvas selection, highlight and overlay state, keyed by node id (relation
@@ -32,8 +33,43 @@ export interface HeatState {
 /** Joined foreign keys animated at most; more would be noise and cost paint time. */
 export const MAX_FLOW_EDGES = 20;
 
+export type DiffChange = "added" | "altered" | "dropped";
+
+/** A dependent of a changed relation or column (docs/API.md Phase 4 `impact`), resolved to a canvas node when it is one. */
+export interface DiffImpact {
+  nodeId: string | null;
+  kind: ImpactItem["kind"];
+  name: string;
+  certainty: ImpactItem["certainty"];
+  /** The changed relation or column it depends on. */
+  via: string;
+}
+
+/**
+ * A migration's schema diff on the canvas (Phase 4). Separate from the query
+ * overlay so running a query does not wipe it, and clearing one leaves the other.
+ */
+export interface DiffOverlay {
+  /** The review that wrote it. */
+  sourceId: string;
+  /** "0042_orders.sql" or "3 migration files". */
+  label: string;
+  relations: Readonly<Record<string, DiffChange>>;
+  columns: Readonly<Record<string, Readonly<Record<string, { change: ColumnChangeKind; to?: string | undefined }>>>>;
+  /** By changed relation: its own dependents plus those of its changed columns. */
+  impact: Readonly<Record<string, readonly DiffImpact[]>>;
+}
+
 export type FocusHops = 1 | 2 | 3;
-export type NodeMark = "selected" | "current-match" | "match" | "chain" | "focus-root" | "highlight";
+export type NodeMark =
+  | "selected"
+  | "current-match"
+  | "match"
+  | "chain"
+  | "focus-root"
+  | "highlight"
+  | "impact"
+  | "impact-heuristic";
 export type ColumnMark = "current-match" | "match" | "endpoint";
 
 export interface RevealRequest {
@@ -51,6 +87,8 @@ interface Derived {
   activeEdge: string | null;
   /** Foreign keys joined by the last query plan, drawn with moving particles. */
   flowEdges: ReadonlySet<string>;
+  /** The changed relation whose dependents are highlighted (a selected relation in the migration diff). */
+  impactRoot: string | null;
 }
 
 export interface CanvasState {
@@ -65,6 +103,7 @@ export interface CanvasState {
   heat: HeatState | null;
   /** Tables an assistant answer named ("N tables" badge); others are dimmed. */
   highlight: ReadonlySet<string> | null;
+  diff: DiffOverlay | null;
   reveal: RevealRequest | null;
   detailsOpen: boolean;
   derived: Derived;
@@ -80,7 +119,7 @@ export interface CanvasState {
   clearSearch: () => void;
   setDetailsOpen: (open: boolean) => void;
   /** Esc: clears the innermost active state. Returns what it cleared, or null. */
-  clearOne: () => "search" | "focus" | "edge" | "details" | "selection" | "overlay" | null;
+  clearOne: () => "search" | "focus" | "edge" | "details" | "selection" | "overlay" | "migration" | null;
   setOverlay: (entries: Record<string, OverlayEntry>) => void;
   patchOverlay: (id: string, entry: OverlayEntry | null) => void;
   /** Writes a query heatmap: badges, animated joins and dimming in one store update. */
@@ -88,6 +127,8 @@ export interface CanvasState {
   setHighlight: (ids: Iterable<string> | null) => void;
   /** Removes badges, animated joins, dimming and highlights. */
   clearOverlay: () => void;
+  /** Writes (or with null, removes) the migration diff. Never touches React Flow's nodes or edges. */
+  setDiff: (diff: DiffOverlay | null) => void;
 }
 
 const EMPTY_SEARCH = { query: "", matches: [] as SearchMatch[], index: -1 };
@@ -95,7 +136,8 @@ const EMPTY_SEARCH = { query: "", matches: [] as SearchMatch[], index: -1 };
 type Inputs = Pick<
   CanvasState,
   "graph" | "selectedId" | "hoverEdge" | "selectedEdge" | "focus" | "search" | "heat" | "highlight"
->;
+> &
+  Partial<Pick<CanvasState, "diff">>;
 
 /** Foreign keys that connect each joined pair, in either direction, capped at MAX_FLOW_EDGES. */
 export function flowEdgesFor(graph: SchemaGraph, joins: HeatState["joins"]): Set<string> {
@@ -143,6 +185,21 @@ function deriveEdge(
   }
 }
 
+/** The impact highlight: the selected changed relation, its dependents on the canvas, and their marks. */
+function deriveImpact(diff: DiffOverlay | null | undefined, selectedId: string | null, graph: SchemaGraph | null) {
+  if (!diff || !selectedId || !diff.relations[selectedId]) return null;
+  const marks = new Map<string, NodeMark>();
+  for (const item of diff.impact[selectedId] ?? []) {
+    const id = item.nodeId;
+    if (!id || id === selectedId || (graph && !graph.byKey.has(id))) continue;
+    // Catalog certainty wins when a node is reached both ways.
+    if (item.certainty === "catalog" || !marks.has(id)) {
+      marks.set(id, item.certainty === "catalog" ? "impact" : "impact-heuristic");
+    }
+  }
+  return { root: selectedId, marks, keep: new Set([selectedId, ...marks.keys()]) };
+}
+
 export function derive({
   graph,
   selectedId,
@@ -152,6 +209,7 @@ export function derive({
   search,
   heat,
   highlight,
+  diff,
 }: Inputs): Derived {
   const nodeMarks = new Map<string, NodeMark>();
   const columnMarks = new Map<string, Map<string, ColumnMark>>();
@@ -181,13 +239,25 @@ export function derive({
     });
     keep = keep ? new Set([...keep].filter((k) => matched.has(k))) : matched;
   }
+  // Selecting a changed relation in a migration diff highlights what depends on it; the rest is dimmed.
+  const impact = deriveImpact(diff, selectedId, graph);
+  if (impact) {
+    for (const [id, mark] of impact.marks) if (!nodeMarks.has(id)) nodeMarks.set(id, mark);
+  }
   if (selectedId) nodeMarks.set(selectedId, "selected");
   const edge = activeEdge ? graph?.edgeById.get(activeEdge) : undefined;
   if (graph && edge) deriveEdge(edge, graph, nodeMarks, columnMarks);
 
-  keep ??= queryKeep;
+  keep ??= impact?.keep ?? queryKeep;
   const flowEdges = graph && heat ? flowEdgesFor(graph, heat.joins) : NO_FLOW;
-  return { nodeMarks, columnMarks, keep, activeEdge: edge ? activeEdge : null, flowEdges };
+  return {
+    nodeMarks,
+    columnMarks,
+    keep,
+    activeEdge: edge ? activeEdge : null,
+    flowEdges,
+    impactRoot: impact?.root ?? null,
+  };
 }
 
 let revealNonce = 0;
@@ -210,9 +280,17 @@ export const useCanvasStore = create<CanvasState>((set, get) => {
     overlay: {},
     heat: null,
     highlight: null,
+    diff: null,
     reveal: null,
     detailsOpen: false,
-    derived: { nodeMarks: new Map(), columnMarks: new Map(), keep: null, activeEdge: null, flowEdges: NO_FLOW },
+    derived: {
+      nodeMarks: new Map(),
+      columnMarks: new Map(),
+      keep: null,
+      activeEdge: null,
+      flowEdges: NO_FLOW,
+      impactRoot: null,
+    },
 
     setGraph: (graph) => {
       const s = get();
@@ -304,6 +382,10 @@ export const useCanvasStore = create<CanvasState>((set, get) => {
         update({ overlay: {}, heat: null, highlight: null });
         return "overlay";
       }
+      if (s.diff) {
+        update({ diff: null });
+        return "migration";
+      }
       return null;
     },
 
@@ -311,6 +393,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => {
     setHeatmap: (overlay, heat) => update({ overlay, heat }),
     setHighlight: (ids) => update({ highlight: ids ? new Set(ids) : null }),
     clearOverlay: () => update({ overlay: {}, heat: null, highlight: null }),
+    setDiff: (diff) => update({ diff }),
     patchOverlay: (id, entry) => {
       const next = { ...get().overlay };
       if (entry) next[id] = entry;
