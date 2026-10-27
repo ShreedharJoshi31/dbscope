@@ -33,6 +33,8 @@ const defaultPort = 4555
 const usage = `usage:
   dbscope ui [--port 4555] [--no-open] [--dev-origin URL]
   dbscope eval nl --dataset DIR --dsn URL [--provider P --model M --base-url U] [--limit N] [--json]
+  dbscope migrate check PATH... [--dsn URL | --schema-dump FILE [--stats FILE]] [--fail-on high] [--format text|json|sarif|github]
+  dbscope stats export --dsn URL [--schemas a,b]
   dbscope version
 `
 
@@ -50,6 +52,10 @@ func run(args []string) int {
 		return ui(args[1:])
 	case "eval":
 		return evalCmd(args[1:], os.Stdout, os.Stderr)
+	case "migrate":
+		return migrateCmd(args[1:], os.Stdout, os.Stderr)
+	case "stats":
+		return statsCmd(args[1:], os.Stdout, os.Stderr)
 	case "version":
 		fmt.Printf("dbscope %s %s/%s\n", agent.Version, runtime.GOOS, runtime.GOARCH)
 		return 0

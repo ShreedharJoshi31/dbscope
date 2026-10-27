@@ -1,0 +1,15 @@
+sarif-schema-2.1.0.json
+
+Source: https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json
+(schema id https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json),
+downloaded 2026-10-27, SHA-256 c3b4bb2d6093897483348925aaa73af03b3e3f4bd4ca38cef26dcb4212a2682e.
+
+Licence: content of the oasis-tcs/sarif-spec repository is contributed by OASIS TC
+members and governed by the OASIS policies, including the OASIS Intellectual
+Property Rights (IPR) Policy (https://www.oasis-open.org/policies-guidelines/ipr),
+under the SARIF TC's RF on RAND Terms IPR mode
+(https://www.oasis-open.org/committees/sarif/ipr.php). See
+https://github.com/oasis-tcs/sarif-spec/blob/main/LICENSE.md.
+
+The file is vendored unmodified and is used only by tests, to validate
+dbscope's SARIF output.

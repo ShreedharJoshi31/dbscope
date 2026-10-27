@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -58,6 +59,10 @@ func Main(m *testing.M) {
 	os.Exit(code)
 }
 
+// PGStatStatements is a version suffix ("17+pgss") that starts the
+// container with pg_stat_statements in shared_preload_libraries.
+const PGStatStatements = "pgss"
+
 // Servers returns a server per requested major version, or the single
 // DBSCOPE_TEST_DSN server when that is set. It skips the test in -short mode
 // or when no server can be started.
@@ -96,9 +101,15 @@ func start(version string) (*Server, func(), string) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 		defer cancel()
-		ctr, err := postgres.Run(ctx, "postgres:"+version+"-alpine",
+		image, variant, _ := strings.Cut(version, "+")
+		opts := []testcontainers.ContainerCustomizer{
 			postgres.WithDatabase("dbscope"), postgres.WithUsername("admin"), postgres.WithPassword("admin-pass"),
-			postgres.BasicWaitStrategies())
+			postgres.BasicWaitStrategies(),
+		}
+		if variant == PGStatStatements {
+			opts = append(opts, testcontainers.WithCmdArgs("-c", "shared_preload_libraries=pg_stat_statements"))
+		}
+		ctr, err := postgres.Run(ctx, "postgres:"+image+"-alpine", opts...)
 		if ctr != nil {
 			stop = func() { testcontainers.TerminateContainer(ctr) }
 		}
@@ -162,6 +173,26 @@ func suffix() string {
 
 // NewDB creates an empty database on the server.
 func (s *Server) NewDB(t testing.TB) *DB {
+	return s.newDB(t, "")
+}
+
+// NewDBFrom creates a database as a copy of template (CREATE DATABASE ...
+// TEMPLATE). Nobody may be connected to template while it is copied:
+// close the template's Admin connection first (CloseAdmin).
+func (s *Server) NewDBFrom(t testing.TB, template string) *DB {
+	return s.newDB(t, template)
+}
+
+// CloseAdmin closes the superuser connection, e.g. so the database can be
+// used as a template.
+func (d *DB) CloseAdmin() {
+	if d.Admin != nil {
+		d.Admin.Close(context.Background())
+		d.Admin = nil
+	}
+}
+
+func (s *Server) newDB(t testing.TB, template string) *DB {
 	t.Helper()
 	ctx := context.Background()
 	admin, err := pgx.ConnectConfig(ctx, s.admin)
@@ -169,7 +200,11 @@ func (s *Server) NewDB(t testing.TB) *DB {
 		t.Fatal(err)
 	}
 	d := &DB{Name: "dbscope_t_" + suffix(), srv: s}
-	if _, err := admin.Exec(ctx, "CREATE DATABASE "+d.Name); err != nil {
+	create := "CREATE DATABASE " + d.Name
+	if template != "" {
+		create += " TEMPLATE " + pgx.Identifier{template}.Sanitize()
+	}
+	if _, err := admin.Exec(ctx, create); err != nil {
 		admin.Close(ctx)
 		t.Fatal(err)
 	}

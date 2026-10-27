@@ -1,0 +1,1 @@
+ALTER TABLE a ADD COLUMN x int;

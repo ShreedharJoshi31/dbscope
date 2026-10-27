@@ -13,6 +13,7 @@ import (
 
 	"github.com/dbscope/dbscope/internal/conn"
 	"github.com/dbscope/dbscope/internal/introspect"
+	"github.com/dbscope/dbscope/internal/migrate"
 	"github.com/dbscope/dbscope/internal/query/exec"
 	"github.com/dbscope/dbscope/internal/schema"
 )
@@ -26,6 +27,10 @@ type SchemaSource interface {
 	// Query runs a statement that passed guard.Check (exec.Run). It shares
 	// the profile's pool: exec passes QueryExecModeExec on every call.
 	Query(ctx context.Context, p conn.Profile, password string, req exec.Request) (*exec.Result, error)
+	// MigrationBase reads the base schema for migration analysis: structure,
+	// sizes, role/database timeouts, and a live impact source on the same
+	// pool. ctx bounds the whole analysis, including the impact queries.
+	MigrationBase(ctx context.Context, p conn.Profile, password string) (*migrate.Base, error)
 	// Forget drops anything held for the profile, e.g. after it changed.
 	Forget(profileID string)
 	// Close releases everything and waits for it to be released.

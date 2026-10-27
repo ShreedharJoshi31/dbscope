@@ -1,0 +1,1 @@
+CREATE INDEX CONCURRENTLY a_id ON a (id);

@@ -1,0 +1,4075 @@
+{
+  "server": "18.6",
+  "major": 18,
+  "fixtures": [
+    {
+      "name": "create_index",
+      "sql": "CREATE INDEX t_txt_idx ON gt.t (txt)",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "ShareLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "create_index"
+        ],
+        "locks": {
+          "gt.t": "ShareLock"
+        },
+        "work": "index_build",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "create_index_concurrently",
+      "sql": "CREATE INDEX CONCURRENTLY t_txt_cidx ON gt.t (txt)",
+      "observed": "blocked_request",
+      "txAllowed": false,
+      "implicitTxAllowed": false,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "ShareUpdateExclusiveLock",
+          "granted": false
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "predicted": {
+        "rules": [
+          "create_index.concurrently"
+        ],
+        "locks": {
+          "gt.t": "ShareUpdateExclusiveLock"
+        },
+        "work": "index_build",
+        "txAllowed": false,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "create_index_partitioned",
+      "sql": "CREATE INDEX p_note_idx ON gt.p (note)",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.p",
+          "kind": "p",
+          "mode": "ShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.p_2025",
+          "kind": "r",
+          "mode": "ShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.p_2026",
+          "kind": "r",
+          "mode": "ShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.p_default",
+          "kind": "r",
+          "mode": "ShareLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.p_2025",
+      "rewritten": [],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "create_index.partitioned"
+        ],
+        "locks": {
+          "gt.p": "ShareLock",
+          "gt.p_2025": "ShareLock",
+          "gt.p_2026": "ShareLock",
+          "gt.p_default": "ShareLock"
+        },
+        "work": "index_build",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "create_index_concurrently_partitioned",
+      "sql": "CREATE INDEX CONCURRENTLY p_note_cidx ON gt.p (note)",
+      "observed": "blocked_request",
+      "txAllowed": false,
+      "implicitTxAllowed": false,
+      "error": "0A000",
+      "errorMessage": "cannot create index on partitioned table \"p\" concurrently",
+      "locks": [
+        {
+          "relation": "gt.p",
+          "kind": "p",
+          "mode": "ShareUpdateExclusiveLock",
+          "granted": false
+        }
+      ],
+      "target": "gt.p",
+      "rewritten": [],
+      "predicted": {
+        "rules": [
+          "create_index.concurrently.partitioned"
+        ],
+        "locks": {
+          "gt.p": "ShareUpdateExclusiveLock"
+        },
+        "work": "index_build",
+        "txAllowed": false,
+        "fails": true,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "drop_index",
+      "sql": "DROP INDEX gt.t_v_idx",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_v_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "drop_index"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock",
+          "gt.t_v_idx": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "drop_index_concurrently",
+      "sql": "DROP INDEX CONCURRENTLY gt.t_v_idx",
+      "observed": "blocked_request",
+      "txAllowed": false,
+      "implicitTxAllowed": false,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "ShareUpdateExclusiveLock",
+          "granted": false
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "predicted": {
+        "rules": [
+          "drop_index.concurrently"
+        ],
+        "locks": {
+          "gt.t": "ShareUpdateExclusiveLock",
+          "gt.t_v_idx": "ShareUpdateExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": false,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "reindex_index",
+      "sql": "REINDEX INDEX gt.t_v_idx",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "ShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_v_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [
+        "gt.t_v_idx"
+      ],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "reindex"
+        ],
+        "locks": {
+          "gt.t": "ShareLock",
+          "gt.t_v_idx": "AccessExclusiveLock"
+        },
+        "work": "index_build",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "reindex_table",
+      "sql": "REINDEX TABLE gt.t",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "ShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_c_uidx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_i_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_n_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_pkey",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_v_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [
+        "gt.t_c_uidx",
+        "gt.t_i_idx",
+        "gt.t_n_idx",
+        "gt.t_pkey",
+        "gt.t_v_idx"
+      ],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "reindex"
+        ],
+        "locks": {
+          "gt.t": "ShareLock",
+          "gt.t_c_uidx": "AccessExclusiveLock",
+          "gt.t_i_idx": "AccessExclusiveLock",
+          "gt.t_n_idx": "AccessExclusiveLock",
+          "gt.t_pkey": "AccessExclusiveLock",
+          "gt.t_v_idx": "AccessExclusiveLock"
+        },
+        "work": "index_build",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "reindex_index_concurrently",
+      "sql": "REINDEX INDEX CONCURRENTLY gt.t_v_idx",
+      "observed": "blocked_request",
+      "txAllowed": false,
+      "implicitTxAllowed": false,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "ShareUpdateExclusiveLock",
+          "granted": false
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "predicted": {
+        "rules": [
+          "reindex.concurrently"
+        ],
+        "locks": {
+          "gt.t": "ShareUpdateExclusiveLock",
+          "gt.t_v_idx": "ShareUpdateExclusiveLock"
+        },
+        "work": "index_build",
+        "txAllowed": false,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "rename_index",
+      "sql": "ALTER INDEX gt.t_v_idx RENAME TO t_v_idx2",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t_v_idx",
+          "kind": "i",
+          "mode": "ShareUpdateExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "rename_index"
+        ],
+        "locks": {
+          "gt.t_v_idx": "ShareUpdateExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "add_column",
+      "sql": "ALTER TABLE gt.t ADD COLUMN a1 integer",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "add_column"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "add_column_constant_default",
+      "sql": "ALTER TABLE gt.t ADD COLUMN a2 integer DEFAULT 42",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "add_column.default"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "add_column_now_default",
+      "sql": "ALTER TABLE gt.t ADD COLUMN a3 timestamptz DEFAULT now()",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "add_column.default"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "add_column_clock_timestamp",
+      "sql": "ALTER TABLE gt.t ADD COLUMN a4 timestamptz DEFAULT clock_timestamp()",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_c_uidx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_i_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_n_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_pkey",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_v_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_namespace: AccessShareLock",
+        "pg_type: AccessExclusiveLock",
+        "pg_type: AccessShareLock",
+        "type gt.mood: AccessShareLock"
+      ],
+      "target": "gt.t",
+      "rewritten": [
+        "gt.t",
+        "gt.t_c_uidx",
+        "gt.t_i_idx",
+        "gt.t_n_idx",
+        "gt.t_pkey",
+        "gt.t_v_idx"
+      ],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "add_column.volatile_default"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "rewrite",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "add_column_gen_random_uuid",
+      "sql": "ALTER TABLE gt.t ADD COLUMN a5 uuid DEFAULT gen_random_uuid()",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_c_uidx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_i_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_n_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_pkey",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_v_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_namespace: AccessShareLock",
+        "pg_type: AccessExclusiveLock",
+        "pg_type: AccessShareLock",
+        "type gt.mood: AccessShareLock"
+      ],
+      "target": "gt.t",
+      "rewritten": [
+        "gt.t",
+        "gt.t_c_uidx",
+        "gt.t_i_idx",
+        "gt.t_n_idx",
+        "gt.t_pkey",
+        "gt.t_v_idx"
+      ],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "add_column.volatile_default"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "rewrite",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "add_column_serial",
+      "sql": "ALTER TABLE gt.t ADD COLUMN a6 serial",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_c_uidx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_i_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_n_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_pkey",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_v_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_namespace: AccessShareLock",
+        "pg_type: AccessExclusiveLock",
+        "pg_type: AccessShareLock",
+        "type gt.mood: AccessShareLock"
+      ],
+      "target": "gt.t",
+      "rewritten": [
+        "gt.t",
+        "gt.t_c_uidx",
+        "gt.t_i_idx",
+        "gt.t_n_idx",
+        "gt.t_pkey",
+        "gt.t_v_idx"
+      ],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "add_column.serial"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "rewrite",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "add_column_identity",
+      "sql": "ALTER TABLE gt.t ADD COLUMN a7 bigint GENERATED ALWAYS AS IDENTITY",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_c_uidx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_i_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_n_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_pkey",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_v_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_namespace: AccessShareLock",
+        "pg_type: AccessExclusiveLock",
+        "pg_type: AccessShareLock",
+        "type gt.mood: AccessShareLock"
+      ],
+      "target": "gt.t",
+      "rewritten": [
+        "gt.t",
+        "gt.t_c_uidx",
+        "gt.t_i_idx",
+        "gt.t_n_idx",
+        "gt.t_pkey",
+        "gt.t_v_idx"
+      ],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "add_column.identity"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "rewrite",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "add_column_generated_stored",
+      "sql": "ALTER TABLE gt.t ADD COLUMN a8 integer GENERATED ALWAYS AS (i * 2) STORED",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_c_uidx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_i_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_n_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_pkey",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_v_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_namespace: AccessShareLock",
+        "pg_type: AccessExclusiveLock",
+        "pg_type: AccessShareLock",
+        "type gt.mood: AccessShareLock"
+      ],
+      "target": "gt.t",
+      "rewritten": [
+        "gt.t",
+        "gt.t_c_uidx",
+        "gt.t_i_idx",
+        "gt.t_n_idx",
+        "gt.t_pkey",
+        "gt.t_v_idx"
+      ],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "add_column.generated_stored"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "rewrite",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "add_column_generated_virtual",
+      "sql": "ALTER TABLE gt.t ADD COLUMN a9 integer GENERATED ALWAYS AS (i * 2) VIRTUAL",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "add_column.generated_virtual"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": false
+      },
+      "agrees": true
+    },
+    {
+      "name": "add_column_constrained_domain",
+      "sql": "ALTER TABLE gt.t ADD COLUMN a10 gt.posint",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_c_uidx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_i_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_n_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_pkey",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_v_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_namespace: AccessShareLock",
+        "pg_type: AccessExclusiveLock",
+        "pg_type: AccessShareLock",
+        "type gt.mood: AccessShareLock",
+        "type gt.posint: AccessShareLock"
+      ],
+      "target": "gt.t",
+      "rewritten": [
+        "gt.t",
+        "gt.t_c_uidx",
+        "gt.t_i_idx",
+        "gt.t_n_idx",
+        "gt.t_pkey",
+        "gt.t_v_idx"
+      ],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "add_column.domain"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "rewrite",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "add_column_not_null_constant_default",
+      "sql": "ALTER TABLE gt.t ADD COLUMN a11 integer NOT NULL DEFAULT 0",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "add_column.default"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "add_column_not_null_no_default",
+      "sql": "ALTER TABLE gt.t ADD COLUMN a12 integer NOT NULL",
+      "observed": "transaction",
+      "txAllowed": true,
+      "error": "23502",
+      "errorMessage": "column \"a12\" of relation \"t\" contains null values",
+      "locks": [],
+      "target": "gt.t",
+      "rewritten": [],
+      "predicted": {
+        "rules": [
+          "add_column.not_null_no_default"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "scan",
+        "txAllowed": true,
+        "fails": true,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "drop_column",
+      "sql": "ALTER TABLE gt.t DROP COLUMN txt",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "drop_column"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "type_varchar_widen",
+      "sql": "ALTER TABLE gt.t ALTER COLUMN v TYPE varchar(40)",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_v_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "alter_type.no_rewrite"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "type_varchar_to_text",
+      "sql": "ALTER TABLE gt.t ALTER COLUMN v TYPE text",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_v_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "alter_type.no_rewrite"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "type_text_to_varchar_n",
+      "sql": "ALTER TABLE gt.t ALTER COLUMN txt TYPE varchar(100)",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_c_uidx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_i_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_n_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_pkey",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_v_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_namespace: AccessShareLock",
+        "pg_type: AccessExclusiveLock",
+        "pg_type: AccessShareLock",
+        "type gt.mood: AccessShareLock"
+      ],
+      "target": "gt.t",
+      "rewritten": [
+        "gt.t",
+        "gt.t_c_uidx",
+        "gt.t_i_idx",
+        "gt.t_n_idx",
+        "gt.t_pkey",
+        "gt.t_v_idx"
+      ],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "alter_type.rewrite"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "rewrite",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "type_varchar_narrow",
+      "sql": "ALTER TABLE gt.t ALTER COLUMN v TYPE varchar(10)",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_c_uidx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_i_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_n_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_pkey",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_v_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_namespace: AccessShareLock",
+        "pg_type: AccessExclusiveLock",
+        "pg_type: AccessShareLock",
+        "type gt.mood: AccessShareLock"
+      ],
+      "target": "gt.t",
+      "rewritten": [
+        "gt.t",
+        "gt.t_c_uidx",
+        "gt.t_i_idx",
+        "gt.t_n_idx",
+        "gt.t_pkey"
+      ],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "alter_type.rewrite"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "rewrite",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "type_int_to_bigint",
+      "sql": "ALTER TABLE gt.t ALTER COLUMN i TYPE bigint",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_c_uidx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_i_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_n_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_pkey",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_v_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_namespace: AccessShareLock",
+        "pg_type: AccessExclusiveLock",
+        "pg_type: AccessShareLock",
+        "type gt.mood: AccessShareLock"
+      ],
+      "target": "gt.t",
+      "rewritten": [
+        "gt.t",
+        "gt.t_c_uidx",
+        "gt.t_n_idx",
+        "gt.t_pkey",
+        "gt.t_v_idx"
+      ],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "alter_type.rewrite"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "rewrite",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "type_numeric_precision_up",
+      "sql": "ALTER TABLE gt.t ALTER COLUMN n TYPE numeric(12,2)",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_n_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "alter_type.no_rewrite"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "type_numeric_scale_change",
+      "sql": "ALTER TABLE gt.t ALTER COLUMN n TYPE numeric(12,3)",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_c_uidx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_i_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_n_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_pkey",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_v_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_namespace: AccessShareLock",
+        "pg_type: AccessExclusiveLock",
+        "pg_type: AccessShareLock",
+        "type gt.mood: AccessShareLock"
+      ],
+      "target": "gt.t",
+      "rewritten": [
+        "gt.t",
+        "gt.t_c_uidx",
+        "gt.t_i_idx",
+        "gt.t_pkey",
+        "gt.t_v_idx"
+      ],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "alter_type.rewrite"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "rewrite",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "type_using_expression",
+      "sql": "ALTER TABLE gt.t ALTER COLUMN i TYPE bigint USING i + 0",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_c_uidx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_i_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_n_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_pkey",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_v_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_namespace: AccessShareLock",
+        "pg_type: AccessExclusiveLock",
+        "pg_type: AccessShareLock",
+        "type gt.mood: AccessShareLock"
+      ],
+      "target": "gt.t",
+      "rewritten": [
+        "gt.t",
+        "gt.t_c_uidx",
+        "gt.t_n_idx",
+        "gt.t_pkey",
+        "gt.t_v_idx"
+      ],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "alter_type.rewrite"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "rewrite",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "set_not_null",
+      "sql": "ALTER TABLE gt.t ALTER COLUMN nn SET NOT NULL",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "set_not_null"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "scan",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "set_not_null_proven_by_check",
+      "sql": "ALTER TABLE gt.t ALTER COLUMN nn SET NOT NULL",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "set_not_null.proven"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "add_not_null_not_valid",
+      "sql": "ALTER TABLE gt.t ADD CONSTRAINT t_nn_nn NOT NULL nn NOT VALID",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "add_not_null.not_valid"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": false
+      },
+      "agrees": true
+    },
+    {
+      "name": "drop_not_null",
+      "sql": "ALTER TABLE gt.t ALTER COLUMN nn DROP NOT NULL",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_constraint: AccessExclusiveLock"
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "drop_not_null"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "set_default",
+      "sql": "ALTER TABLE gt.t ALTER COLUMN i SET DEFAULT 7",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "set_default"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "drop_default",
+      "sql": "ALTER TABLE gt.t ALTER COLUMN created_at DROP DEFAULT",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_attrdef: AccessExclusiveLock"
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "drop_default"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "set_statistics",
+      "sql": "ALTER TABLE gt.t ALTER COLUMN i SET STATISTICS 500",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "ShareUpdateExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "set_statistics"
+        ],
+        "locks": {
+          "gt.t": "ShareUpdateExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "add_fk",
+      "sql": "ALTER TABLE gt.t ADD CONSTRAINT t_parent_fk2 FOREIGN KEY (parent_id) REFERENCES gt.parent (id)",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.parent",
+          "kind": "r",
+          "mode": "ShareRowExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.parent_code_key",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.parent_pkey",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "ShareRowExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_c_uidx",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_i_idx",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_n_idx",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_pkey",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_v_idx",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_constraint: AccessShareLock"
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "add_fk"
+        ],
+        "locks": {
+          "gt.parent": "ShareRowExclusiveLock",
+          "gt.t": "ShareRowExclusiveLock"
+        },
+        "work": "scan",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "add_fk_not_valid",
+      "sql": "ALTER TABLE gt.t ADD CONSTRAINT t_parent_fk2 FOREIGN KEY (parent_id) REFERENCES gt.parent (id) NOT VALID",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.parent",
+          "kind": "r",
+          "mode": "ShareRowExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.parent_pkey",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "ShareRowExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_constraint: AccessShareLock"
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "add_fk.not_valid"
+        ],
+        "locks": {
+          "gt.parent": "ShareRowExclusiveLock",
+          "gt.t": "ShareRowExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "add_fk_partitioned",
+      "sql": "ALTER TABLE gt.p ADD CONSTRAINT p_ids_fk FOREIGN KEY (id) REFERENCES gt.ids (id)",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.ids",
+          "kind": "r",
+          "mode": "ShareRowExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.ids_pkey",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.p",
+          "kind": "p",
+          "mode": "ShareRowExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.p_2025",
+          "kind": "r",
+          "mode": "ShareRowExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.p_2025_pkey",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.p_2026",
+          "kind": "r",
+          "mode": "ShareRowExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.p_2026_pkey",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.p_default",
+          "kind": "r",
+          "mode": "ShareRowExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.p_default_pkey",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_constraint: AccessShareLock"
+      ],
+      "target": "gt.p_2025",
+      "rewritten": [],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "add_fk"
+        ],
+        "locks": {
+          "gt.ids": "ShareRowExclusiveLock",
+          "gt.p": "ShareRowExclusiveLock",
+          "gt.p_2025": "ShareRowExclusiveLock",
+          "gt.p_2026": "ShareRowExclusiveLock",
+          "gt.p_default": "ShareRowExclusiveLock"
+        },
+        "work": "scan",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "add_fk_not_valid_partitioned",
+      "sql": "ALTER TABLE gt.p ADD CONSTRAINT p_parent_fk FOREIGN KEY (id) REFERENCES gt.parent (id) NOT VALID",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.p",
+          "kind": "p",
+          "mode": "ShareRowExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.p_2025",
+          "kind": "r",
+          "mode": "ShareRowExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.p_2026",
+          "kind": "r",
+          "mode": "ShareRowExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.p_default",
+          "kind": "r",
+          "mode": "ShareRowExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.parent",
+          "kind": "r",
+          "mode": "ShareRowExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.parent_pkey",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_constraint: AccessShareLock"
+      ],
+      "target": "gt.p",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "add_fk.not_valid.partitioned"
+        ],
+        "locks": {
+          "gt.p": "ShareRowExclusiveLock",
+          "gt.p_2025": "ShareRowExclusiveLock",
+          "gt.p_2026": "ShareRowExclusiveLock",
+          "gt.p_default": "ShareRowExclusiveLock",
+          "gt.parent": "ShareRowExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "add_check",
+      "sql": "ALTER TABLE gt.t ADD CONSTRAINT t_i_pos CHECK (i \u003e 0)",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "add_check"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "scan",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "add_check_not_valid",
+      "sql": "ALTER TABLE gt.t ADD CONSTRAINT t_i_pos CHECK (i \u003e 0) NOT VALID",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "add_check.not_valid"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "add_check_not_enforced",
+      "sql": "ALTER TABLE gt.t ADD CONSTRAINT t_i_pos CHECK (i \u003e 0) NOT ENFORCED",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "add_check.not_enforced"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": false
+      },
+      "agrees": true
+    },
+    {
+      "name": "add_unique",
+      "sql": "ALTER TABLE gt.t ADD CONSTRAINT t_txt_key UNIQUE (txt)",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_constraint: AccessShareLock"
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "add_unique"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "index_build",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "add_primary_key",
+      "sql": "ALTER TABLE gt.nopk ADD PRIMARY KEY (id)",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.nopk",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_constraint: AccessShareLock"
+      ],
+      "target": "gt.nopk",
+      "rewritten": [],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "add_pk"
+        ],
+        "locks": {
+          "gt.nopk": "AccessExclusiveLock"
+        },
+        "work": "index_build",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "add_unique_using_index",
+      "sql": "ALTER TABLE gt.t ADD CONSTRAINT t_c_key UNIQUE USING INDEX t_c_uidx",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_c_uidx",
+          "kind": "i",
+          "mode": "ShareUpdateExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_constraint: AccessShareLock"
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "add_unique.using_index"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "add_primary_key_using_index",
+      "sql": "ALTER TABLE gt.nopk ADD CONSTRAINT nopk_pkey PRIMARY KEY USING INDEX nopk_id_uidx",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.nopk",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.nopk_id_uidx",
+          "kind": "i",
+          "mode": "ShareUpdateExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_constraint: AccessShareLock"
+      ],
+      "target": "gt.nopk",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "add_pk.using_index"
+        ],
+        "locks": {
+          "gt.nopk": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "add_primary_key_using_index_nullable",
+      "sql": "ALTER TABLE gt.nopk ADD CONSTRAINT nopk_x_pkey PRIMARY KEY USING INDEX nopk_x_uidx",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.nopk",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.nopk_x_uidx",
+          "kind": "i",
+          "mode": "ShareUpdateExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_constraint: AccessShareLock"
+      ],
+      "target": "gt.nopk",
+      "rewritten": [],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "add_pk.using_index.nullable"
+        ],
+        "locks": {
+          "gt.nopk": "AccessExclusiveLock"
+        },
+        "work": "scan",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "add_exclude",
+      "sql": "ALTER TABLE gt.t ADD CONSTRAINT t_i_excl EXCLUDE USING btree (i WITH =)",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_constraint: AccessShareLock"
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "add_exclude"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "index_build",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "validate_check",
+      "sql": "ALTER TABLE gt.t VALIDATE CONSTRAINT t_i_pos",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "ShareUpdateExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "validate_constraint"
+        ],
+        "locks": {
+          "gt.t": "ShareUpdateExclusiveLock"
+        },
+        "work": "scan",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "validate_fk",
+      "sql": "ALTER TABLE gt.t VALIDATE CONSTRAINT t_parent_fk2",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.parent",
+          "kind": "r",
+          "mode": "RowShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.parent_code_key",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.parent_pkey",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "ShareUpdateExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_c_uidx",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_i_idx",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_n_idx",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_pkey",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_v_idx",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "validate_constraint.fk"
+        ],
+        "locks": {
+          "gt.parent": "RowShareLock",
+          "gt.t": "ShareUpdateExclusiveLock"
+        },
+        "work": "scan",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "drop_constraint_fk",
+      "sql": "ALTER TABLE gt.t DROP CONSTRAINT t_parent_id_fkey",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.parent",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_constraint: AccessExclusiveLock",
+        "pg_trigger: AccessExclusiveLock"
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "drop_constraint.fk"
+        ],
+        "locks": {
+          "gt.parent": "AccessExclusiveLock",
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "drop_constraint_check",
+      "sql": "ALTER TABLE gt.t DROP CONSTRAINT t_i_pos",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_constraint: AccessExclusiveLock"
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "drop_constraint"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "rename_constraint",
+      "sql": "ALTER TABLE gt.t RENAME CONSTRAINT t_parent_id_fkey TO t_parent_fk",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "rename_constraint"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "rename_column",
+      "sql": "ALTER TABLE gt.t RENAME COLUMN txt TO txt2",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "rename_column"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "rename_table",
+      "sql": "ALTER TABLE gt.child RENAME TO child2",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.child",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.child",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "rename_table"
+        ],
+        "locks": {
+          "gt.child": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "set_tablespace",
+      "sql": "ALTER TABLE gt.t SET TABLESPACE dbscope_gt_ts",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [
+        "gt.t"
+      ],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "set_tablespace"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "rewrite",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "set_unlogged",
+      "sql": "ALTER TABLE gt.nopk SET UNLOGGED",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.nopk",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_namespace: AccessShareLock",
+        "pg_type: AccessExclusiveLock",
+        "pg_type: AccessShareLock"
+      ],
+      "target": "gt.nopk",
+      "rewritten": [
+        "gt.nopk"
+      ],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "set_logged"
+        ],
+        "locks": {
+          "gt.nopk": "AccessExclusiveLock"
+        },
+        "work": "rewrite",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "set_fillfactor",
+      "sql": "ALTER TABLE gt.t SET (fillfactor = 80)",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "ShareUpdateExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "set_options"
+        ],
+        "locks": {
+          "gt.t": "ShareUpdateExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "disable_trigger",
+      "sql": "ALTER TABLE gt.t DISABLE TRIGGER t_trg",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "ShareRowExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "enable_trigger"
+        ],
+        "locks": {
+          "gt.t": "ShareRowExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "comment_on_table",
+      "sql": "COMMENT ON TABLE gt.t IS 'measured'",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "ShareUpdateExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "comment"
+        ],
+        "locks": {
+          "gt.t": "ShareUpdateExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "lock_table_share",
+      "sql": "LOCK TABLE gt.t IN SHARE MODE",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "ShareLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "lock_table"
+        ],
+        "locks": {
+          "gt.t": "ShareLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "attach_partition",
+      "sql": "ALTER TABLE gt.p ATTACH PARTITION gt.p_new FOR VALUES FROM ('2027-01-01') TO ('2028-01-01')",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.p",
+          "kind": "p",
+          "mode": "ShareUpdateExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.p_default",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.p_new",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.p_new_pkey",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.p_pkey",
+          "kind": "I",
+          "mode": "ShareUpdateExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.p_ref",
+          "kind": "r",
+          "mode": "ShareRowExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_constraint: AccessShareLock"
+      ],
+      "target": "gt.p_new",
+      "rewritten": [],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "attach_partition"
+        ],
+        "locks": {
+          "gt.p": "ShareUpdateExclusiveLock",
+          "gt.p_default": "AccessExclusiveLock",
+          "gt.p_new": "AccessExclusiveLock",
+          "gt.p_ref": "ShareRowExclusiveLock"
+        },
+        "work": "scan",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "detach_partition",
+      "sql": "ALTER TABLE gt.p DETACH PARTITION gt.p_2025",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.p",
+          "kind": "p",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.p_2025",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.p_2025_pkey",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.p_default",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.p_ref",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.p_ref_pkey",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_constraint: AccessExclusiveLock",
+        "pg_trigger: AccessExclusiveLock"
+      ],
+      "target": "gt.p",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "detach_partition"
+        ],
+        "locks": {
+          "gt.p": "AccessExclusiveLock",
+          "gt.p_2025": "AccessExclusiveLock",
+          "gt.p_default": "AccessExclusiveLock",
+          "gt.p_ref": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "detach_partition_concurrently",
+      "sql": "ALTER TABLE gt.p DETACH PARTITION gt.p_2025 CONCURRENTLY",
+      "observed": "blocked_request",
+      "txAllowed": false,
+      "implicitTxAllowed": false,
+      "locks": [
+        {
+          "relation": "gt.p",
+          "kind": "p",
+          "mode": "ShareUpdateExclusiveLock",
+          "granted": false
+        }
+      ],
+      "target": "gt.p",
+      "rewritten": [],
+      "predicted": {
+        "rules": [
+          "detach_partition.concurrently"
+        ],
+        "locks": {
+          "gt.p": "ShareUpdateExclusiveLock",
+          "gt.p_2025": "ShareUpdateExclusiveLock",
+          "gt.p_ref": "ShareLock"
+        },
+        "work": "none",
+        "txAllowed": false,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "create_partition_of",
+      "sql": "CREATE TABLE gt.p_2027 PARTITION OF gt.p FOR VALUES FROM ('2027-01-01') TO ('2028-01-01')",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.p",
+          "kind": "p",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.p_default",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.p_pkey",
+          "kind": "I",
+          "mode": "ShareUpdateExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.p_ref",
+          "kind": "r",
+          "mode": "ShareRowExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_constraint: AccessShareLock",
+        "pg_namespace: AccessShareLock",
+        "pg_type: AccessShareLock"
+      ],
+      "target": "gt.p",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "create_table.partition_of"
+        ],
+        "locks": {
+          "gt.p": "AccessExclusiveLock",
+          "gt.p_default": "AccessExclusiveLock",
+          "gt.p_ref": "ShareRowExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "create_table_with_fk",
+      "sql": "CREATE TABLE gt.newt (id bigint PRIMARY KEY, t_id bigint REFERENCES gt.t (id))",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "ShareRowExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_pkey",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_constraint: AccessShareLock",
+        "pg_namespace: AccessShareLock",
+        "pg_type: AccessShareLock"
+      ],
+      "target": "gt.parent",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "create_table.fk"
+        ],
+        "locks": {
+          "gt.t": "ShareRowExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "vacuum_full",
+      "sql": "VACUUM FULL gt.t",
+      "observed": "blocked_request",
+      "txAllowed": false,
+      "implicitTxAllowed": false,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": false
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [
+        "gt.t",
+        "gt.t_c_uidx",
+        "gt.t_i_idx",
+        "gt.t_n_idx",
+        "gt.t_pkey",
+        "gt.t_v_idx"
+      ],
+      "predicted": {
+        "rules": [
+          "vacuum_full"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "rewrite",
+        "txAllowed": false,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "vacuum",
+      "sql": "VACUUM gt.t",
+      "observed": "blocked_request",
+      "txAllowed": false,
+      "implicitTxAllowed": false,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "ShareUpdateExclusiveLock",
+          "granted": false
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "predicted": {
+        "rules": [
+          "vacuum"
+        ],
+        "locks": {
+          "gt.t": "ShareUpdateExclusiveLock"
+        },
+        "work": "scan",
+        "txAllowed": false,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "analyze",
+      "sql": "ANALYZE gt.t",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "ShareUpdateExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_c_uidx",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_i_idx",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_n_idx",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_pkey",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_v_idx",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "analyze"
+        ],
+        "locks": {
+          "gt.t": "ShareUpdateExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "cluster_table",
+      "sql": "CLUSTER gt.t USING t_i_idx",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_c_uidx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_i_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_n_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_pkey",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_v_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_namespace: AccessShareLock",
+        "pg_type: AccessExclusiveLock",
+        "pg_type: AccessShareLock",
+        "type gt.mood: AccessShareLock"
+      ],
+      "target": "gt.t",
+      "rewritten": [
+        "gt.t",
+        "gt.t_c_uidx",
+        "gt.t_i_idx",
+        "gt.t_n_idx",
+        "gt.t_pkey",
+        "gt.t_v_idx"
+      ],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "cluster"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "rewrite",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "cluster_all",
+      "sql": "CLUSTER",
+      "observed": "blocked_request",
+      "txAllowed": false,
+      "implicitTxAllowed": false,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": false
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [
+        "gt.t",
+        "gt.t_c_uidx",
+        "gt.t_i_idx",
+        "gt.t_n_idx",
+        "gt.t_pkey",
+        "gt.t_v_idx"
+      ],
+      "predicted": {
+        "rules": [
+          "cluster.all"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "rewrite",
+        "txAllowed": false,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "create_trigger",
+      "sql": "CREATE TRIGGER t_trg2 AFTER INSERT ON gt.t FOR EACH ROW EXECUTE FUNCTION gt.trg()",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "ShareRowExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_proc: AccessShareLock"
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "create_trigger"
+        ],
+        "locks": {
+          "gt.t": "ShareRowExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "drop_trigger",
+      "sql": "DROP TRIGGER t_trg ON gt.t",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_trigger: AccessExclusiveLock"
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "drop_trigger"
+        ],
+        "locks": {
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "alter_type_add_value",
+      "sql": "ALTER TYPE gt.mood ADD VALUE 'great'",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [],
+      "objectLocks": [
+        "type gt.mood: ExclusiveLock"
+      ],
+      "target": "gt.parent",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "alter_enum.add_value"
+        ],
+        "locks": {},
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "refresh_matview",
+      "sql": "REFRESH MATERIALIZED VIEW gt.t_mv",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_c_uidx",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_i_idx",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_mv",
+          "kind": "m",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_mv_id",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_n_idx",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_pkey",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_v_idx",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_namespace: AccessShareLock",
+        "pg_type: AccessExclusiveLock",
+        "pg_type: AccessShareLock"
+      ],
+      "target": "gt.t_mv",
+      "rewritten": [
+        "gt.t_mv",
+        "gt.t_mv_id"
+      ],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "refresh_matview"
+        ],
+        "locks": {
+          "gt.t": "AccessShareLock",
+          "gt.t_mv": "AccessExclusiveLock"
+        },
+        "work": "rewrite",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "refresh_matview_concurrently",
+      "sql": "REFRESH MATERIALIZED VIEW CONCURRENTLY gt.t_mv",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_c_uidx",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_i_idx",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_mv",
+          "kind": "m",
+          "mode": "ExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_mv_id",
+          "kind": "i",
+          "mode": "RowExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_n_idx",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_pkey",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_v_idx",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_namespace: AccessShareLock",
+        "pg_type: AccessExclusiveLock",
+        "pg_type: AccessShareLock"
+      ],
+      "target": "gt.t_mv",
+      "rewritten": [],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "refresh_matview.concurrently"
+        ],
+        "locks": {
+          "gt.t": "AccessShareLock",
+          "gt.t_mv": "ExclusiveLock"
+        },
+        "work": "scan",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "create_view",
+      "sql": "CREATE VIEW gt.v2 AS SELECT id FROM gt.t",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessShareLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_namespace: AccessShareLock",
+        "pg_type: AccessShareLock"
+      ],
+      "target": "gt.parent",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "create_view"
+        ],
+        "locks": {
+          "gt.t": "AccessShareLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "create_or_replace_view",
+      "sql": "CREATE OR REPLACE VIEW gt.t_view AS SELECT id, c FROM gt.t",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_view",
+          "kind": "v",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_namespace: AccessShareLock"
+      ],
+      "target": "gt.parent",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "create_view.replace"
+        ],
+        "locks": {
+          "gt.t": "AccessShareLock",
+          "gt.t_view": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "create_matview",
+      "sql": "CREATE MATERIALIZED VIEW gt.mv2 AS SELECT id FROM gt.t",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_c_uidx",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_i_idx",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_n_idx",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_pkey",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_v_idx",
+          "kind": "i",
+          "mode": "AccessShareLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_namespace: AccessShareLock",
+        "pg_type: AccessExclusiveLock",
+        "pg_type: AccessShareLock"
+      ],
+      "target": "gt.t",
+      "rewritten": [],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "create_matview"
+        ],
+        "locks": {
+          "gt.t": "AccessShareLock"
+        },
+        "work": "scan",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "drop_view",
+      "sql": "DROP VIEW gt.t_view",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.t_view",
+          "kind": "v",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_rewrite: AccessExclusiveLock",
+        "type gt.t_view: AccessExclusiveLock",
+        "type gt.t_view[]: AccessExclusiveLock"
+      ],
+      "target": "gt.parent",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "drop_view"
+        ],
+        "locks": {
+          "gt.t_view": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "drop_table_fk_child",
+      "sql": "DROP TABLE gt.child",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.child",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.child_pkey",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_constraint: AccessExclusiveLock",
+        "pg_trigger: AccessExclusiveLock",
+        "type gt.child: AccessExclusiveLock",
+        "type gt.child[]: AccessExclusiveLock"
+      ],
+      "target": "gt.parent",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "drop_table"
+        ],
+        "locks": {
+          "gt.child": "AccessExclusiveLock",
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "drop_table_restrict_with_dependents",
+      "sql": "DROP TABLE gt.t",
+      "observed": "transaction",
+      "txAllowed": true,
+      "error": "2BP01",
+      "errorMessage": "cannot drop table gt.t because other objects depend on it",
+      "locks": [],
+      "target": "gt.t",
+      "rewritten": [],
+      "predicted": {
+        "rules": [
+          "drop_table"
+        ],
+        "locks": {
+          "gt.parent": "AccessExclusiveLock",
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": true,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "drop_table_cascade",
+      "sql": "DROP TABLE gt.t CASCADE",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.child",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.parent",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_c_uidx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_i_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_mv",
+          "kind": "m",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_mv_id",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_n_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_pkey",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_v_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_view",
+          "kind": "v",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "objectLocks": [
+        "pg_attrdef: AccessExclusiveLock",
+        "pg_constraint: AccessExclusiveLock",
+        "pg_rewrite: AccessExclusiveLock",
+        "pg_trigger: AccessExclusiveLock",
+        "type gt.t: AccessExclusiveLock",
+        "type gt.t[]: AccessExclusiveLock",
+        "type gt.t_mv: AccessExclusiveLock",
+        "type gt.t_mv[]: AccessExclusiveLock",
+        "type gt.t_view: AccessExclusiveLock",
+        "type gt.t_view[]: AccessExclusiveLock"
+      ],
+      "target": "gt.parent",
+      "rewritten": [],
+      "scanned": false,
+      "predicted": {
+        "rules": [
+          "drop_table.cascade"
+        ],
+        "locks": {
+          "gt.child": "AccessExclusiveLock",
+          "gt.parent": "AccessExclusiveLock",
+          "gt.t": "AccessExclusiveLock",
+          "gt.t_mv": "AccessExclusiveLock",
+          "gt.t_view": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": false,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "truncate",
+      "sql": "TRUNCATE gt.child",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.child",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.child_pkey",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.child",
+      "rewritten": [
+        "gt.child",
+        "gt.child_pkey"
+      ],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "truncate"
+        ],
+        "locks": {
+          "gt.child": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": true,
+        "parsed": true
+      },
+      "agrees": true
+    },
+    {
+      "name": "truncate_cascade",
+      "sql": "TRUNCATE gt.t CASCADE",
+      "observed": "transaction",
+      "txAllowed": true,
+      "locks": [
+        {
+          "relation": "gt.child",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.child_pkey",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t",
+          "kind": "r",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_c_uidx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_i_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_n_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_pkey",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        },
+        {
+          "relation": "gt.t_v_idx",
+          "kind": "i",
+          "mode": "AccessExclusiveLock",
+          "granted": true
+        }
+      ],
+      "target": "gt.t",
+      "rewritten": [
+        "gt.child",
+        "gt.child_pkey",
+        "gt.t",
+        "gt.t_c_uidx",
+        "gt.t_i_idx",
+        "gt.t_n_idx",
+        "gt.t_pkey",
+        "gt.t_v_idx"
+      ],
+      "scanned": true,
+      "predicted": {
+        "rules": [
+          "truncate.cascade"
+        ],
+        "locks": {
+          "gt.child": "AccessExclusiveLock",
+          "gt.t": "AccessExclusiveLock"
+        },
+        "work": "none",
+        "txAllowed": true,
+        "fails": false,
+        "newStorage": true,
+        "parsed": true
+      },
+      "agrees": true
+    }
+  ],
+  "agreements": 88
+}

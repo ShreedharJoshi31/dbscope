@@ -112,6 +112,8 @@ func New(cfg Config) (*Agent, error) {
 	mux.HandleFunc("GET /api/profiles/{id}/glossary", s.getGlossary)
 	mux.HandleFunc("PUT /api/profiles/{id}/glossary", s.putGlossary)
 	mux.HandleFunc("POST /api/profiles/{id}/ask", s.ask)
+	mux.HandleFunc("POST /api/profiles/{id}/migrations/analyze", s.analyzeMigrations)
+	mux.HandleFunc("POST /api/sample/migrations/analyze", s.analyzeSampleMigrations)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "no such API route")
 	})
@@ -151,7 +153,12 @@ func (s *server) internalError(w http.ResponseWriter, r *http.Request, err error
 // decode reads exactly one JSON value into v, rejecting unknown fields and
 // bodies over 1 MiB. It writes the error response and returns false on failure.
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodyBytes))
+	return decodeLimit(w, r, v, maxBodyBytes)
+}
+
+// decodeLimit is decode with a body limit of limit bytes.
+func decodeLimit(w http.ResponseWriter, r *http.Request, v any, limit int64) bool {
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, limit))
 	dec.DisallowUnknownFields()
 	err := dec.Decode(v)
 	if err == nil {
@@ -164,7 +171,7 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	case err == nil:
 		return true
 	case errors.As(err, &tooBig):
-		writeError(w, http.StatusRequestEntityTooLarge, "validation", "request body must be at most 1 MiB")
+		writeError(w, http.StatusRequestEntityTooLarge, "validation", fmt.Sprintf("request body must be at most %d MiB", limit>>20))
 	case errors.Is(err, io.EOF):
 		writeError(w, http.StatusBadRequest, "validation", "request body is required")
 	default:

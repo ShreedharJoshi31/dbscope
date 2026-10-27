@@ -1,0 +1,2 @@
+DROP TABLE b;
+DROP TABLE a;

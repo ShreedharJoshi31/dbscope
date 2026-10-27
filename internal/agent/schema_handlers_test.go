@@ -17,6 +17,7 @@ import (
 
 	"github.com/dbscope/dbscope/internal/conn"
 	"github.com/dbscope/dbscope/internal/introspect"
+	"github.com/dbscope/dbscope/internal/migrate"
 	"github.com/dbscope/dbscope/internal/pgtest"
 	"github.com/dbscope/dbscope/internal/query/exec"
 	"github.com/dbscope/dbscope/internal/query/plan"
@@ -80,6 +81,14 @@ func (f *fakeSource) Introspect(_ context.Context, p conn.Profile, password stri
 				Columns: []schema.Column{{Name: "id", Type: "bigint"}}},
 		},
 	}, nil
+}
+
+func (f *fakeSource) MigrationBase(ctx context.Context, p conn.Profile, password string) (*migrate.Base, error) {
+	m, err := f.Introspect(ctx, p, password)
+	if err != nil {
+		return nil, err
+	}
+	return &migrate.Base{Model: m, Source: "live"}, nil
 }
 
 func (f *fakeSource) Forget(id string) {
