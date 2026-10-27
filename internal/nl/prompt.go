@@ -2,6 +2,7 @@ package nl
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -100,6 +101,7 @@ func repairMessage(redacted string) string {
 // consistency, assumption fragments inside the SQL, tables that exist,
 // and 2-4 clarify options. It returns the problem in words, or "".
 func validate(o *llm.Output, m *schema.Model) string {
+	normalize(o)
 	switch o.Kind {
 	case "sql":
 		if strings.TrimSpace(o.SQL) == "" {
@@ -132,6 +134,24 @@ func validate(o *llm.Output, m *schema.Model) string {
 		return fmt.Sprintf(`kind is %q; it must be "sql" or "clarify"`, o.Kind)
 	}
 	return ""
+}
+
+var sqlFence = regexp.MustCompile("(?s)^```[A-Za-z]*\\s*\\n?(.*?)\\s*```$")
+
+// normalize undoes formatting slips small local models make that do not
+// change the answer: SQL wrapped in a Markdown fence or backticks, and SQL
+// left in an otherwise complete clarify answer.
+func normalize(o *llm.Output) {
+	s := strings.TrimSpace(o.SQL)
+	if m := sqlFence.FindStringSubmatch(s); m != nil {
+		s = m[1]
+	} else if len(s) > 2 && strings.Count(s, "`") == 2 && s[0] == '`' && s[len(s)-1] == '`' {
+		s = s[1 : len(s)-1]
+	}
+	o.SQL = s
+	if o.Kind == "clarify" && strings.TrimSpace(o.ClarifyingQuestion.Question) != "" {
+		o.SQL = ""
+	}
 }
 
 // resolveTable maps a name the model gave ("schema.name", "name", quoted

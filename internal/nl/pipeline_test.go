@@ -534,6 +534,29 @@ func TestValidate(t *testing.T) {
 	}
 }
 
+func TestNormalize(t *testing.T) {
+	for _, c := range []struct{ in, want string }{
+		{"```sql\nSELECT 1\n```", "SELECT 1"},
+		{"```\nSELECT 1;\n```", "SELECT 1;"},
+		{"```postgresql SELECT 1```", "SELECT 1"},
+		{"`SELECT 1`", "SELECT 1"},
+		{"  SELECT 1  ", "SELECT 1"},
+		{"SELECT '`a`' AS x", "SELECT '`a`' AS x"}, // backticks inside the statement are data
+	} {
+		o := sqlOutput(c.in)
+		normalize(&o)
+		if o.SQL != c.want {
+			t.Errorf("%q -> %q, want %q", c.in, o.SQL, c.want)
+		}
+	}
+	m := &schema.Model{}
+	o := llm.Output{Kind: "clarify", SQL: "SELECT 1",
+		ClarifyingQuestion: llm.ClarifyingQuestion{Question: "Gross or net?", Options: []string{"gross", "net"}}}
+	if p := validate(&o, m); p != "" || o.SQL != "" {
+		t.Fatalf("complete clarify with stray sql: %q sql=%q", p, o.SQL)
+	}
+}
+
 func TestConversations(t *testing.T) {
 	c := NewConversations()
 	now := time.Date(2026, 10, 27, 0, 0, 0, 0, time.UTC)
