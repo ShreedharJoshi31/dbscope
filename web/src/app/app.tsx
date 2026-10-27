@@ -4,6 +4,7 @@ import { ErrorBoundary } from "@/app/error-boundary";
 import { AppHotkeys } from "@/app/hotkeys";
 import { Providers } from "@/app/providers";
 import { createQueryClient } from "@/app/query-client";
+import { useWorkspaceStore } from "@/entities/schema";
 import { ShortcutSheet } from "@/features/show-shortcuts";
 import { UnlockSecretsDialog } from "@/features/unlock-secrets";
 import { NoSessionPage } from "@/pages/no-session";
@@ -15,6 +16,7 @@ import { LiveRegion } from "@/shared/ui/live-region";
 
 function Screen() {
   const profiles = useProfiles();
+  const sample = useWorkspaceStore((s) => s.source === "sample");
 
   if (profiles.isPending) {
     return (
@@ -42,11 +44,12 @@ function Screen() {
     );
   }
 
-  const hasProfiles = profiles.data.length > 0;
+  // The sample workspace needs no connection, so it opens the workbench even on first run.
+  const workbench = profiles.data.length > 0 || sample;
   return (
     <>
-      <AppHotkeys workbench={hasProfiles} />
-      {hasProfiles ? <WorkbenchPage /> : <OnboardingPage />}
+      <AppHotkeys workbench={workbench} />
+      {workbench ? <WorkbenchPage /> : <OnboardingPage />}
     </>
   );
 }

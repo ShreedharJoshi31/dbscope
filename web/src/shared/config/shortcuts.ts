@@ -14,12 +14,24 @@ export type ShortcutId =
   | "toggleDock"
   | "toggleAssistant"
   | "nextRegion"
-  | "previousRegion";
+  | "previousRegion"
+  | "canvasSearch"
+  | "canvasFocusMode"
+  | "canvasMoveSelection"
+  | "canvasOpenDetails"
+  | "canvasFollowFk"
+  | "canvasClear";
+
+export type ShortcutGroup = "General" | "Panels" | "Navigation" | "Canvas";
+
+export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = ["General", "Panels", "Navigation", "Canvas"];
 
 export interface ShortcutDefinition {
   combo: KeyCombo;
   label: string;
-  group: "General" | "Panels" | "Navigation";
+  group: ShortcutGroup;
+  /** Key caps to show instead of the combo, for shortcuts that are a family of keys (the arrows). */
+  keys?: string[];
 }
 
 export const SHORTCUTS: Record<ShortcutId, ShortcutDefinition> = {
@@ -30,10 +42,33 @@ export const SHORTCUTS: Record<ShortcutId, ShortcutDefinition> = {
   toggleAssistant: { combo: { key: "i", mod: true }, label: "Toggle assistant", group: "Panels" },
   nextRegion: { combo: { key: "F6" }, label: "Focus next region", group: "Navigation" },
   previousRegion: { combo: { key: "F6", shift: true }, label: "Focus previous region", group: "Navigation" },
+  canvasSearch: { combo: { key: "/" }, label: "Search tables and columns", group: "Canvas" },
+  canvasFocusMode: { combo: { key: "f" }, label: "Focus on the selected table and its neighbours", group: "Canvas" },
+  canvasMoveSelection: {
+    combo: { key: "ArrowRight" },
+    label: "Move the selection to the nearest table (canvas focused)",
+    group: "Canvas",
+    keys: ["↑", "↓", "←", "→"],
+  },
+  canvasOpenDetails: { combo: { key: "Enter" }, label: "Open details of the selected table", group: "Canvas" },
+  canvasFollowFk: {
+    combo: { key: "Tab" },
+    label: "Follow the selected table's foreign key (Shift+Tab goes back)",
+    group: "Canvas",
+  },
+  canvasClear: { combo: { key: "Escape" }, label: "Clear search, focus mode or selection", group: "Canvas" },
+};
+
+const KEY_NAMES: Record<string, string> = {
+  Escape: "Esc",
+  ArrowUp: "↑",
+  ArrowDown: "↓",
+  ArrowLeft: "←",
+  ArrowRight: "→",
 };
 
 function keyLabel(key: string): string {
-  return key.length === 1 ? key.toUpperCase() : key;
+  return key.length === 1 ? key.toUpperCase() : (KEY_NAMES[key] ?? key);
 }
 
 /** Visible key caps, e.g. ["⌘", "K"] on macOS or ["Ctrl", "K"] elsewhere. */
@@ -55,10 +90,11 @@ export function ariaKeyShortcut(combo: KeyCombo, mac = isMacPlatform()): string 
   const parts: string[] = [];
   if (combo.mod) parts.push(mac ? "Meta" : "Control");
   if (combo.shift) parts.push("Shift");
-  parts.push(keyLabel(combo.key));
+  parts.push(combo.key.length === 1 ? combo.key.toUpperCase() : combo.key);
   return parts.join("+");
 }
 
 export function shortcutLabel(id: ShortcutId): string {
-  return formatCombo(SHORTCUTS[id].combo);
+  const { keys, combo } = SHORTCUTS[id];
+  return keys ? keys.join(" ") : formatCombo(combo);
 }

@@ -1,0 +1,53 @@
+/* ERD canvas styling on top of React Flow's base.css. Colours come from tokens only. */
+
+/* Defined on the canvas root: the shared <marker> defs live outside .react-flow and read it too. */
+.erd-canvas {
+  --erd-edge-stroke: var(--border-control);
+}
+
+.erd-canvas .react-flow {
+  --xy-background-color: var(--surface-canvas);
+  --xy-minimap-background-color: var(--surface-subtle);
+  --xy-minimap-mask-background-color: var(--overlay-backdrop);
+  --xy-minimap-node-background-color: var(--border-default);
+  --xy-selection-background-color: var(--surface-selected);
+  --xy-selection-border: 1px dashed var(--border-focus);
+}
+
+.erd-canvas .react-flow__edge-path.erd-edge {
+  stroke: var(--erd-edge-stroke);
+  stroke-width: 1.25;
+}
+
+.erd-canvas .react-flow__edge-path.erd-edge-inferred {
+  stroke-dasharray: 6 4;
+}
+
+.erd-canvas .react-flow__edge-path.erd-edge-active {
+  stroke: var(--accent-fg);
+  stroke-width: 2.25;
+}
+
+.erd-canvas .react-flow__edge-path.erd-edge-dim {
+  opacity: 0.15;
+}
+
+.erd-canvas .react-flow__node {
+  /* Node cards draw their own focus/selection rings. */
+  outline: none;
+}
+
+.erd-canvas .react-flow__minimap {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-6);
+  overflow: hidden;
+}
+
+.erd-canvas .react-flow__attribution {
+  background: var(--surface-canvas);
+  font-size: var(--font-size-11);
+}
+
+.erd-canvas .react-flow__attribution a {
+  color: var(--text-muted);
+}

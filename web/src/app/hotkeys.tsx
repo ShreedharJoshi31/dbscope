@@ -1,3 +1,4 @@
+import { runCanvasCommand } from "@/entities/schema";
 import { openShortcutSheet } from "@/features/show-shortcuts";
 import { togglePanel } from "@/features/toggle-panel";
 import { SHORTCUTS } from "@/shared/config/shortcuts";
@@ -15,6 +16,9 @@ const WORKBENCH: HotkeyBinding[] = [
   { combo: SHORTCUTS.toggleAssistant.combo, handler: () => togglePanel("assistant") },
   { combo: SHORTCUTS.previousRegion.combo, handler: () => focusAdjacentRegion(-1) },
   { combo: SHORTCUTS.nextRegion.combo, handler: () => focusAdjacentRegion(1) },
+  // Single keys: useHotkeys never fires these while typing in a field.
+  { combo: SHORTCUTS.canvasSearch.combo, handler: () => runCanvasCommand("focusSearch") },
+  { combo: SHORTCUTS.canvasFocusMode.combo, handler: () => runCanvasCommand("toggleFocus") },
 ];
 
 /** Global shortcuts. Workbench-only bindings are inactive on onboarding. */

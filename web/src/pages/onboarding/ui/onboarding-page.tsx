@@ -1,6 +1,7 @@
 import { ScanSearch, ShieldCheck } from "lucide-react";
 import { useActiveConnectionStore } from "@/entities/connection";
 import { ConnectionForm } from "@/features/add-connection";
+import { OpenSampleButton } from "@/features/load-schema";
 import { ThemeToggle } from "@/features/toggle-theme";
 
 /** First run: no saved connections yet (UX rule 1). */
@@ -26,6 +27,12 @@ export function OnboardingPage() {
           </div>
           <div className="rounded-lg border border-border-default bg-surface-raised p-6 shadow-sm">
             <ConnectionForm submitLabel="Save and open" autoFocus onSaved={(profile) => setActiveId(profile.id)} />
+          </div>
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-dashed border-border-default px-4 py-3">
+            <p className="text-sm text-text-muted">
+              No database at hand? Explore a 40-table e-commerce and SaaS sample schema, read-only.
+            </p>
+            <OpenSampleButton />
           </div>
           <p className="flex items-start gap-2 text-xs text-text-muted">
             <ShieldCheck aria-hidden className="mt-0.5 size-3.5 shrink-0 text-status-success-fg" />

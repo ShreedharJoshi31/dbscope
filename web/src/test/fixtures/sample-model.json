@@ -1,0 +1,3230 @@
+{
+  "serverVersion": 170000,
+  "schemas": ["app", "billing", "shop"],
+  "relations": [
+    {
+      "schema": "app",
+      "name": "api_keys",
+      "kind": "table",
+      "comment": "Programmatic access tokens; only a hash of the secret is stored",
+      "rowEstimate": 7720,
+      "pages": 129,
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "team_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "created_by",
+          "type": "bigint",
+          "nullable": true
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "prefix",
+          "type": "character varying(12)",
+          "nullable": false
+        },
+        {
+          "name": "secret_hash",
+          "type": "bytea",
+          "nullable": false
+        },
+        {
+          "name": "scopes",
+          "type": "text[]",
+          "nullable": false,
+          "default": "'{}'::text[]"
+        },
+        {
+          "name": "last_used_at",
+          "type": "timestamp with time zone",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "revoked_at",
+          "type": "timestamp with time zone",
+          "nullable": true
+        }
+      ],
+      "primaryKey": ["id"],
+      "foreignKeys": [
+        {
+          "name": "api_keys_created_by_fkey",
+          "columns": ["created_by"],
+          "ref": {
+            "schema": "app",
+            "name": "users"
+          },
+          "refColumns": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action",
+          "validated": true
+        },
+        {
+          "name": "api_keys_team_id_fkey",
+          "columns": ["team_id"],
+          "ref": {
+            "schema": "app",
+            "name": "teams"
+          },
+          "refColumns": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "uniques": [["prefix"]],
+      "indexes": [
+        {
+          "name": "api_keys_active_idx",
+          "columns": ["team_id"],
+          "unique": false,
+          "primary": false,
+          "method": "btree",
+          "valid": true,
+          "include": ["prefix"],
+          "partial": "revoked_at IS NULL"
+        },
+        {
+          "name": "api_keys_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "api_keys_prefix_key",
+          "columns": ["prefix"],
+          "unique": true,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "app",
+      "name": "audit_log",
+      "kind": "partitioned_table",
+      "comment": "Append-only record of security-relevant actions, partitioned by month",
+      "rowEstimate": 3683328,
+      "pages": 0,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "actor_id",
+          "type": "bigint",
+          "nullable": true
+        },
+        {
+          "name": "team_id",
+          "type": "bigint",
+          "nullable": true
+        },
+        {
+          "name": "action",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "target_type",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "target_key",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "ip",
+          "type": "inet",
+          "nullable": true
+        },
+        {
+          "name": "details",
+          "type": "jsonb",
+          "nullable": false,
+          "default": "'{}'::jsonb"
+        }
+      ],
+      "primaryKey": ["id", "at"],
+      "foreignKeys": [
+        {
+          "name": "audit_log_actor_id_fkey",
+          "columns": ["actor_id"],
+          "ref": {
+            "schema": "app",
+            "name": "users"
+          },
+          "refColumns": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action",
+          "validated": true
+        },
+        {
+          "name": "audit_log_team_id_fkey",
+          "columns": ["team_id"],
+          "ref": {
+            "schema": "app",
+            "name": "teams"
+          },
+          "refColumns": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "audit_log_actor_at_idx",
+          "columns": ["actor_id", "at"],
+          "unique": false,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "audit_log_details_idx",
+          "columns": ["details"],
+          "unique": false,
+          "primary": false,
+          "method": "gin",
+          "valid": true
+        },
+        {
+          "name": "audit_log_pkey",
+          "columns": ["id", "at"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        }
+      ],
+      "partitionKey": "RANGE (at)",
+      "partitions": [
+        {
+          "schema": "app",
+          "name": "audit_log_2026_08"
+        },
+        {
+          "schema": "app",
+          "name": "audit_log_2026_09"
+        },
+        {
+          "schema": "app",
+          "name": "audit_log_2026_10"
+        }
+      ]
+    },
+    {
+      "schema": "app",
+      "name": "events",
+      "kind": "table",
+      "comment": "Product analytics events; user_id is not declared as a foreign key for ingest speed",
+      "rowEstimate": 1840000,
+      "pages": 30667,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": true
+        },
+        {
+          "name": "team_id",
+          "type": "bigint",
+          "nullable": true
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "properties",
+          "type": "jsonb",
+          "nullable": false,
+          "default": "'{}'::jsonb"
+        },
+        {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "nullable": false
+        }
+      ],
+      "primaryKey": ["id"],
+      "foreignKeys": [
+        {
+          "name": "events_team_id_fkey",
+          "columns": ["team_id"],
+          "ref": {
+            "schema": "app",
+            "name": "teams"
+          },
+          "refColumns": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action",
+          "validated": true
+        },
+        {
+          "name": "app.events(user_id)->app.users(id)",
+          "columns": ["user_id"],
+          "ref": {
+            "schema": "app",
+            "name": "users"
+          },
+          "refColumns": ["id"],
+          "validated": false,
+          "inferred": true,
+          "confidence": 0.8
+        }
+      ],
+      "indexes": [
+        {
+          "name": "events_occurred_at_idx",
+          "columns": ["occurred_at"],
+          "unique": false,
+          "primary": false,
+          "method": "brin",
+          "valid": true
+        },
+        {
+          "name": "events_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "events_user_id_idx",
+          "columns": ["user_id"],
+          "unique": false,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "app",
+      "name": "feature_flags",
+      "kind": "table",
+      "comment": "Rollout switches; never analyzed, so it has no row estimate",
+      "rowEstimate": null,
+      "pages": 0,
+      "columns": [
+        {
+          "name": "key",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "enabled",
+          "type": "boolean",
+          "nullable": false,
+          "default": "false"
+        },
+        {
+          "name": "rollout_percent",
+          "type": "integer",
+          "nullable": false,
+          "default": "0"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": ["key"],
+      "checks": [
+        {
+          "name": "feature_flags_rollout_percent_check",
+          "expr": "CHECK (rollout_percent >= 0 AND rollout_percent <= 100)",
+          "validated": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "feature_flags_pkey",
+          "columns": ["key"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "app",
+      "name": "invitations",
+      "kind": "table",
+      "rowEstimate": 2310,
+      "pages": 39,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "team_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "role_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "invited_by",
+          "type": "bigint",
+          "nullable": true
+        },
+        {
+          "name": "token",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "nullable": false
+        },
+        {
+          "name": "accepted_at",
+          "type": "timestamp with time zone",
+          "nullable": true
+        }
+      ],
+      "primaryKey": ["id"],
+      "foreignKeys": [
+        {
+          "name": "invitations_invited_by_fkey",
+          "columns": ["invited_by"],
+          "ref": {
+            "schema": "app",
+            "name": "users"
+          },
+          "refColumns": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action",
+          "validated": true
+        },
+        {
+          "name": "invitations_role_id_fkey",
+          "columns": ["role_id"],
+          "ref": {
+            "schema": "app",
+            "name": "roles"
+          },
+          "refColumns": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action",
+          "validated": true
+        },
+        {
+          "name": "invitations_team_id_fkey",
+          "columns": ["team_id"],
+          "ref": {
+            "schema": "app",
+            "name": "teams"
+          },
+          "refColumns": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "uniques": [["token"]],
+      "indexes": [
+        {
+          "name": "invitations_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "invitations_token_key",
+          "columns": ["token"],
+          "unique": true,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "app",
+      "name": "permissions",
+      "kind": "table",
+      "rowEstimate": 64,
+      "pages": 2,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "code",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "nullable": true
+        }
+      ],
+      "primaryKey": ["id"],
+      "uniques": [["code"]],
+      "indexes": [
+        {
+          "name": "permissions_code_key",
+          "columns": ["code"],
+          "unique": true,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "permissions_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "app",
+      "name": "role_permissions",
+      "kind": "table",
+      "rowEstimate": 410,
+      "pages": 7,
+      "columns": [
+        {
+          "name": "role_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "permission_id",
+          "type": "bigint",
+          "nullable": false
+        }
+      ],
+      "primaryKey": ["role_id", "permission_id"],
+      "foreignKeys": [
+        {
+          "name": "role_permissions_permission_id_fkey",
+          "columns": ["permission_id"],
+          "ref": {
+            "schema": "app",
+            "name": "permissions"
+          },
+          "refColumns": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action",
+          "validated": true
+        },
+        {
+          "name": "role_permissions_role_id_fkey",
+          "columns": ["role_id"],
+          "ref": {
+            "schema": "app",
+            "name": "roles"
+          },
+          "refColumns": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "role_permissions_pkey",
+          "columns": ["role_id", "permission_id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "app",
+      "name": "roles",
+      "kind": "table",
+      "rowEstimate": 12,
+      "pages": 1,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "builtin",
+          "type": "boolean",
+          "nullable": false,
+          "default": "false"
+        }
+      ],
+      "primaryKey": ["id"],
+      "uniques": [["name"]],
+      "indexes": [
+        {
+          "name": "roles_name_key",
+          "columns": ["name"],
+          "unique": true,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "roles_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "app",
+      "name": "sessions",
+      "kind": "table",
+      "rowEstimate": 48211,
+      "pages": 804,
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "user_agent",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "ip",
+          "type": "inet",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "nullable": false
+        }
+      ],
+      "primaryKey": ["id"],
+      "foreignKeys": [
+        {
+          "name": "sessions_user_id_fkey",
+          "columns": ["user_id"],
+          "ref": {
+            "schema": "app",
+            "name": "users"
+          },
+          "refColumns": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "sessions_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "sessions_user_id_idx",
+          "columns": ["user_id"],
+          "unique": false,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "app",
+      "name": "team_members",
+      "kind": "table",
+      "comment": "Which users belong to which teams, and with what role",
+      "rowEstimate": 15890,
+      "pages": 265,
+      "columns": [
+        {
+          "name": "team_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "role_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "joined_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": ["team_id", "user_id"],
+      "foreignKeys": [
+        {
+          "name": "team_members_role_id_fkey",
+          "columns": ["role_id"],
+          "ref": {
+            "schema": "app",
+            "name": "roles"
+          },
+          "refColumns": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action",
+          "validated": true
+        },
+        {
+          "name": "team_members_team_id_fkey",
+          "columns": ["team_id"],
+          "ref": {
+            "schema": "app",
+            "name": "teams"
+          },
+          "refColumns": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action",
+          "validated": true
+        },
+        {
+          "name": "team_members_user_id_fkey",
+          "columns": ["user_id"],
+          "ref": {
+            "schema": "app",
+            "name": "users"
+          },
+          "refColumns": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "team_members_pkey",
+          "columns": ["team_id", "user_id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "team_members_user_id_idx",
+          "columns": ["user_id"],
+          "unique": false,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "app",
+      "name": "teams",
+      "kind": "table",
+      "comment": "Tenant boundary: every billable workspace is a team",
+      "rowEstimate": 4210,
+      "pages": 71,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "slug",
+          "type": "citext",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "owner_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": ["id"],
+      "foreignKeys": [
+        {
+          "name": "teams_owner_id_fkey",
+          "columns": ["owner_id"],
+          "ref": {
+            "schema": "app",
+            "name": "users"
+          },
+          "refColumns": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "uniques": [["slug"]],
+      "indexes": [
+        {
+          "name": "teams_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "teams_slug_key",
+          "columns": ["slug"],
+          "unique": true,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "app",
+      "name": "user_profiles",
+      "kind": "table",
+      "comment": "One-to-one extension of users with optional profile data",
+      "rowEstimate": 98120,
+      "pages": 1636,
+      "columns": [
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "display_name",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "avatar_url",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "country_code",
+          "type": "character(2)",
+          "nullable": true
+        },
+        {
+          "name": "timezone",
+          "type": "text",
+          "nullable": false,
+          "default": "'UTC'::text"
+        }
+      ],
+      "primaryKey": ["user_id"],
+      "foreignKeys": [
+        {
+          "name": "user_profiles_country_code_fkey",
+          "columns": ["country_code"],
+          "ref": {
+            "schema": "geo",
+            "name": "countries"
+          },
+          "refColumns": ["code"],
+          "onDelete": "no action",
+          "onUpdate": "no action",
+          "validated": true
+        },
+        {
+          "name": "user_profiles_user_id_fkey",
+          "columns": ["user_id"],
+          "ref": {
+            "schema": "app",
+            "name": "users"
+          },
+          "refColumns": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "user_profiles_pkey",
+          "columns": ["user_id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "app",
+      "name": "users",
+      "kind": "table",
+      "comment": "Everyone who can sign in",
+      "rowEstimate": 120400,
+      "pages": 2007,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "email",
+          "type": "citext",
+          "nullable": false,
+          "comment": "Login address, unique case-insensitively"
+        },
+        {
+          "name": "password_hash",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "status",
+          "type": "app.user_status",
+          "nullable": false,
+          "default": "'invited'::app.user_status"
+        },
+        {
+          "name": "email_lower",
+          "type": "text",
+          "nullable": false,
+          "generated": "lower((email)::text)",
+          "generatedKind": "stored"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "last_seen_at",
+          "type": "timestamp with time zone",
+          "nullable": true
+        }
+      ],
+      "primaryKey": ["id"],
+      "uniques": [["email"]],
+      "indexes": [
+        {
+          "name": "users_email_key",
+          "columns": ["email"],
+          "unique": true,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "users_last_seen_at_idx",
+          "columns": ["last_seen_at"],
+          "unique": false,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "users_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "app",
+      "name": "webhook_deliveries",
+      "kind": "table",
+      "rowEstimate": 912004,
+      "pages": 15201,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "webhook_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "event",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "status_code",
+          "type": "smallint",
+          "nullable": true
+        },
+        {
+          "name": "attempt",
+          "type": "smallint",
+          "nullable": false,
+          "default": "1"
+        },
+        {
+          "name": "sent_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": ["id"],
+      "foreignKeys": [
+        {
+          "name": "webhook_deliveries_webhook_id_fkey",
+          "columns": ["webhook_id"],
+          "ref": {
+            "schema": "app",
+            "name": "webhooks"
+          },
+          "refColumns": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "webhook_deliveries_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "webhook_deliveries_webhook_id_sent_at_idx",
+          "columns": ["webhook_id", "sent_at"],
+          "unique": false,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "app",
+      "name": "webhooks",
+      "kind": "table",
+      "rowEstimate": 812,
+      "pages": 14,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "team_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "url",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "secret",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "events",
+          "type": "text[]",
+          "nullable": false
+        },
+        {
+          "name": "active",
+          "type": "boolean",
+          "nullable": false,
+          "default": "true"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": ["id"],
+      "foreignKeys": [
+        {
+          "name": "webhooks_team_id_fkey",
+          "columns": ["team_id"],
+          "ref": {
+            "schema": "app",
+            "name": "teams"
+          },
+          "refColumns": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "webhooks_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "billing",
+      "name": "accounts",
+      "kind": "table",
+      "comment": "Billing identity of a team",
+      "rowEstimate": 4180,
+      "pages": 70,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "team_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "legal_name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "tax_id",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "currency",
+          "type": "character(3)",
+          "nullable": false,
+          "default": "'USD'::bpchar"
+        },
+        {
+          "name": "country_code",
+          "type": "character(2)",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": ["id"],
+      "foreignKeys": [
+        {
+          "name": "accounts_country_code_fkey",
+          "columns": ["country_code"],
+          "ref": {
+            "schema": "geo",
+            "name": "countries"
+          },
+          "refColumns": ["code"],
+          "onDelete": "no action",
+          "onUpdate": "no action",
+          "validated": true
+        },
+        {
+          "name": "accounts_team_id_fkey",
+          "columns": ["team_id"],
+          "ref": {
+            "schema": "app",
+            "name": "teams"
+          },
+          "refColumns": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "uniques": [["team_id"]],
+      "indexes": [
+        {
+          "name": "accounts_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "accounts_team_id_key",
+          "columns": ["team_id"],
+          "unique": true,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "billing",
+      "name": "credit_notes",
+      "kind": "table",
+      "rowEstimate": 311,
+      "pages": 6,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "invoice_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "amount_cents",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "reason",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": ["id"],
+      "foreignKeys": [
+        {
+          "name": "credit_notes_invoice_id_fkey",
+          "columns": ["invoice_id"],
+          "ref": {
+            "schema": "billing",
+            "name": "invoices"
+          },
+          "refColumns": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "checks": [
+        {
+          "name": "credit_notes_amount_cents_check",
+          "expr": "CHECK (amount_cents > 0)",
+          "validated": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "credit_notes_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "billing",
+      "name": "invoice_lines",
+      "kind": "table",
+      "rowEstimate": 210440,
+      "pages": 3508,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "invoice_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "quantity",
+          "type": "integer",
+          "nullable": false,
+          "default": "1"
+        },
+        {
+          "name": "unit_amount_cents",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "amount_cents",
+          "type": "bigint",
+          "nullable": false,
+          "generated": "(quantity * unit_amount_cents)",
+          "generatedKind": "stored"
+        }
+      ],
+      "primaryKey": ["id"],
+      "foreignKeys": [
+        {
+          "name": "invoice_lines_invoice_id_fkey",
+          "columns": ["invoice_id"],
+          "ref": {
+            "schema": "billing",
+            "name": "invoices"
+          },
+          "refColumns": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "invoice_lines_invoice_id_idx",
+          "columns": ["invoice_id"],
+          "unique": false,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "invoice_lines_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "billing",
+      "name": "invoices",
+      "kind": "table",
+      "rowEstimate": 61220,
+      "pages": 1021,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "account_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "subscription_ref",
+          "type": "bigint",
+          "nullable": true
+        },
+        {
+          "name": "number",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false,
+          "default": "'draft'::text"
+        },
+        {
+          "name": "total_cents",
+          "type": "bigint",
+          "nullable": false,
+          "default": "0"
+        },
+        {
+          "name": "issued_at",
+          "type": "timestamp with time zone",
+          "nullable": true
+        },
+        {
+          "name": "due_at",
+          "type": "timestamp with time zone",
+          "nullable": true
+        },
+        {
+          "name": "paid_at",
+          "type": "timestamp with time zone",
+          "nullable": true
+        }
+      ],
+      "primaryKey": ["id"],
+      "foreignKeys": [
+        {
+          "name": "invoices_account_id_fkey",
+          "columns": ["account_id"],
+          "ref": {
+            "schema": "billing",
+            "name": "accounts"
+          },
+          "refColumns": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action",
+          "validated": true
+        },
+        {
+          "name": "invoices_subscription_ref_fkey",
+          "columns": ["subscription_ref"],
+          "ref": {
+            "schema": "billing",
+            "name": "subscriptions"
+          },
+          "refColumns": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "uniques": [["number"]],
+      "checks": [
+        {
+          "name": "invoices_status_check",
+          "expr": "CHECK (status = ANY (ARRAY['draft'::text, 'open'::text, 'paid'::text, 'void'::text]))",
+          "validated": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "invoices_account_id_idx",
+          "columns": ["account_id"],
+          "unique": false,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "invoices_number_key",
+          "columns": ["number"],
+          "unique": true,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "invoices_open_idx",
+          "columns": ["due_at"],
+          "unique": false,
+          "primary": false,
+          "method": "btree",
+          "valid": true,
+          "partial": "status = 'open'::text"
+        },
+        {
+          "name": "invoices_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "billing",
+      "name": "mrr_by_plan",
+      "kind": "materialized_view",
+      "comment": "Monthly recurring revenue per plan, refreshed nightly",
+      "rowEstimate": 18,
+      "pages": 1,
+      "columns": [
+        {
+          "name": "plan_id",
+          "type": "bigint",
+          "nullable": true
+        },
+        {
+          "name": "plan_name",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "active_subscriptions",
+          "type": "bigint",
+          "nullable": true
+        },
+        {
+          "name": "mrr_cents",
+          "type": "numeric",
+          "nullable": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "mrr_by_plan_plan_id_idx",
+          "columns": ["plan_id"],
+          "unique": true,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        }
+      ],
+      "dependsOn": [
+        {
+          "schema": "billing",
+          "name": "plans"
+        },
+        {
+          "schema": "billing",
+          "name": "prices"
+        },
+        {
+          "schema": "billing",
+          "name": "subscriptions"
+        }
+      ]
+    },
+    {
+      "schema": "billing",
+      "name": "payment_methods",
+      "kind": "table",
+      "rowEstimate": 5022,
+      "pages": 84,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "account_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "kind",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "last4",
+          "type": "character(4)",
+          "nullable": true
+        },
+        {
+          "name": "expires",
+          "type": "date",
+          "nullable": true
+        },
+        {
+          "name": "is_default",
+          "type": "boolean",
+          "nullable": false,
+          "default": "false"
+        }
+      ],
+      "primaryKey": ["id"],
+      "foreignKeys": [
+        {
+          "name": "payment_methods_account_id_fkey",
+          "columns": ["account_id"],
+          "ref": {
+            "schema": "billing",
+            "name": "accounts"
+          },
+          "refColumns": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "payment_methods_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "billing",
+      "name": "plans",
+      "kind": "table",
+      "comment": "Sellable plans; prices hang off them",
+      "rowEstimate": 9,
+      "pages": 1,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "code",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "active",
+          "type": "boolean",
+          "nullable": false,
+          "default": "true"
+        }
+      ],
+      "primaryKey": ["id"],
+      "uniques": [["code"]],
+      "indexes": [
+        {
+          "name": "plans_code_key",
+          "columns": ["code"],
+          "unique": true,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "plans_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "billing",
+      "name": "prices",
+      "kind": "table",
+      "rowEstimate": 27,
+      "pages": 1,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "plan_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "interval",
+          "type": "billing.billing_interval",
+          "nullable": false
+        },
+        {
+          "name": "currency",
+          "type": "character(3)",
+          "nullable": false
+        },
+        {
+          "name": "unit_amount_cents",
+          "type": "bigint",
+          "nullable": false
+        }
+      ],
+      "primaryKey": ["id"],
+      "foreignKeys": [
+        {
+          "name": "prices_plan_id_fkey",
+          "columns": ["plan_id"],
+          "ref": {
+            "schema": "billing",
+            "name": "plans"
+          },
+          "refColumns": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "uniques": [["plan_id", "interval", "currency"]],
+      "indexes": [
+        {
+          "name": "prices_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "prices_plan_id_interval_currency_key",
+          "columns": ["plan_id", "interval", "currency"],
+          "unique": true,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "billing",
+      "name": "subscription_items",
+      "kind": "table",
+      "rowEstimate": 7310,
+      "pages": 122,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "subscription_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "price_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "quantity",
+          "type": "integer",
+          "nullable": false,
+          "default": "1"
+        }
+      ],
+      "primaryKey": ["id"],
+      "foreignKeys": [
+        {
+          "name": "subscription_items_price_id_fkey",
+          "columns": ["price_id"],
+          "ref": {
+            "schema": "billing",
+            "name": "prices"
+          },
+          "refColumns": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action",
+          "validated": true
+        },
+        {
+          "name": "subscription_items_subscription_id_fkey",
+          "columns": ["subscription_id"],
+          "ref": {
+            "schema": "billing",
+            "name": "subscriptions"
+          },
+          "refColumns": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "subscription_items_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "billing",
+      "name": "subscriptions",
+      "kind": "table",
+      "rowEstimate": 4930,
+      "pages": 83,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "account_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "billing.subscription_status",
+          "nullable": false,
+          "default": "'trialing'::billing.subscription_status"
+        },
+        {
+          "name": "current_period_start",
+          "type": "timestamp with time zone",
+          "nullable": false
+        },
+        {
+          "name": "current_period_end",
+          "type": "timestamp with time zone",
+          "nullable": false
+        },
+        {
+          "name": "canceled_at",
+          "type": "timestamp with time zone",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": ["id"],
+      "foreignKeys": [
+        {
+          "name": "subscriptions_account_id_fkey",
+          "columns": ["account_id"],
+          "ref": {
+            "schema": "billing",
+            "name": "accounts"
+          },
+          "refColumns": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "subscriptions_account_id_idx",
+          "columns": ["account_id"],
+          "unique": false,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "subscriptions_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "billing",
+      "name": "usage_records",
+      "kind": "table",
+      "comment": "Metered usage, one row per item per hour",
+      "rowEstimate": 2401113,
+      "pages": 40019,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "subscription_item_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "quantity",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "recorded_at",
+          "type": "timestamp with time zone",
+          "nullable": false
+        }
+      ],
+      "primaryKey": ["id"],
+      "foreignKeys": [
+        {
+          "name": "usage_records_subscription_item_id_fkey",
+          "columns": ["subscription_item_id"],
+          "ref": {
+            "schema": "billing",
+            "name": "subscription_items"
+          },
+          "refColumns": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "usage_records_item_recorded_idx",
+          "columns": ["subscription_item_id", "recorded_at"],
+          "unique": false,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "usage_records_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "shop",
+      "name": "addresses",
+      "kind": "table",
+      "rowEstimate": 301233,
+      "pages": 5021,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "customer_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "line1",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "line2",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "city",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "postal_code",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "country_code",
+          "type": "character(2)",
+          "nullable": false
+        }
+      ],
+      "primaryKey": ["id"],
+      "foreignKeys": [
+        {
+          "name": "addresses_country_code_fkey",
+          "columns": ["country_code"],
+          "ref": {
+            "schema": "geo",
+            "name": "countries"
+          },
+          "refColumns": ["code"],
+          "onDelete": "no action",
+          "onUpdate": "no action",
+          "validated": true
+        },
+        {
+          "name": "addresses_customer_id_fkey",
+          "columns": ["customer_id"],
+          "ref": {
+            "schema": "shop",
+            "name": "customers"
+          },
+          "refColumns": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "addresses_customer_id_idx",
+          "columns": ["customer_id"],
+          "unique": false,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "addresses_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "shop",
+      "name": "categories",
+      "kind": "table",
+      "comment": "Product taxonomy; parent_id makes it a tree",
+      "rowEstimate": 340,
+      "pages": 6,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "parent_id",
+          "type": "bigint",
+          "nullable": true
+        },
+        {
+          "name": "slug",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "position",
+          "type": "integer",
+          "nullable": false,
+          "default": "0"
+        }
+      ],
+      "primaryKey": ["id"],
+      "foreignKeys": [
+        {
+          "name": "categories_parent_id_fkey",
+          "columns": ["parent_id"],
+          "ref": {
+            "schema": "shop",
+            "name": "categories"
+          },
+          "refColumns": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "uniques": [["slug"]],
+      "indexes": [
+        {
+          "name": "categories_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "categories_slug_key",
+          "columns": ["slug"],
+          "unique": true,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "shop",
+      "name": "customers",
+      "kind": "table",
+      "rowEstimate": 250310,
+      "pages": 4172,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": true,
+          "comment": "Set when the customer has a dbscope login"
+        },
+        {
+          "name": "email",
+          "type": "citext",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": ["id"],
+      "foreignKeys": [
+        {
+          "name": "customers_user_id_fkey",
+          "columns": ["user_id"],
+          "ref": {
+            "schema": "app",
+            "name": "users"
+          },
+          "refColumns": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "uniques": [["email"]],
+      "indexes": [
+        {
+          "name": "customers_email_key",
+          "columns": ["email"],
+          "unique": true,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "customers_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "shop",
+      "name": "inventory",
+      "kind": "table",
+      "comment": "Stock per variant per warehouse",
+      "rowEstimate": 88400,
+      "pages": 1474,
+      "columns": [
+        {
+          "name": "variant_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "warehouse_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "on_hand",
+          "type": "integer",
+          "nullable": false,
+          "default": "0"
+        },
+        {
+          "name": "reserved",
+          "type": "integer",
+          "nullable": false,
+          "default": "0"
+        },
+        {
+          "name": "available",
+          "type": "integer",
+          "nullable": false,
+          "generated": "(on_hand - reserved)",
+          "generatedKind": "stored"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": ["variant_id", "warehouse_id"],
+      "foreignKeys": [
+        {
+          "name": "inventory_variant_id_fkey",
+          "columns": ["variant_id"],
+          "ref": {
+            "schema": "shop",
+            "name": "variants"
+          },
+          "refColumns": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action",
+          "validated": true
+        },
+        {
+          "name": "inventory_warehouse_id_fkey",
+          "columns": ["warehouse_id"],
+          "ref": {
+            "schema": "shop",
+            "name": "warehouses"
+          },
+          "refColumns": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "checks": [
+        {
+          "name": "inventory_reserved_check",
+          "expr": "CHECK (reserved <= on_hand)",
+          "validated": false
+        }
+      ],
+      "indexes": [
+        {
+          "name": "inventory_pkey",
+          "columns": ["variant_id", "warehouse_id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "shop",
+      "name": "order_items",
+      "kind": "table",
+      "comment": "Lines of an order; (order_id, line_no) is the natural key",
+      "rowEstimate": 4120332,
+      "pages": 68673,
+      "columns": [
+        {
+          "name": "order_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "line_no",
+          "type": "smallint",
+          "nullable": false
+        },
+        {
+          "name": "variant_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "quantity",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "unit_price_cents",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "total_cents",
+          "type": "bigint",
+          "nullable": false,
+          "generated": "(quantity * unit_price_cents)",
+          "generatedKind": "stored"
+        }
+      ],
+      "primaryKey": ["order_id", "line_no"],
+      "foreignKeys": [
+        {
+          "name": "order_items_order_id_fkey",
+          "columns": ["order_id"],
+          "ref": {
+            "schema": "shop",
+            "name": "orders"
+          },
+          "refColumns": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action",
+          "validated": true
+        },
+        {
+          "name": "order_items_variant_id_fkey",
+          "columns": ["variant_id"],
+          "ref": {
+            "schema": "shop",
+            "name": "variants"
+          },
+          "refColumns": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "checks": [
+        {
+          "name": "order_items_quantity_check",
+          "expr": "CHECK (quantity > 0)",
+          "validated": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "order_items_pkey",
+          "columns": ["order_id", "line_no"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "order_items_variant_id_idx",
+          "columns": ["variant_id"],
+          "unique": false,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "shop",
+      "name": "order_summaries",
+      "kind": "view",
+      "comment": "One row per order with its customer and line totals",
+      "rowEstimate": null,
+      "pages": 0,
+      "columns": [
+        {
+          "name": "order_id",
+          "type": "bigint",
+          "nullable": true
+        },
+        {
+          "name": "customer_name",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "status",
+          "type": "shop.order_status",
+          "nullable": true
+        },
+        {
+          "name": "line_count",
+          "type": "bigint",
+          "nullable": true
+        },
+        {
+          "name": "total_cents",
+          "type": "numeric",
+          "nullable": true
+        },
+        {
+          "name": "placed_at",
+          "type": "timestamp with time zone",
+          "nullable": true
+        }
+      ],
+      "dependsOn": [
+        {
+          "schema": "shop",
+          "name": "customers"
+        },
+        {
+          "schema": "shop",
+          "name": "order_items"
+        },
+        {
+          "schema": "shop",
+          "name": "orders"
+        }
+      ]
+    },
+    {
+      "schema": "shop",
+      "name": "orders",
+      "kind": "table",
+      "rowEstimate": 1210554,
+      "pages": 20176,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "customer_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "shop.order_status",
+          "nullable": false,
+          "default": "'pending'::shop.order_status"
+        },
+        {
+          "name": "billing_address_id",
+          "type": "bigint",
+          "nullable": true
+        },
+        {
+          "name": "shipping_address_id",
+          "type": "bigint",
+          "nullable": true
+        },
+        {
+          "name": "currency",
+          "type": "character(3)",
+          "nullable": false
+        },
+        {
+          "name": "placed_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": ["id"],
+      "foreignKeys": [
+        {
+          "name": "orders_billing_address_id_fkey",
+          "columns": ["billing_address_id"],
+          "ref": {
+            "schema": "shop",
+            "name": "addresses"
+          },
+          "refColumns": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action",
+          "validated": true
+        },
+        {
+          "name": "orders_customer_id_fkey",
+          "columns": ["customer_id"],
+          "ref": {
+            "schema": "shop",
+            "name": "customers"
+          },
+          "refColumns": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action",
+          "validated": true
+        },
+        {
+          "name": "orders_shipping_address_id_fkey",
+          "columns": ["shipping_address_id"],
+          "ref": {
+            "schema": "shop",
+            "name": "addresses"
+          },
+          "refColumns": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "orders_customer_id_placed_at_idx",
+          "columns": ["customer_id", "placed_at"],
+          "unique": false,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "orders_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "shop",
+      "name": "payments",
+      "kind": "table",
+      "rowEstimate": 1190220,
+      "pages": 19837,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "order_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "provider",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "provider_ref",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "amount_cents",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "captured_at",
+          "type": "timestamp with time zone",
+          "nullable": true
+        }
+      ],
+      "primaryKey": ["id"],
+      "foreignKeys": [
+        {
+          "name": "payments_order_id_fkey",
+          "columns": ["order_id"],
+          "ref": {
+            "schema": "shop",
+            "name": "orders"
+          },
+          "refColumns": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "uniques": [["provider", "provider_ref"]],
+      "indexes": [
+        {
+          "name": "payments_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "payments_provider_provider_ref_key",
+          "columns": ["provider", "provider_ref"],
+          "unique": true,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "shop",
+      "name": "products",
+      "kind": "table",
+      "rowEstimate": 18220,
+      "pages": 304,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "category_id",
+          "type": "bigint",
+          "nullable": true
+        },
+        {
+          "name": "sku",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "shop.product_status",
+          "nullable": false,
+          "default": "'draft'::shop.product_status"
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": ["id"],
+      "foreignKeys": [
+        {
+          "name": "products_category_id_fkey",
+          "columns": ["category_id"],
+          "ref": {
+            "schema": "shop",
+            "name": "categories"
+          },
+          "refColumns": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "uniques": [["sku"]],
+      "indexes": [
+        {
+          "name": "products_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "products_sku_key",
+          "columns": ["sku"],
+          "unique": true,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "shop",
+      "name": "refunds",
+      "kind": "table",
+      "comment": "payment_id is not declared as a foreign key (legacy import)",
+      "rowEstimate": 20410,
+      "pages": 341,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "order_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "payment_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "amount_cents",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "reason",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": ["id"],
+      "foreignKeys": [
+        {
+          "name": "refunds_order_id_fkey",
+          "columns": ["order_id"],
+          "ref": {
+            "schema": "shop",
+            "name": "orders"
+          },
+          "refColumns": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action",
+          "validated": true
+        },
+        {
+          "name": "shop.refunds(payment_id)->shop.payments(id)",
+          "columns": ["payment_id"],
+          "ref": {
+            "schema": "shop",
+            "name": "payments"
+          },
+          "refColumns": ["id"],
+          "validated": false,
+          "inferred": true,
+          "confidence": 0.6
+        }
+      ],
+      "indexes": [
+        {
+          "name": "refunds_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "shop",
+      "name": "reviews",
+      "kind": "table",
+      "rowEstimate": 64110,
+      "pages": 1069,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "product_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "customer_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "rating",
+          "type": "smallint",
+          "nullable": false
+        },
+        {
+          "name": "body",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": ["id"],
+      "foreignKeys": [
+        {
+          "name": "reviews_customer_id_fkey",
+          "columns": ["customer_id"],
+          "ref": {
+            "schema": "shop",
+            "name": "customers"
+          },
+          "refColumns": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action",
+          "validated": true
+        },
+        {
+          "name": "reviews_product_id_fkey",
+          "columns": ["product_id"],
+          "ref": {
+            "schema": "shop",
+            "name": "products"
+          },
+          "refColumns": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "uniques": [["product_id", "customer_id"]],
+      "checks": [
+        {
+          "name": "reviews_rating_check",
+          "expr": "CHECK (rating >= 1 AND rating <= 5)",
+          "validated": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "reviews_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "reviews_product_id_customer_id_key",
+          "columns": ["product_id", "customer_id"],
+          "unique": true,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "shop",
+      "name": "shipment_items",
+      "kind": "table",
+      "comment": "Composite foreign key back to the order line it ships",
+      "rowEstimate": 3920110,
+      "pages": 65336,
+      "columns": [
+        {
+          "name": "shipment_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "order_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "line_no",
+          "type": "smallint",
+          "nullable": false
+        },
+        {
+          "name": "quantity",
+          "type": "integer",
+          "nullable": false
+        }
+      ],
+      "primaryKey": ["shipment_id", "order_id", "line_no"],
+      "foreignKeys": [
+        {
+          "name": "shipment_items_order_id_line_no_fkey",
+          "columns": ["order_id", "line_no"],
+          "ref": {
+            "schema": "shop",
+            "name": "order_items"
+          },
+          "refColumns": ["order_id", "line_no"],
+          "onDelete": "cascade",
+          "onUpdate": "no action",
+          "validated": true
+        },
+        {
+          "name": "shipment_items_shipment_id_fkey",
+          "columns": ["shipment_id"],
+          "ref": {
+            "schema": "shop",
+            "name": "shipments"
+          },
+          "refColumns": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "shipment_items_pkey",
+          "columns": ["shipment_id", "order_id", "line_no"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "shop",
+      "name": "shipments",
+      "kind": "table",
+      "rowEstimate": 1100300,
+      "pages": 18339,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "order_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "warehouse_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "carrier",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "tracking_number",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "shipped_at",
+          "type": "timestamp with time zone",
+          "nullable": true
+        }
+      ],
+      "primaryKey": ["id"],
+      "foreignKeys": [
+        {
+          "name": "shipments_order_id_fkey",
+          "columns": ["order_id"],
+          "ref": {
+            "schema": "shop",
+            "name": "orders"
+          },
+          "refColumns": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action",
+          "validated": true
+        },
+        {
+          "name": "shipments_warehouse_id_fkey",
+          "columns": ["warehouse_id"],
+          "ref": {
+            "schema": "shop",
+            "name": "warehouses"
+          },
+          "refColumns": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "shipments_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "shop",
+      "name": "variants",
+      "kind": "table",
+      "rowEstimate": 54200,
+      "pages": 904,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "product_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "sku",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "option_values",
+          "type": "jsonb",
+          "nullable": false,
+          "default": "'{}'::jsonb"
+        },
+        {
+          "name": "price_cents",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "weight_grams",
+          "type": "integer",
+          "nullable": true
+        }
+      ],
+      "primaryKey": ["id"],
+      "foreignKeys": [
+        {
+          "name": "variants_product_id_fkey",
+          "columns": ["product_id"],
+          "ref": {
+            "schema": "shop",
+            "name": "products"
+          },
+          "refColumns": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "uniques": [["sku"]],
+      "indexes": [
+        {
+          "name": "variants_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "variants_sku_key",
+          "columns": ["sku"],
+          "unique": true,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "shop",
+      "name": "warehouses",
+      "kind": "table",
+      "rowEstimate": 14,
+      "pages": 1,
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": "always"
+        },
+        {
+          "name": "code",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "country_code",
+          "type": "character(2)",
+          "nullable": false
+        }
+      ],
+      "primaryKey": ["id"],
+      "foreignKeys": [
+        {
+          "name": "warehouses_country_code_fkey",
+          "columns": ["country_code"],
+          "ref": {
+            "schema": "geo",
+            "name": "countries"
+          },
+          "refColumns": ["code"],
+          "onDelete": "no action",
+          "onUpdate": "no action",
+          "validated": true
+        }
+      ],
+      "uniques": [["code"]],
+      "indexes": [
+        {
+          "name": "warehouses_code_key",
+          "columns": ["code"],
+          "unique": true,
+          "primary": false,
+          "method": "btree",
+          "valid": true
+        },
+        {
+          "name": "warehouses_pkey",
+          "columns": ["id"],
+          "unique": true,
+          "primary": true,
+          "method": "btree",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "schema": "geo",
+      "name": "countries",
+      "kind": "table",
+      "rowEstimate": null,
+      "pages": 0,
+      "columns": [],
+      "primaryKey": ["code"],
+      "stub": true
+    }
+  ],
+  "enums": [
+    {
+      "schema": "app",
+      "name": "user_status",
+      "values": ["invited", "active", "suspended", "deleted"]
+    },
+    {
+      "schema": "billing",
+      "name": "billing_interval",
+      "values": ["month", "year"]
+    },
+    {
+      "schema": "billing",
+      "name": "subscription_status",
+      "values": ["trialing", "active", "past_due", "canceled", "unpaid"]
+    },
+    {
+      "schema": "shop",
+      "name": "order_status",
+      "values": ["pending", "paid", "fulfilled", "cancelled", "refunded"]
+    },
+    {
+      "schema": "shop",
+      "name": "product_status",
+      "values": ["draft", "active", "archived"]
+    }
+  ],
+  "introspectedAt": "2026-10-26T00:00:00Z",
+  "durationMs": 214
+}

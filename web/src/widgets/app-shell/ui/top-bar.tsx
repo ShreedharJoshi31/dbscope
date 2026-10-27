@@ -2,6 +2,7 @@ import { CircleHelp, ScanSearch } from "lucide-react";
 import type { ReactNode } from "react";
 import { useConnectionDialog } from "@/features/add-connection";
 import { useDeleteConnection } from "@/features/delete-connection";
+import { SampleBadge } from "@/features/load-schema";
 import { openShortcutSheet } from "@/features/show-shortcuts";
 import { ConnectionSwitcher } from "@/features/switch-connection";
 import { ThemeToggle } from "@/features/toggle-theme";
@@ -23,6 +24,7 @@ export function TopBar({ search }: { search: ReactNode }) {
         </span>
         <span aria-hidden className="h-4 w-px bg-border-default" />
         <ConnectionSwitcher onNew={openCreate} onEdit={openEdit} onDelete={openDelete} />
+        <SampleBadge />
       </div>
       <div className="min-w-0">{search}</div>
       <div className="flex items-center justify-end gap-1">

@@ -21,9 +21,24 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
+      testIgnore: /perf\.spec\.ts/,
       // No device preset: its Windows user agent would make the app expect Ctrl while
       // ControlOrMeta sends Cmd on macOS hosts. The real platform keeps the two in step.
       use: { browserName: "chromium", viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 },
+    },
+    {
+      // Frame timing: vsync and the 60 fps cap are off, so requestAnimationFrame intervals measure
+      // the real cost of a frame instead of snapping to 16.7 ms. Runs alone to avoid CPU contention.
+      name: "perf",
+      testMatch: /perf\.spec\.ts/,
+      dependencies: ["chromium"],
+      fullyParallel: false,
+      use: {
+        browserName: "chromium",
+        viewport: { width: 1440, height: 900 },
+        deviceScaleFactor: 1,
+        launchOptions: { args: ["--disable-gpu-vsync", "--disable-frame-rate-limit"] },
+      },
     },
   ],
   webServer: {

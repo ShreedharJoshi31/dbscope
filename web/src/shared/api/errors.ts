@@ -6,6 +6,8 @@ export type ServerErrorCode =
   | "unauthorized"
   | "forbidden"
   | "secrets_locked"
+  | "upstream"
+  | "timeout"
   | "internal";
 export type ApiErrorCode = ServerErrorCode | "network" | "malformed_response";
 
@@ -16,6 +18,8 @@ const SERVER_CODES: readonly ServerErrorCode[] = [
   "unauthorized",
   "forbidden",
   "secrets_locked",
+  "upstream",
+  "timeout",
   "internal",
 ];
 
@@ -48,6 +52,8 @@ const FALLBACK_MESSAGES: Record<ServerErrorCode, string> = {
   unauthorized: "This session is not authorized.",
   forbidden: "The dbscope agent refused this request.",
   secrets_locked: "The secrets vault is locked.",
+  upstream: "The database could not be reached or refused the request.",
+  timeout: "The database did not answer within the statement timeout.",
   internal: "The dbscope agent hit an internal error.",
 };
 

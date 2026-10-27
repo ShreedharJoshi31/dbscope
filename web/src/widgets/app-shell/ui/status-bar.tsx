@@ -1,6 +1,8 @@
-import { LoaderCircle, ShieldAlert } from "lucide-react";
+import { FlaskConical, LoaderCircle, ShieldAlert } from "lucide-react";
 import { EnvBadge, ERROR_KIND_COPY } from "@/entities/connection";
+import { useWorkbenchSchema } from "@/features/load-schema";
 import { type Profile, useHealth, useSavedProfileTest } from "@/shared/api";
+import { formatAge, useNow } from "@/shared/lib/relative-time";
 import { StatusIcon } from "@/shared/ui/status-icon";
 
 function ConnectionState({ profile }: { profile: Profile }) {
@@ -44,6 +46,26 @@ function ConnectionState({ profile }: { profile: Profile }) {
   );
 }
 
+function SnapshotAge() {
+  const { source, query } = useWorkbenchSchema();
+  const now = useNow();
+  let text = "No schema snapshot yet";
+  if (query.isFetching && !query.data) text = "Reading schema…";
+  else if (query.isError) text = "Schema not read";
+  else if (query.data) text = `schema snapshot ${formatAge(query.data.introspectedAt, now)}`;
+  return (
+    <span data-testid="snapshot-age" className="ml-auto flex items-center gap-1">
+      {source === "sample" && (
+        <>
+          <FlaskConical aria-hidden className="size-3" />
+          Sample schema ·
+        </>
+      )}
+      {text}
+    </span>
+  );
+}
+
 export function StatusBar({ profile }: { profile: Profile | undefined }) {
   const { data: health } = useHealth();
 
@@ -65,7 +87,7 @@ export function StatusBar({ profile }: { profile: Profile | undefined }) {
           <ConnectionState profile={profile} />
         </>
       )}
-      <span className="ml-auto">No schema snapshot yet</span>
+      <SnapshotAge />
       {health && <span className="font-mono">dbscope {health.version}</span>}
     </footer>
   );

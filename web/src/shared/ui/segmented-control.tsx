@@ -18,6 +18,8 @@ interface SegmentedControlProps<T extends string> {
   "aria-labelledby"?: string;
   "aria-describedby"?: string;
   firstRadioRef?: Ref<HTMLButtonElement>;
+  /** "sm" fits a 28px toolbar. */
+  size?: "default" | "sm";
   className?: string;
 }
 
@@ -28,6 +30,7 @@ export function SegmentedControl<T extends string>({
   onValueChange,
   invalid,
   firstRadioRef,
+  size = "default",
   className,
   ...groupProps
 }: SegmentedControlProps<T>) {
@@ -38,7 +41,8 @@ export function SegmentedControl<T extends string>({
       onValueChange={(next) => onValueChange(next as T)}
       aria-invalid={invalid || undefined}
       className={cn(
-        "inline-flex h-8 w-fit items-stretch rounded-md border border-border-control bg-surface-canvas p-px",
+        "inline-flex w-fit items-stretch rounded-md border border-border-control bg-surface-canvas p-px",
+        size === "sm" ? "h-7" : "h-8",
         invalid && "border-status-danger-fg",
         className,
       )}
@@ -49,7 +53,8 @@ export function SegmentedControl<T extends string>({
           value={option.value}
           ref={index === 0 ? firstRadioRef : undefined}
           className={cn(
-            "inline-flex items-center gap-1 rounded-sm px-3 text-sm text-text-muted outline-none transition-colors",
+            "inline-flex items-center gap-1 rounded-sm text-text-muted outline-none transition-colors",
+            size === "sm" ? "px-2 text-xs" : "px-3 text-sm",
             "hover:bg-surface-hover hover:text-text-primary",
             "focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-border-focus",
             "data-checked:bg-surface-selected data-checked:font-medium data-checked:text-text-primary",

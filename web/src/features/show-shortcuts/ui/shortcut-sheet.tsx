@@ -1,9 +1,7 @@
 import { useShortcutSheet } from "@/features/show-shortcuts/model/sheet-store";
-import { SHORTCUTS, type ShortcutDefinition } from "@/shared/config/shortcuts";
+import { SHORTCUT_GROUPS, SHORTCUTS } from "@/shared/config/shortcuts";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/shared/ui/dialog";
 import { ShortcutKeys } from "@/shared/ui/shortcut-keys";
-
-const GROUPS: ShortcutDefinition["group"][] = ["General", "Panels", "Navigation"];
 
 export function ShortcutSheet() {
   const { open, setOpen } = useShortcutSheet();
@@ -11,7 +9,7 @@ export function ShortcutSheet() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Keyboard shortcuts</DialogTitle>
           <DialogDescription>
@@ -19,7 +17,7 @@ export function ShortcutSheet() {
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4">
-          {GROUPS.map((group) => (
+          {SHORTCUT_GROUPS.map((group) => (
             <section key={group} aria-labelledby={`shortcuts-${group}`}>
               <h3
                 id={`shortcuts-${group}`}
@@ -37,7 +35,7 @@ export function ShortcutSheet() {
                     >
                       <dt className="text-sm">{shortcut.label}</dt>
                       <dd>
-                        <ShortcutKeys combo={shortcut.combo} />
+                        <ShortcutKeys combo={shortcut.combo} keys={shortcut.keys} />
                       </dd>
                     </div>
                   ))}

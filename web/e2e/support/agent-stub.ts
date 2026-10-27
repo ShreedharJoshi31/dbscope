@@ -1,4 +1,5 @@
-import type { Page, Route } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { handleSchemaRoute, json, type SchemaStubOptions, type SchemaStubState } from "./schema-stub";
 
 /** Mirrors the Phase 0 contract in docs/API.md, kept local so e2e does not import app code. */
 export type Env = "local" | "staging" | "prod-replica";
@@ -46,7 +47,7 @@ export function stubProfile(overrides: Partial<StubProfile> = {}): StubProfile {
   };
 }
 
-interface StubOptions {
+interface StubOptions extends SchemaStubOptions {
   profiles?: StubProfile[];
 }
 
@@ -62,18 +63,17 @@ const HEALTHY_TEST = {
   warnings: [],
 };
 
-function json(route: Route, status: number, body?: unknown) {
-  return route.fulfill({
-    status,
-    contentType: "application/json",
-    body: body === undefined ? "" : JSON.stringify(body),
-  });
-}
-
 /** An in-memory dbscope agent behind page.route, so e2e runs without the Go backend. */
 export async function stubAgent(page: Page, options: StubOptions = {}) {
   const profiles = [...(options.profiles ?? [])];
   let nextId = 1;
+  const schema: SchemaStubState = {
+    decisions: new Map(),
+    decisionRequests: [],
+    layouts: new Map(),
+    layoutPuts: [],
+    schemaRequests: 0,
+  };
 
   await page.route("**/api/**", async (route) => {
     const request = route.request();
@@ -83,6 +83,8 @@ export async function stubAgent(page: Page, options: StubOptions = {}) {
     const { pathname } = new URL(request.url());
     const method = request.method();
     const byId = pathname.match(/^\/api\/profiles\/([^/]+)(\/test)?$/);
+
+    if (await handleSchemaRoute(route, pathname, method, options, schema)) return;
 
     if (pathname === "/api/health") return json(route, 200, { version: "dev", os: "darwin", arch: "arm64" });
     if (pathname === "/api/secrets/status") return json(route, 200, { backend: "keyring", locked: false });
@@ -117,6 +119,19 @@ export async function stubAgent(page: Page, options: StubOptions = {}) {
       return json(route, 201, created);
     }
     if (byId?.[2] && method === "POST") return json(route, 200, HEALTHY_TEST);
+    if (byId && !byId[2] && method === "PUT") {
+      const { password, ...input } = request.postDataJSON() as Omit<StubProfile, "id"> & { password?: string };
+      const index = profiles.findIndex((p) => p.id === byId[1]);
+      const current = profiles[index];
+      if (!current) return json(route, 404, { error: { code: "not_found", message: "no such profile" } });
+      const updated = {
+        ...current,
+        ...input,
+        hasPassword: password === undefined ? current.hasPassword : Boolean(password),
+      };
+      profiles[index] = updated;
+      return json(route, 200, updated);
+    }
     if (byId && method === "DELETE") {
       const index = profiles.findIndex((p) => p.id === byId[1]);
       if (index >= 0) profiles.splice(index, 1);
@@ -125,7 +140,7 @@ export async function stubAgent(page: Page, options: StubOptions = {}) {
     return json(route, 404, { error: { code: "not_found", message: `no stub for ${method} ${pathname}` } });
   });
 
-  return { profiles };
+  return { profiles, schema };
 }
 
 /** Opens the UI the way `dbscope ui` does: with the session token in the fragment. */
