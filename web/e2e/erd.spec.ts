@@ -1,6 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 import { openApp, stubAgent, stubProfile } from "./support/agent-stub";
 import { centreOn, fitAll, layoutMeasures, nodePosition, tableNode, viewport, waitForCanvas } from "./support/canvas";
+import { syntheticModel } from "./support/schema-stub";
 
 const TABLES = 42;
 const EDGES = 56; // 55 foreign keys; the composite one draws two column pairs
@@ -67,6 +68,58 @@ test.describe("ERD canvas", () => {
 
     await page.getByRole("toolbar", { name: "Canvas tools" }).getByRole("button", { name: "Hide minimap" }).click();
     await expect(minimap).toHaveCount(0);
+  });
+
+  test("a very large schema paints its overview on a canvas, and clicking a table there selects it", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const model = syntheticModel(2500, 3000);
+    await stubAgent(page, { profiles: [stubProfile()], schema: model });
+    await openApp(page);
+    await waitForCanvas(page, 90_000);
+    await expect(page.getByTestId("erd-overview-canvas")).toHaveCount(1);
+    await expect(page.locator('[data-testid="table-node"]')).toHaveCount(0);
+
+    // A table well inside the pane, wherever the layout put it.
+    const ids = model.relations.map((r) => `${r.schema}.${r.name}`);
+    const target = await page.evaluate((ids) => {
+      const probe = window.__dbscopeCanvas;
+      const v = probe?.getViewport();
+      const pane = document.querySelector('[data-testid="erd-canvas"]')?.getBoundingClientRect();
+      if (!probe || !v || !pane) return null;
+      for (const id of ids) {
+        const p = probe.positionOf(id);
+        if (!p) continue;
+        // The middle of the card: at overview zoom a screen pixel is 4 to 20 flow units.
+        const x = pane.left + v.x + (p.x + 140) * v.zoom;
+        const y = pane.top + v.y + (p.y + 30) * v.zoom;
+        if (x > pane.left + 60 && x < pane.right - 260 && y > pane.top + 60 && y < pane.bottom - 200)
+          return { id, x, y };
+      }
+      return null;
+    }, ids);
+    if (!target) throw new Error("no table inside the pane");
+    const { id } = target;
+    const tools = page.getByRole("toolbar", { name: "Canvas tools" });
+    await expect(tools.getByRole("button", { name: "Focus on the selected table" })).toBeDisabled();
+    await page.mouse.click(target.x, target.y);
+    await expect(tools.getByRole("button", { name: "Focus on the selected table" })).toBeEnabled();
+
+    // Double-clicking a painted table opens its details, as on a card.
+    await page.mouse.dblclick(target.x, target.y);
+    await expect(page.getByTestId("table-details")).toBeVisible();
+    await page.getByRole("button", { name: "Close details" }).click();
+
+    // Fit view still sees the hidden tables: from somewhere else it returns to the first fit.
+    const fitted = await viewport(page);
+    await page.evaluate(() => window.__dbscopeCanvas?.setViewport({ x: 5000, y: 5000, zoom: 0.07 }));
+    await fitAll(page);
+    await expect.poll(async () => Math.round((await viewport(page)).x)).toBe(Math.round(fitted.x));
+    // Zooming in brings the cards back, selection kept.
+    await centreOn(page, id, 0.6);
+    await expect(tableNode(page, id)).toHaveAttribute("data-mark", "selected");
+    await expect(page.getByTestId("erd-overview-canvas")).toHaveCount(0);
   });
 
   test("search finds a column, Enter pans to it and Esc clears", async ({ page }) => {

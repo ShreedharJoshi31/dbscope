@@ -187,4 +187,30 @@ test.describe("ERD performance", () => {
     expect(readyMs).toBeGreaterThan(0);
     expect(readyMs).toBeLessThan(3000);
   });
+
+  test("5,000 tables: overview painted on a canvas, initial render and pan/zoom frame times", async ({
+    page,
+  }, info) => {
+    test.setTimeout(240_000);
+    await stubAgent(page, { profiles: [stubProfile()], schema: syntheticModel(5000, 10000) });
+    await openApp(page);
+    await waitForCanvas(page, 120_000);
+    const readyMs = await canvasReadyMs(page);
+    // No card per table at overview zoom: one canvas paints them all.
+    await expect(page.getByTestId("erd-overview-canvas")).toHaveCount(1);
+    await expect(page.locator('[data-testid="table-node"]')).toHaveCount(0);
+    const fitZoom = (await page.evaluate(() => window.__dbscopeCanvas?.getViewport().zoom)) ?? 0.05;
+    const stats = await scriptedPanZoom(page, 300, { zoom: { base: fitZoom * 1.5, swing: fitZoom * 0.3 }, pan: 300 });
+    const result = { tables: 5000, fks: 10000, initialRenderMs: Math.round(readyMs), overview: stats };
+    console.log(`PERF ${JSON.stringify(result)}`);
+    info.annotations.push({ type: "perf-5000", description: JSON.stringify(result) });
+    expect(readyMs).toBeLessThan(4000);
+    // The whole run stayed in the painted overview: no cards came back mid-measurement.
+    expect(stats.avgNodes).toBe(0);
+    expect(stats.details).toEqual([]);
+    // Before the canvas overview a zoom step cost 160+ ms at the 95th percentile; the median is the
+    // steadier guard (the tail varies by tens of ms between runs).
+    expect(stats.medianMs).toBeLessThan(33);
+    expect(stats.p95Ms).toBeLessThan(120);
+  });
 });

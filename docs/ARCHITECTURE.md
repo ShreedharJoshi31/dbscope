@@ -93,32 +93,41 @@ web/src/
 ## Canvas performance
 
 Measured by `web/e2e/perf.spec.ts` (the `perf` Playwright project: vsync and the frame cap off, so
-a frame interval is its real cost) on an Apple M2 with 8 GB, 2026-10-28. Medians, scripted pan
-with the zoom swinging:
+a frame interval is its real cost; headless Chromium rasterises on the CPU) on an Apple M2 with
+8 GB, 2026-10-28. Medians of a scripted pan with the zoom swinging:
 
-| Schema | Initial render | Overview (all tables drawn) | Header-only zoom | Detailed zoom |
+| Schema | Initial render | Overview zoom | Header-only zoom | Detailed zoom |
 |---|---|---|---|---|
 | 300 tables, 600 FKs | 1.5 s (layered layout ~0.9 s in a worker) | – | 4 ms | 3 ms (7 ms densest) |
-| 1,500 tables, 3,000 FKs | 1.1 s | 15 ms (67 fps) | 20 ms (50 fps) | – |
+| 1,500 tables, 3,000 FKs | 1.1 s | 6 ms (24 ms before) | 21 ms | – |
+| 3,000 tables (canvas overview; a one-off run of the same script) | 1.7 s | 13–14 ms (zoom p95 34 ms; 114 ms before) | – | – |
+| 5,000 tables, 10,000 FKs (canvas overview) | 2.5 s | 24–28 ms (zoom p95 36–75 ms; 164 ms before) | – | – |
 
 What keeps it there:
 
 - Level of detail by zoom (`entities/schema/ui/lod.ts`): column rows only at zoom ≥ 0.5; header-only
   cards below; on schemas over 200 tables, name-only cards below 0.25 with every foreign key drawn as
   one SVG path instead of 3,000 edge components.
+- Over 2,000 tables, the overview zoom is painted on one canvas (`widgets/erd-canvas/ui/overview-canvas.tsx`):
+  React Flow keeps the tables as hidden nodes (fit view and the minimap still use them), keys are one
+  `Path2D`, and tables are a few `Path2D`s grouped by look, so a frame is a handful of draw calls (the
+  rasterising still grows with the table count). Marks differ in line width and dash, not only colour:
+  selection, search matches, focus and impact, migration changes, stubs; dimmed tables are faint. The
+  canvas takes no pointer events: panning and zooming stay React Flow's, a click is hit-tested to select
+  the table under it, and a double-click opens its details. Tables cannot be dragged at this zoom, and
+  overlay badges (query plans, workload) appear from the header-only zoom up, as on any schema with an
+  overview; zooming in past the overview brings the cards back, culled to the screen.
 - React Flow culls off-screen nodes and edges except in the overview, where everything is on screen.
-- The minimap is two canvases (`widgets/erd-canvas/ui/canvas-minimap.tsx`): tables are drawn when the
-  layout changes, and a pan or zoom redraws only the viewport rectangle. React Flow's SVG minimap
-  re-rendered a rectangle per table on every frame: 24 ms a frame at 1,500 tables, against 7 ms with
-  this one (pan only, overview).
+- The dotted background is not drawn at overview zoom, where its dots are a few pixels apart:
+  ~5 ms a frame of rasterising noise.
+- The minimap is two canvases (`widgets/erd-canvas/ui/canvas-minimap.tsx`): tables are redrawn when
+  the nodes change (a layout, a drag), and a pan or zoom redraws only the viewport rectangle. React Flow's SVG minimap
+  re-rendered a rectangle per table on every frame: 24 ms a frame at 1,500 tables.
 - Layout runs in a worker; positions are saved per schema selection, so a reopen skips it.
 
-Limits measured on the same machine (overview, before any further work): 3,000 tables render in
-1.9 s and pan at 17 ms a frame, but each zoom step costs about 50 ms (p95 115 ms); 5,000 tables
-render in 2.7 s, pan at 27–30 ms and zoom at p95 165–180 ms. The cost there is the number of DOM
-cards the browser re-rasterises; removing their text below a readable size did not help. A
-canvas-drawn overview (tables and keys painted on one canvas below the overview zoom) is the next
-step for schemas that size.
+Removing the cards' text below a readable size did not help (re-rendering every card when the zoom
+crossed that threshold cost more than it saved), so it is not done. Header-only zoom on 1,500 tables
+stays near 50 fps while the zoom changes every frame; pans alone are at 60.
 
 ## Agent security model
 

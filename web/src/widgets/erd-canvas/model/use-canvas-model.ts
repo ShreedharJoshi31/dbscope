@@ -62,7 +62,8 @@ export function useCanvasModel({ graph, layoutKey, restored, showInferred, prefe
   }, []);
 
   const fitAll = useCallback(() => {
-    void fitView({ padding: 0.08, duration: motionDuration(250), maxZoom: 1.2 });
+    // Hidden: on very large schemas the overview hides the tables and paints them on a canvas.
+    void fitView({ padding: 0.08, duration: motionDuration(250), maxZoom: 1.2, includeHiddenNodes: true });
   }, [fitView]);
 
   const relayout = useCallback(

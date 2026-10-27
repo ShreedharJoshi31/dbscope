@@ -1,5 +1,6 @@
 import { type Node, Panel, useReactFlow, useStore } from "@xyflow/react";
-import { type PointerEvent, useEffect, useMemo, useRef, type WheelEvent } from "react";
+import { type PointerEvent, useEffect, useLayoutEffect, useMemo, useRef, useState, type WheelEvent } from "react";
+import { onPixelRatioChange, tokenColors } from "@/widgets/erd-canvas/model/canvas-paint";
 
 const WIDTH = 200;
 const HEIGHT = 150;
@@ -38,21 +39,23 @@ function fitNodes(nodes: readonly Node[]): Fit {
 function context(canvas: HTMLCanvasElement | null): CanvasRenderingContext2D | null {
   if (!canvas) return null;
   const dpr = window.devicePixelRatio || 1;
-  if (canvas.width !== WIDTH * dpr) {
-    canvas.width = WIDTH * dpr;
-    canvas.height = HEIGHT * dpr;
+  const w = Math.round(WIDTH * dpr);
+  const h = Math.round(HEIGHT * dpr);
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w;
+    canvas.height = h;
   }
   const ctx = canvas.getContext("2d");
-  ctx?.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx?.setTransform(w / WIDTH, 0, 0, h / HEIGHT, 0, 0);
   return ctx;
 }
 
-const cssVar = (el: Element, name: string) => getComputedStyle(el).getPropertyValue(name).trim();
+const COLORS = ["--surface-subtle", "--border-control", "--overlay-backdrop", "--border-focus"] as const;
 
 /**
  * The minimap, drawn on two canvases instead of React Flow's SVG one: the
- * tables are drawn once per layout change, and a pan or zoom redraws only the
- * viewport rectangle. React Flow's minimap re-renders one SVG rectangle per
+ * tables are redrawn only when the nodes change (a layout, a drag), and a pan
+ * or zoom redraws only the viewport rectangle. React Flow's minimap re-renders one SVG rectangle per
  * table on every viewport change, which at 1,500 tables made each pan frame
  * cost three times as much (docs/ARCHITECTURE.md, "Canvas performance").
  */
@@ -67,14 +70,21 @@ export function CanvasMinimap({ theme }: { theme: string }) {
   const base = useRef<HTMLCanvasElement>(null);
   const top = useRef<HTMLCanvasElement>(null);
   const fit = useMemo(() => fitNodes(nodes), [nodes]);
+  const [pixelRatio, setPixelRatio] = useState(() => window.devicePixelRatio);
+  useEffect(() => onPixelRatioChange(() => setPixelRatio(window.devicePixelRatio)), []);
+  const [colors, setColors] = useState<Record<(typeof COLORS)[number], string> | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: theme changes what the tokens resolve to.
+  useLayoutEffect(() => {
+    if (base.current) setColors(tokenColors(base.current, COLORS));
+  }, [theme]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: theme changes the CSS variables read while drawing.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new pixel ratio needs a sharper redraw.
   useEffect(() => {
     const ctx = context(base.current);
-    if (!ctx || !base.current) return;
-    ctx.fillStyle = cssVar(base.current, "--surface-subtle");
+    if (!ctx || !colors) return;
+    ctx.fillStyle = colors["--surface-subtle"];
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
-    ctx.fillStyle = cssVar(base.current, "--border-control");
+    ctx.fillStyle = colors["--border-control"];
     for (const n of nodes) {
       const w = (n.measured?.width ?? n.width ?? 0) * fit.scale;
       const h = (n.measured?.height ?? n.height ?? 0) * fit.scale;
@@ -85,25 +95,25 @@ export function CanvasMinimap({ theme }: { theme: string }) {
         Math.max(1, h),
       );
     }
-  }, [nodes, fit, theme]);
+  }, [nodes, fit, colors, pixelRatio]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: theme changes the CSS variables read while drawing.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new pixel ratio needs a sharper redraw.
   useEffect(() => {
     const ctx = context(top.current);
-    if (!ctx || !top.current) return;
+    if (!ctx || !colors) return;
     const [tx, ty, zoom] = transform;
     const x = fit.ox + (-tx / zoom - fit.minX) * fit.scale;
     const y = fit.oy + (-ty / zoom - fit.minY) * fit.scale;
     const w = (width / zoom) * fit.scale;
     const h = (height / zoom) * fit.scale;
     ctx.clearRect(0, 0, WIDTH, HEIGHT);
-    ctx.fillStyle = cssVar(top.current, "--overlay-backdrop");
+    ctx.fillStyle = colors["--overlay-backdrop"];
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
     ctx.clearRect(x, y, w, h);
-    ctx.strokeStyle = cssVar(top.current, "--border-focus");
+    ctx.strokeStyle = colors["--border-focus"];
     ctx.lineWidth = 1;
     ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
-  }, [transform, width, height, fit, theme]);
+  }, [transform, width, height, fit, colors, pixelRatio]);
 
   /** Centres the canvas on the flow point under a minimap position. */
   const centreAt = (event: PointerEvent<HTMLDivElement>) => {
@@ -114,8 +124,10 @@ export function CanvasMinimap({ theme }: { theme: string }) {
     void setViewport({ x: width / 2 - fx * zoom, y: height / 2 - fy * zoom, zoom });
   };
   const onWheel = (event: WheelEvent<HTMLDivElement>) => {
+    if (!event.deltaY) return; // a sideways swipe
     const [tx, ty, zoom] = transform;
-    const next = Math.min(maxZoom, Math.max(minZoom, zoom * (event.deltaY < 0 ? 1.2 : 1 / 1.2)));
+    // Proportional to the scroll, so a trackpad's many small events zoom smoothly.
+    const next = Math.min(maxZoom, Math.max(minZoom, zoom * Math.exp(-event.deltaY * 0.002)));
     const cx = (width / 2 - tx) / zoom;
     const cy = (height / 2 - ty) / zoom;
     void setViewport({ x: width / 2 - cx * next, y: height / 2 - cy * next, zoom: next });
@@ -126,10 +138,11 @@ export function CanvasMinimap({ theme }: { theme: string }) {
       <div
         data-testid="erd-minimap"
         role="img"
-        aria-label="Minimap of the ERD"
+        aria-label="Minimap of the ERD: click or drag to move the canvas"
         className="erd-minimap relative cursor-pointer"
         style={{ width: WIDTH, height: HEIGHT }}
         onPointerDown={(e) => {
+          if (e.button !== 0) return;
           e.currentTarget.setPointerCapture(e.pointerId);
           centreAt(e);
         }}

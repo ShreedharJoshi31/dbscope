@@ -10,7 +10,7 @@ import {
   ReactFlowProvider,
   useReactFlow,
 } from "@xyflow/react";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useRef } from "react";
 import {
   fkIdOfPairEdge,
   type SchemaGraph,
@@ -43,6 +43,7 @@ import { EdgeMarkers } from "@/widgets/erd-canvas/ui/edge-markers";
 import { FarEdges } from "@/widgets/erd-canvas/ui/far-edges";
 import { LayoutStatusBanner } from "@/widgets/erd-canvas/ui/layout-status";
 import { MigrationLegend } from "@/widgets/erd-canvas/ui/migration-legend";
+import { CANVAS_OVERVIEW_MIN_TABLES, OverviewCanvas, tableAt } from "@/widgets/erd-canvas/ui/overview-canvas";
 import { RelationshipEdge } from "@/widgets/erd-canvas/ui/relationship-edge";
 import { TableDetails } from "@/widgets/erd-canvas/ui/table-details";
 import { ZoomControls } from "@/widgets/erd-canvas/ui/zoom-controls";
@@ -78,13 +79,19 @@ function CanvasViewInner({ graph, layoutKey, restored, schedule, profileId }: Ca
   const { showInferred, minimap, algorithm: preferred, set: setPrefs } = useCanvasPrefs();
   const algorithm = preferred ?? defaultAlgorithm(graph.relations.length);
   const model = useCanvasModel({ graph, layoutKey, restored, showInferred, preferred, schedule });
-  const { fitView } = useReactFlow();
+  const { fitView, screenToFlowPosition } = useReactFlow();
   const paneRef = useRef<HTMLDivElement>(null);
   // Overview zoom: nearly every table is on screen, so viewport culling only adds per-frame work and
   // mount churn, and per-edge components (each recomputing on every pan frame) give way to one path.
   // Measured with 1,500 tables: ~100 ms a pan frame before, ~17 ms after (see e2e/perf.spec.ts).
   const far = useZoomDetail() === "far";
   const cull = !far;
+  // Very large schemas paint the overview on a canvas; React Flow keeps the tables hidden.
+  const canvasOverview = far && graph.relations.length > CANVAS_OVERVIEW_MIN_TABLES;
+  const flowNodes = useMemo(
+    () => (canvasOverview ? model.nodes.map((n) => ({ ...n, hidden: true })) : model.nodes),
+    [canvasOverview, model.nodes],
+  );
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -114,6 +121,7 @@ function CanvasViewInner({ graph, layoutKey, restored, schedule, profileId }: Ca
     if (focus && derived.keep) {
       void fitView({
         nodes: [...derived.keep].map((id) => ({ id })),
+        includeHiddenNodes: true,
         padding: 0.2,
         duration: motionDuration(250),
         maxZoom: 1.2,
@@ -179,11 +187,35 @@ function CanvasViewInner({ graph, layoutKey, restored, schedule, profileId }: Ca
   const onEdgeLeave: EdgeMouseHandler<RelationshipEdgeType> = useCallback(() => {
     useCanvasStore.getState().setHoverEdge(null);
   }, []);
-  const onPaneClick = useCallback(() => {
-    const store = useCanvasStore.getState();
-    store.select(null);
-    store.setSelectedEdge(null);
-  }, []);
+  const onPaneClick = useCallback(
+    (event: ReactMouseEvent) => {
+      const store = useCanvasStore.getState();
+      store.setSelectedEdge(null);
+      // The overview canvas has no elements to click: find the table under the pointer.
+      if (canvasOverview) {
+        const p = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+        const id = tableAt(model.nodes, p.x, p.y);
+        if (id) {
+          store.select(id);
+          return;
+        }
+      }
+      store.select(null);
+    },
+    [canvasOverview, model.nodes, screenToFlowPosition],
+  );
+
+  // The overview canvas's stand-in for double-clicking a card: open the table's details.
+  const onOverviewDoubleClick = useCallback(
+    (event: ReactMouseEvent) => {
+      const p = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      const id = tableAt(model.nodes, p.x, p.y);
+      if (!id) return;
+      useCanvasStore.getState().select(id);
+      useCanvasStore.getState().setDetailsOpen(true);
+    },
+    [model.nodes, screenToFlowPosition],
+  );
 
   const actions = useMemo(() => ({ toggleCollapsed: model.toggleCollapsed }), [model.toggleCollapsed]);
   const inferredCount = useMemo(() => graph.edges.filter((e) => e.inferred && !e.accepted).length, [graph]);
@@ -216,12 +248,13 @@ function CanvasViewInner({ graph, layoutKey, restored, schedule, profileId }: Ca
         // biome-ignore lint/a11y/noNoninteractiveTabindex: role=application is the canvas's single tab stop; arrows, Enter, Tab and Esc act on tables (use-canvas-keyboard).
         tabIndex={0}
         onKeyDown={onKeyDown}
+        onDoubleClick={canvasOverview ? onOverviewDoubleClick : undefined}
         className="relative min-h-0 flex-1 outline-none focus-visible:ring-2 focus-visible:ring-border-focus focus-visible:ring-inset"
       >
         <EdgeMarkers />
         <TableNodeActionsContext value={actions}>
           <ReactFlow<TableNodeType, RelationshipEdgeType>
-            nodes={model.nodes}
+            nodes={flowNodes}
             edges={far ? NO_EDGES : model.edges}
             nodeTypes={NODE_TYPES}
             edgeTypes={EDGE_TYPES}
@@ -246,8 +279,10 @@ function CanvasViewInner({ graph, layoutKey, restored, schedule, profileId }: Ca
             proOptions={PRO_OPTIONS}
             attributionPosition="top-right"
           >
-            <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="var(--border-default)" />
-            {far && <FarEdges nodes={model.nodes} edges={model.edges} />}
+            {/* At overview zoom the dots are under a few pixels apart: noise that costs ~5 ms a frame to rasterise. */}
+            {!far && <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="var(--border-default)" />}
+            {far && !canvasOverview && <FarEdges nodes={model.nodes} edges={model.edges} />}
+            {canvasOverview && <OverviewCanvas nodes={model.nodes} edges={model.edges} theme={theme} />}
             <ZoomControls onFit={model.fitAll} />
             {minimap && <CanvasMinimap theme={theme} />}
           </ReactFlow>
