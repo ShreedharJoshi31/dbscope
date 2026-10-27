@@ -111,6 +111,30 @@ Profile create/update/test-by-id with a locked vault → `423 {"error":{"code":"
 - `PUT /api/profiles/{id}/layout` body `{"key":"...","positions":{...},"collapsed":[...]}` → `204`
   `layoutKey` is chosen by the UI (e.g. the sorted schema list); max 1 MiB body.
 
+### Team file (shared state)
+
+Design and format: `docs/SHARING.md`.
+
+- `GET /api/profiles/{id}/shared` → `200` the team file (`application/json`, `Content-Disposition: attachment; filename="<name>.dbscope.json"`)
+- `POST /api/profiles/{id}/shared/preview?mode=merge|replace` body = the file → `200 SharePreview` (nothing changes)
+- `POST /api/profiles/{id}/shared/import?mode=merge|replace` body = the file → `200 SharePreview` of what was applied, in one transaction
+
+```ts
+type SharePreview = {
+  mode: "merge" | "replace";
+  schemaChecked: boolean; // false when the database could not be read, so orphans are not flagged
+  tables: Section; foreignKeys: Section; glossary: Section;
+};
+type Section = {
+  items: { layout?: string; key: string; change: "added" | "changed" | "unchanged" | "kept" | "removed"; detail?: string; orphan?: boolean }[];
+  counts: Partial<Record<"added" | "changed" | "unchanged" | "kept" | "removed", number>>;
+  orphans: number;
+};
+```
+
+Errors: `400 validation` (not a team file, a newer `formatVersion`, limits, bad `mode`), `404`. The
+database is read only to flag orphans, and a locked vault or unreachable database just skips that.
+
 ### Sample schema
 
 - `GET /api/sample/schema` → `200 Model` — a built-in, realistic ~40-table e-commerce + SaaS schema
@@ -300,6 +324,8 @@ dbscope migrate check PATH... [--dsn URL | --schema-dump FILE [--stats FILE]] [-
                        [--fail-on low|medium|high|critical] [--format text|json|sarif|github]
                        [--tx-mode auto|file|statement|none] [--assume-lock-timeout]
 dbscope stats export --dsn URL [--schemas a,b] > stats.json   # sizes, row estimates, version, role timeouts; no row data
+dbscope share export --connection NAME [--out FILE]               # the team file; docs/SHARING.md
+dbscope share import --connection NAME [--replace] [--dry-run] FILE
 dbscope migrate capture --shadow URL [--dsn URL] [--out DIR] [--url-env NAME]... [--allow-nonempty-shadow] -- COMMAND...
 ```
 

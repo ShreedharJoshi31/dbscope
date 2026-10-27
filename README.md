@@ -140,6 +140,21 @@ PostgreSQL 17 grammar. Rules and scoring: [docs/MIGRATIONS.md](docs/MIGRATIONS.m
 
 ![Migration review](web/e2e/__screenshots__/chromium-darwin/migration-tab-light.png)
 
+## Sharing with your team
+
+Canvas layouts, accepted or rejected inferred foreign keys and the assistant
+glossary can be exported as one JSON file to commit next to your code. It holds
+no connection details or data, and is written so diffs stay small and merges
+clean. Teammates import it from the command palette (with a preview and Undo)
+or the CLI:
+
+```bash
+./bin/dbscope share export --connection orders --out db/orders.dbscope.json
+./bin/dbscope share import --connection orders db/orders.dbscope.json --dry-run
+```
+
+Details: [docs/SHARING.md](docs/SHARING.md).
+
 ## Platforms
 
 macOS, Linux and Windows, on amd64 and arm64; the binary is built without cgo.

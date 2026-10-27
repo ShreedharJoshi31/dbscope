@@ -507,7 +507,8 @@ func (r *runner) done() {
 func truncate(s string, n int) string {
 	s = strings.TrimSpace(s)
 	if rs := []rune(s); len(rs) > n {
-		return string(rs[:n])
+		// Trimmed again: the cut can leave a space at the end, which the glossary rejects.
+		return strings.TrimSpace(string(rs[:n]))
 	}
 	return s
 }

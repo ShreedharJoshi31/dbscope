@@ -20,6 +20,7 @@ import { useCommandPalette } from "@/widgets/command-palette/model/palette-store
 import { CanvasCommandItems } from "@/widgets/command-palette/ui/canvas-command-items";
 import { MigrationCommandItems } from "@/widgets/command-palette/ui/migration-command-items";
 import { AssistantCommandItems, QueryCommandItems } from "@/widgets/command-palette/ui/query-command-items";
+import { TeamCommandItems } from "@/widgets/command-palette/ui/team-command-items";
 
 function Shortcut({ combo }: { combo: KeyCombo }) {
   return <CommandShortcut className="font-mono tracking-normal">{formatCombo(combo)}</CommandShortcut>;
@@ -71,6 +72,7 @@ export function CommandPalette() {
           <AssistantCommandItems run={run} />
           <MigrationCommandItems run={run} />
           <CanvasCommandItems run={run} />
+          <TeamCommandItems run={run} />
           <CommandGroup heading="View">
             <CommandItem onSelect={run(toggleTheme)}>
               <SunMoon aria-hidden />

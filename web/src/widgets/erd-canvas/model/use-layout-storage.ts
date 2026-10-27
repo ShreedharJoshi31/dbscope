@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type CanvasLayoutInput, putLayout, useCanvasLayout } from "@/shared/api";
 import { announce } from "@/shared/lib/announcer";
+import { registerLayoutFlusher } from "@/shared/lib/layout-sync";
 import { safeSessionStorage } from "@/shared/lib/storage";
 import { createLayoutSaver } from "@/widgets/erd-canvas/model/layout-saver";
 
@@ -30,6 +31,11 @@ export function useLayoutStorage(profileId: string | undefined, layoutKey: strin
   const remote = useCanvasLayout(sample ? undefined : profileId, layoutKey);
   const [sampleLayout] = useState(() => (sample ? readSample(layoutKey) : null));
 
+  // Saves run one after another, so waiting on the last waits on all of them.
+  const inflight = useRef<Promise<void>>(Promise.resolve());
+  // Set once an import is about to replace the saved layout: this canvas
+  // saves nothing more and is remounted afterwards.
+  const frozen = useRef(false);
   const saver = useMemo(
     () =>
       createLayoutSaver((layout) => {
@@ -38,18 +44,35 @@ export function useLayoutStorage(profileId: string | undefined, layoutKey: strin
           return;
         }
         if (!profileId) return;
-        putLayout(profileId, layout).catch((error: unknown) => {
-          announce(`Could not save the canvas layout: ${error instanceof Error ? error.message : "unknown error"}`);
-        });
+        inflight.current = inflight.current.then(() =>
+          putLayout(profileId, layout).catch((error: unknown) => {
+            announce(`Could not save the canvas layout: ${error instanceof Error ? error.message : "unknown error"}`);
+          }),
+        );
       }),
     [sample, profileId],
   );
-  useEffect(() => () => saver.flush(), [saver]);
+  useEffect(() => () => (frozen.current ? saver.cancel() : saver.flush()), [saver]);
+  useEffect(
+    () =>
+      registerLayoutFlusher(() => {
+        saver.flush();
+        frozen.current = true;
+        return inflight.current;
+      }),
+    [saver],
+  );
+  const schedule = useCallback(
+    (layout: CanvasLayoutInput) => {
+      if (!frozen.current) saver.schedule(layout);
+    },
+    [saver],
+  );
 
   let restored: LayoutStorage["restored"];
   if (sample) restored = sampleLayout;
   else if (remote.isPending) restored = undefined;
   else restored = remote.data ?? null; // A failed read starts from a fresh layout instead of blocking the canvas.
 
-  return { restored, schedule: saver.schedule };
+  return { restored, schedule };
 }

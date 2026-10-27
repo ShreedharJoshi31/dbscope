@@ -16,6 +16,7 @@ export * from "@/shared/api/query-api";
 export type * from "@/shared/api/query-types";
 export * from "@/shared/api/schema-queries";
 export type * from "@/shared/api/schema-types";
+export * from "@/shared/api/share-api";
 export { readSseStream, type SseEvent } from "@/shared/api/sse";
 export { bootstrapToken, getToken, reloadOnNewToken } from "@/shared/api/token";
 export type * from "@/shared/api/types";

@@ -3,6 +3,7 @@ import { lazy, Suspense } from "react";
 import { getSchemaGraph } from "@/entities/schema";
 import { openSample, SchemaLoadError, useWorkbenchSchema } from "@/features/load-schema";
 import type { Model } from "@/shared/api";
+import { useLayoutEpoch } from "@/shared/lib/layout-sync";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { useLayoutStorage } from "@/widgets/erd-canvas/model/use-layout-storage";
 
@@ -38,6 +39,7 @@ function Loaded({ model, layoutKey, profileId, sample }: LoadedProps) {
 
 export function ErdCanvas() {
   const { source, profile, query, layoutKey } = useWorkbenchSchema();
+  const epoch = useLayoutEpoch((s) => s.epoch);
 
   if (source === "profile" && !profile) {
     return (
@@ -73,8 +75,9 @@ export function ErdCanvas() {
   }
   return (
     <Loaded
-      // A new source, connection or schema selection is a new canvas with its own saved layout.
-      key={`${source}:${profile?.id ?? ""}:${layoutKey}`}
+      // A new source, connection or schema selection is a new canvas with its own saved
+      // layout; so is an imported team file (epoch), which replaced the saved one.
+      key={`${source}:${profile?.id ?? ""}:${layoutKey}:${epoch}`}
       model={query.data}
       layoutKey={layoutKey}
       profileId={profile?.id}

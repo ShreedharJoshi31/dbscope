@@ -8,6 +8,7 @@ import { DeleteConnectionDialog } from "@/features/delete-connection";
 import { GlossaryDialog } from "@/features/edit-glossary";
 import { LlmSettingsDialog } from "@/features/llm-settings";
 import { RunConfirmDialog } from "@/features/run-query";
+import { ImportSharedDialog } from "@/features/share-state";
 import { switchConnection } from "@/features/switch-connection";
 import { usePanelStore } from "@/features/toggle-panel";
 import { AppShell } from "@/widgets/app-shell";
@@ -69,6 +70,7 @@ export function WorkbenchPage() {
       <RunConfirmDialog />
       <LlmSettingsDialog />
       <GlossaryDialog />
+      <ImportSharedDialog />
       <ConnectionFormDialog
         onSaved={(profile, mode) => {
           if (mode === "create") switchConnection(profile);
