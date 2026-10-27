@@ -7,6 +7,7 @@ import (
 	"os"
 	"regexp"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -227,6 +228,40 @@ func TestIntrospectPartitionEstimate(t *testing.T) {
 			m, err = Introspect(t.Context(), d.Admin, []string{"archive"}, 0)
 			if err != nil || len(m.Relations) != 0 {
 				t.Fatalf("archive alone: %v %v", err, names(m))
+			}
+		})
+	}
+}
+
+// Older schemas (e.g. Pagila) declare foreign keys on each partition instead
+// of on the partitioned table.
+func TestIntrospectPartitionLocalForeignKeys(t *testing.T) {
+	for _, srv := range pgtest.Servers(t, "14", "18") {
+		t.Run(srv.String(), func(t *testing.T) {
+			d := srv.NewDB(t)
+			d.Exec(t, `CREATE TABLE customers (id int PRIMARY KEY);
+				CREATE TABLE staff (id int PRIMARY KEY);
+				CREATE TABLE pay (id int, customer_id int, staff_id int, at date) PARTITION BY RANGE (at);
+				CREATE TABLE pay_a PARTITION OF pay FOR VALUES FROM ('2026-01-01') TO ('2026-07-01');
+				CREATE TABLE pay_b PARTITION OF pay FOR VALUES FROM ('2026-07-01') TO ('2027-01-01');
+				ALTER TABLE pay_a ADD FOREIGN KEY (customer_id) REFERENCES customers(id);
+				ALTER TABLE pay_b ADD FOREIGN KEY (customer_id) REFERENCES customers(id);
+				ALTER TABLE pay_a ADD FOREIGN KEY (staff_id) REFERENCES staff(id)`)
+			m, err := Introspect(t.Context(), d.Admin, []string{"public"}, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fks := mustRel(t, m, "public", "pay").ForeignKeys
+			if len(fks) != 1 {
+				t.Fatalf("want only the key declared on every partition, got %+v", fks)
+			}
+			fk := fks[0]
+			if !slices.Equal(fk.Columns, []string{"customer_id"}) || fk.Ref != q("public", "customers") ||
+				!slices.Equal(fk.RefCols, []string{"id"}) || fk.Inferred || !fk.Validated {
+				t.Fatalf("promoted key %+v", fk)
+			}
+			if !strings.Contains(fk.Name, "declared on each of 2 partitions") {
+				t.Fatalf("name %q", fk.Name)
 			}
 		})
 	}

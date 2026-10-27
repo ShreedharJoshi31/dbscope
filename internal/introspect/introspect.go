@@ -11,6 +11,7 @@ import (
 	"math"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -98,6 +99,14 @@ type pendingFK struct {
 	refOID uint32
 }
 
+// partitionFK is a foreign key declared directly on a partition rather than
+// inherited from the partitioned table.
+type partitionFK struct {
+	partition uint32
+	refOID    uint32
+	fk        schema.ForeignKey
+}
+
 // Introspect reads every relation in the given schemas. An empty list means
 // every non-system schema the role has USAGE on; schemas named explicitly
 // are read even without USAGE, since the catalogs are readable regardless.
@@ -147,6 +156,7 @@ func Introspect(ctx context.Context, db DB, schemas []string, timeout time.Durat
 		return nil, fmt.Errorf("introspect: %w", err)
 	}
 
+	a.promotePartitionFKs()
 	if missing := a.missingRefs(); len(missing) > 0 {
 		rows, err := s.tx.Query(ctx, stubsQuery, missing)
 		if err == nil {
@@ -170,6 +180,7 @@ type assembler struct {
 	order   []uint32
 	rels    map[uint32]*rel
 	fks     []pendingFK
+	partFKs []partitionFK
 	enumsV  []schema.Enum
 }
 
@@ -263,6 +274,15 @@ func (a *assembler) constraints(rows pgx.Rows) error {
 		if x == nil {
 			return nil
 		}
+		if x.partition {
+			if typ == "f" {
+				a.partFKs = append(a.partFKs, partitionFK{partition: oid, refOID: refOID, fk: schema.ForeignKey{
+					Name: name, Columns: slices.Clone(cols), RefCols: slices.Clone(refCols),
+					OnDelete: fkActions[onDel], OnUpdate: fkActions[onUpd], Validated: validated,
+				}})
+			}
+			return nil
+		}
 		r := &x.r
 		switch typ {
 		case "p":
@@ -351,6 +371,61 @@ func (a *assembler) visible(oid uint32) schema.QualifiedName {
 		}
 	}
 	return x.r.QName()
+}
+
+// promotePartitionFKs moves a foreign key declared separately on partitions
+// up to their root when every leaf partition declares it (same columns, same
+// target), as schemas that predate partitioned-table foreign keys do. A key on
+// only some partitions is not a fact about the table, so it is left out.
+func (a *assembler) promotePartitionFKs() {
+	leaves := map[uint32]int{}
+	for _, x := range a.rels {
+		if x.partition && x.leaf {
+			leaves[x.root]++
+		}
+	}
+	type key struct {
+		root, ref     uint32
+		cols, refCols string
+	}
+	type group struct {
+		fk         schema.ForeignKey
+		partitions map[uint32]bool
+		validated  bool
+	}
+	groups := map[key]*group{}
+	var order []key
+	for _, p := range a.partFKs {
+		x := a.rels[p.partition]
+		if !x.leaf {
+			continue
+		}
+		k := key{x.root, p.refOID, strings.Join(p.fk.Columns, ","), strings.Join(p.fk.RefCols, ",")}
+		g := groups[k]
+		if g == nil {
+			g = &group{fk: p.fk, partitions: map[uint32]bool{}, validated: true}
+			groups[k] = g
+			order = append(order, k)
+		}
+		g.partitions[p.partition] = true
+		g.validated = g.validated && p.fk.Validated
+	}
+	for _, k := range order {
+		g, root := groups[k], a.rels[k.root]
+		if root == nil || root.partition || len(g.partitions) != leaves[k.root] {
+			continue
+		}
+		if slices.ContainsFunc(root.r.ForeignKeys, func(f schema.ForeignKey) bool {
+			return slices.Equal(f.Columns, g.fk.Columns)
+		}) {
+			continue
+		}
+		fk := g.fk
+		fk.Name = fmt.Sprintf("%s (declared on each of %d partitions)", fk.Name, len(g.partitions))
+		fk.Validated = g.validated
+		root.r.ForeignKeys = append(root.r.ForeignKeys, fk)
+		a.fks = append(a.fks, pendingFK{owner: k.root, index: len(root.r.ForeignKeys) - 1, refOID: k.ref})
+	}
 }
 
 func (a *assembler) missingRefs() []uint32 {

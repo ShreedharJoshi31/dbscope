@@ -62,7 +62,9 @@ WHERE a.attnum > 0 AND NOT a.attisdropped
 ORDER BY a.attrelid, a.attnum`
 
 // constraintsQuery pairs FK columns by ordinal; conparentid = 0 drops the
-// per-partition clones. contype 'n' (table NOT NULL in 18) is excluded.
+// per-partition clones. Foreign keys declared directly on partitions are
+// kept so they can be promoted to the root. contype 'n' (table NOT NULL in
+// 18) is excluded.
 const constraintsQuery = `SELECT con.conrelid, con.conname, con.contype::text, con.convalidated,
        ARRAY(SELECT a.attname::text
              FROM unnest(con.conkey) WITH ORDINALITY AS k(attnum, ord)
@@ -81,7 +83,7 @@ JOIN pg_class c ON c.oid = con.conrelid
 JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE con.contype IN ('p','u','f','c')
   AND con.conparentid = 0
-  AND NOT c.relispartition
+  AND (NOT c.relispartition OR con.contype = 'f')
   AND n.nspname = ANY($1::text[])
 ORDER BY con.conrelid, con.contype, con.conname`
 
