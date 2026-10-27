@@ -60,6 +60,8 @@ export interface TestResult {
 export interface SecretsStatus {
   backend: "keyring" | "passphrase";
   locked: boolean;
+  /** False until the vault file exists, so there is nothing saved to unlock yet. */
+  initialized: boolean;
 }
 
 export interface Health {

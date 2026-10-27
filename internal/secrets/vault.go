@@ -44,6 +44,8 @@ var (
 type Status struct {
 	Backend Backend `json:"backend"`
 	Locked  bool    `json:"locked"`
+	// Initialized reports whether the vault file exists, i.e. whether there is anything to unlock yet.
+	Initialized bool `json:"initialized"`
 }
 
 type Vault struct {
@@ -167,7 +169,8 @@ func within(d time.Duration, f func() bool) bool {
 func (v *Vault) Status() Status {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	return Status{Backend: v.backend, Locked: v.recipient == nil}
+	_, err := os.Stat(v.path)
+	return Status{Backend: v.backend, Locked: v.recipient == nil, Initialized: err == nil}
 }
 
 // Unlock opens a passphrase vault. The first unlock, before any vault file

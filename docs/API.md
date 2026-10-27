@@ -74,7 +74,8 @@ Test runs with a 10s connect timeout and never logs the DSN or password.
 
 ### Secrets
 
-- `GET /api/secrets/status` → `200 {"backend":"keyring"|"passphrase","locked":bool}`
+- `GET /api/secrets/status` → `200 {"backend":"keyring"|"passphrase","locked":bool,"initialized":bool}`
+  (`initialized` is false until the vault file exists; the UI only prompts unprompted when it is true)
 - `POST /api/secrets/unlock` body `{"passphrase":"..."}` → `204` or `401 {"error":{"code":"unauthorized"}}`
   (only meaningful for the passphrase backend; the first unlock sets the passphrase)
 

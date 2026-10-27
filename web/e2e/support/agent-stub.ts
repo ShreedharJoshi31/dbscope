@@ -94,7 +94,8 @@ export async function stubAgent(page: Page, options: StubOptions = {}) {
     if (await handleMigrationRoute(route, pathname, method, options, migrations)) return;
 
     if (pathname === "/api/health") return json(route, 200, { version: "dev", os: "darwin", arch: "arm64" });
-    if (pathname === "/api/secrets/status") return json(route, 200, { backend: "keyring", locked: false });
+    if (pathname === "/api/secrets/status")
+      return json(route, 200, { backend: "keyring", locked: false, initialized: true });
     if (pathname === "/api/connection-url/parse" && method === "POST") {
       const { url } = request.postDataJSON() as { url: string };
       const parsed = new URL(url);

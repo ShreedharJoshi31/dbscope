@@ -8,11 +8,15 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 
-/** Opens whenever the passphrase vault reports locked, unless the user dismissed it. */
+/**
+ * Opens when the passphrase vault is locked and holds saved passwords, or when a request needed it,
+ * unless the user dismissed it. A first-run user with nothing saved is not interrupted.
+ */
 export function UnlockSecretsDialog() {
   const { data: status } = useSecretsStatus();
-  const { dismissed, dismiss } = useUnlockPrompt();
-  const open = Boolean(status?.locked) && !dismissed;
+  const { dismissed, requested, dismiss } = useUnlockPrompt();
+  const open = Boolean(status?.locked) && (Boolean(status?.initialized) || requested) && !dismissed;
+  const creating = status?.initialized === false;
   // The form stays mounted while the dialog animates closed; a new key on each open resets it.
   const [formKey, setFormKey] = useState(0);
   const [wasOpen, setWasOpen] = useState(open);
@@ -24,13 +28,13 @@ export function UnlockSecretsDialog() {
   return (
     <Dialog open={open} onOpenChange={(next) => !next && dismiss()}>
       <DialogContent className="sm:max-w-md" showCloseButton={false}>
-        <UnlockForm key={formKey} onDismiss={dismiss} />
+        <UnlockForm key={formKey} creating={creating} onDismiss={dismiss} />
       </DialogContent>
     </Dialog>
   );
 }
 
-function UnlockForm({ onDismiss }: { onDismiss: () => void }) {
+function UnlockForm({ creating, onDismiss }: { creating: boolean; onDismiss: () => void }) {
   const id = useId();
   const [passphrase, setPassphrase] = useState("");
   const unlock = useUnlockSecrets();
@@ -52,12 +56,12 @@ function UnlockForm({ onDismiss }: { onDismiss: () => void }) {
       <DialogHeader>
         <DialogTitle className="flex items-center gap-2">
           <KeyRound aria-hidden className="size-4 text-text-muted" />
-          Unlock saved passwords
+          {creating ? "Choose a passphrase for saved passwords" : "Unlock saved passwords"}
         </DialogTitle>
         <DialogDescription>
-          This system has no OS keyring, so dbscope keeps connection passwords in a vault encrypted with your
-          passphrase. The first time you unlock, the passphrase you enter becomes the vault passphrase. It cannot be
-          recovered, so keep it somewhere safe.
+          {creating
+            ? "This system has no OS keyring, so dbscope keeps connection passwords in a vault encrypted with a passphrase you choose now. It cannot be recovered, so keep it somewhere safe, then retry what you were doing."
+            : "This system has no OS keyring, so dbscope keeps connection passwords in a vault encrypted with your passphrase."}
         </DialogDescription>
       </DialogHeader>
       <div className="flex flex-col gap-1">
@@ -67,7 +71,7 @@ function UnlockForm({ onDismiss }: { onDismiss: () => void }) {
         <Input
           id={id}
           type="password"
-          autoComplete="current-password"
+          autoComplete={creating ? "new-password" : "current-password"}
           value={passphrase}
           onChange={(e) => setPassphrase(e.target.value)}
           readOnly={unlock.isPending}
@@ -92,7 +96,7 @@ function UnlockForm({ onDismiss }: { onDismiss: () => void }) {
         </Button>
         <Button type="submit" disabled={!passphrase || unlock.isPending}>
           {unlock.isPending && <LoaderCircle aria-hidden className="animate-spin" />}
-          {unlock.isPending ? "Unlocking…" : "Unlock"}
+          {unlock.isPending ? "Unlocking…" : creating ? "Set passphrase" : "Unlock"}
         </Button>
       </DialogFooter>
     </form>

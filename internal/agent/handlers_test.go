@@ -360,7 +360,7 @@ func TestSecretsKeyringStatus(t *testing.T) {
 	e := keyringEnv(t)
 	w := e.do("GET", "/api/secrets/status", "")
 	expect(t, w, 200, "")
-	if st := decodeBody[secrets.Status](t, w); st != (secrets.Status{Backend: secrets.BackendKeyring, Locked: false}) {
+	if st := decodeBody[secrets.Status](t, w); st != (secrets.Status{Backend: secrets.BackendKeyring}) {
 		t.Fatalf("status %+v", st)
 	}
 	expect(t, e.do("POST", "/api/secrets/unlock", `{"passphrase":"anything"}`), 204, "")
@@ -370,7 +370,7 @@ func TestLockedVault(t *testing.T) {
 	const passphrase = "correct horse"
 	e := lockedEnv(t, passphrase)
 
-	if st := decodeBody[secrets.Status](t, e.do("GET", "/api/secrets/status", "")); st != (secrets.Status{Backend: secrets.BackendPassphrase, Locked: true}) {
+	if st := decodeBody[secrets.Status](t, e.do("GET", "/api/secrets/status", "")); st != (secrets.Status{Backend: secrets.BackendPassphrase, Locked: true, Initialized: true}) {
 		t.Fatalf("status %+v", st)
 	}
 	// Profiles created out of band, since the API refuses while locked.

@@ -25,7 +25,7 @@ func TestNoKeychainSkipsKeyring(t *testing.T) {
 	keyring.MockInit()
 	keychainPresent = func() bool { return false }
 	t.Cleanup(func() { keychainPresent = func() bool { return true } })
-	if st := openFast(t, vaultPath(t)).Status(); st != (Status{BackendPassphrase, true}) {
+	if st := openFast(t, vaultPath(t)).Status(); st != (Status{BackendPassphrase, true, false}) {
 		t.Fatalf("status %+v", st)
 	}
 	if _, err := keyring.Get(keyringService, probeUser); !errors.Is(err, keyring.ErrNotFound) {
@@ -36,7 +36,7 @@ func TestNoKeychainSkipsKeyring(t *testing.T) {
 func TestForceFileEnv(t *testing.T) {
 	keyring.MockInit()
 	t.Setenv(ForceFileEnv, "file")
-	if st := openFast(t, vaultPath(t)).Status(); st != (Status{BackendPassphrase, true}) {
+	if st := openFast(t, vaultPath(t)).Status(); st != (Status{BackendPassphrase, true, false}) {
 		t.Fatalf("status %+v", st)
 	}
 }
@@ -66,7 +66,7 @@ func TestKeyringBackend(t *testing.T) {
 	keyring.MockInit()
 	path := vaultPath(t)
 	v := openFast(t, path)
-	if st := v.Status(); st != (Status{BackendKeyring, false}) {
+	if st := v.Status(); st != (Status{BackendKeyring, false, false}) {
 		t.Fatalf("status %+v", st)
 	}
 	if err := v.Set("p1", "s3cret-value"); err != nil {
@@ -143,7 +143,7 @@ func TestPassphraseBackend(t *testing.T) {
 	path := vaultPath(t)
 
 	v := openFast(t, path)
-	if st := v.Status(); st != (Status{BackendPassphrase, true}) {
+	if st := v.Status(); st != (Status{BackendPassphrase, true, false}) {
 		t.Fatalf("status %+v", st)
 	}
 	if _, _, err := v.Get("p"); !errors.Is(err, ErrLocked) {
@@ -163,8 +163,8 @@ func TestPassphraseBackend(t *testing.T) {
 	if err := v.Unlock("correct horse"); err != nil {
 		t.Fatal(err)
 	}
-	if v.Status().Locked {
-		t.Fatal("still locked")
+	if st := v.Status(); st != (Status{BackendPassphrase, false, true}) {
+		t.Fatalf("status after first unlock %+v", st)
 	}
 	if err := v.Set("p", "pw-value"); err != nil {
 		t.Fatal(err)
@@ -186,7 +186,7 @@ func TestPassphraseBackend(t *testing.T) {
 
 	// A passphrase file keeps the passphrase backend even once a keyring appears.
 	keyring.MockInit()
-	if st := openFast(t, path).Status(); st != (Status{BackendPassphrase, true}) {
+	if st := openFast(t, path).Status(); st != (Status{BackendPassphrase, true, true}) {
 		t.Fatalf("status with keyring available: %+v", st)
 	}
 }
