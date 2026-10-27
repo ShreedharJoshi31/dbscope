@@ -1,7 +1,9 @@
+import { useQuery } from "@tanstack/react-query";
 import { screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw/http";
 import { describe, expect, it, vi } from "vitest";
 import { UnlockSecretsDialog } from "@/features/unlock-secrets";
+import { apiFetch } from "@/shared/api";
 import { renderWithProviders } from "@/test/render";
 import { server } from "@/test/server";
 
@@ -35,6 +37,39 @@ describe("UnlockSecretsDialog", () => {
     await user.type(screen.getByLabelText("Passphrase"), "correct horse{Enter}");
     expect(sent).toEqual({ passphrase: "correct horse" });
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("refetches requests that failed while the vault was locked", async () => {
+    let locked = true;
+    let probeCalls = 0;
+    server.use(
+      http.get("/api/secrets/status", () => HttpResponse.json({ backend: "passphrase", locked })),
+      http.post("/api/secrets/unlock", () => {
+        locked = false;
+        return new HttpResponse(null, { status: 204 });
+      }),
+      http.get("/api/probe", () => {
+        probeCalls++;
+        return locked
+          ? HttpResponse.json({ error: { code: "secrets_locked" } }, { status: 423 })
+          : HttpResponse.json({ ok: true });
+      }),
+    );
+    function Probe() {
+      const q = useQuery({ queryKey: ["probe"], queryFn: () => apiFetch<{ ok: boolean }>("/api/probe"), retry: false });
+      return <p>{q.isSuccess ? "probe ok" : q.isError ? "probe failed" : "probe loading"}</p>;
+    }
+    const { user } = renderWithProviders(
+      <>
+        <UnlockSecretsDialog />
+        <Probe />
+      </>,
+    );
+    expect(await screen.findByText("probe failed")).toBeInTheDocument();
+
+    await user.type(await screen.findByLabelText("Passphrase"), "pw{Enter}");
+    expect(await screen.findByText("probe ok")).toBeInTheDocument();
+    expect(probeCalls).toBe(2);
   });
 
   it("keeps its content while the close animation runs", async () => {

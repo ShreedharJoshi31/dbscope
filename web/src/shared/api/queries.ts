@@ -103,6 +103,7 @@ export function useUnlockSecrets() {
   const client = useQueryClient();
   return useMutation<void, ApiError, string>({
     mutationFn: (passphrase) => apiFetch<void>("/api/secrets/unlock", { method: "POST", body: { passphrase } }),
-    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.secretsStatus }),
+    // Anything fetched while locked may have failed with 423 (schema, namespaces, tests), so refetch it all.
+    onSuccess: () => client.invalidateQueries(),
   });
 }
