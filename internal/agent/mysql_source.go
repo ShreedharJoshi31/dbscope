@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/dbscope/dbscope/internal/conn"
+	"github.com/dbscope/dbscope/internal/health"
 	"github.com/dbscope/dbscope/internal/introspect"
 	"github.com/dbscope/dbscope/internal/migrate"
 	"github.com/dbscope/dbscope/internal/migrate/ingest"
@@ -95,6 +96,17 @@ func (ms *mysqlSource) Analyze(ctx context.Context, p conn.Profile, password str
 		return nil, err
 	}
 	return mysql.Analyze(base, files), nil
+}
+
+// Health reads the server's health checks (internal/mysql.Health).
+func (ms *mysqlSource) Health(ctx context.Context, p conn.Profile, password string) (*health.Report, error) {
+	ctx, cancel := context.WithTimeout(ctx, statementTimeout(p)+connectSlack)
+	defer cancel()
+	db, err := ms.get(p, password)
+	if err != nil {
+		return nil, err
+	}
+	return mysql.Health(ctx, db)
 }
 
 // Query is PostgreSQL's request shape (a parsed tree); MySQL statements go through Run.

@@ -33,3 +33,22 @@ rows deleted, and a role without `pg_read_all_stats`.
 
 Without `pg_read_all_stats` (or `pg_monitor`) a role sees only its own
 sessions: the session checks say so, and standby replication is `unknown`.
+
+## MySQL and MariaDB
+
+Checked on MySQL 8.4 and MariaDB 11.8 (`internal/mysql/health_test.go`) with
+a transaction holding a row lock, a second one waiting on it, and a user
+with only SELECT.
+
+| Check | Warn | Danger | Notes |
+|---|---|---|---|
+| Connections | 80% of `max_connections` | 95% | also the most at once since start |
+| Oldest open transaction | 5 min | 1 h | it holds back purge |
+| Transactions waiting on locks | 1 | 10 | `LOCK WAIT` in `INNODB_TRX` |
+| Undo history not yet purged | 100,000 | 1,000,000 | `trx_rseg_history_len` |
+| Replication | 30 s behind | 5 min, or a stopped thread | `SHOW REPLICA STATUS`; "not a replica" otherwise |
+| Buffer pool hit ratio | under 99% | under 95% | only after 100,000 page reads |
+
+Both servers refuse `INNODB_TRX` and `INNODB_METRICS` without `PROCESS`, and
+replica status without `REPLICATION CLIENT` (MySQL) or `SLAVE MONITOR`
+(MariaDB); those checks then say which grant is missing.
