@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/dbscope/dbscope/internal/conn"
+	"github.com/dbscope/dbscope/internal/health"
 	"github.com/dbscope/dbscope/internal/introspect"
 	"github.com/dbscope/dbscope/internal/migrate"
 	"github.com/dbscope/dbscope/internal/query/exec"
@@ -82,6 +83,24 @@ func (e engineSource) Close() {
 
 // supports writes a 501 and returns false when the profile's engine lacks a
 // mode, before any work for it starts.
+// healthSource is a source that reads server health checks.
+type healthSource interface {
+	Health(ctx context.Context, p conn.Profile, password string) (*health.Report, error)
+}
+
+// Health reads the health checks of the profile's engine, when it has them.
+func (e engineSource) Health(ctx context.Context, p conn.Profile, password string) (*health.Report, error) {
+	src, err := e.of(p)
+	if err != nil {
+		return nil, err
+	}
+	hs, ok := src.(healthSource)
+	if !ok {
+		return nil, errUnsupported
+	}
+	return hs.Health(ctx, p, password)
+}
+
 func supports(w http.ResponseWriter, p conn.Profile, has bool, mode string) bool {
 	if !has {
 		writeError(w, http.StatusNotImplemented, "unsupported", fmt.Sprintf("%s is not available for %s databases yet", mode, p.Engine))

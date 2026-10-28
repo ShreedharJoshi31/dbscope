@@ -8,6 +8,7 @@ import { Button } from "@/shared/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/shared/ui/tooltip";
 import { DriftTab } from "@/widgets/results-dock/ui/drift-tab";
+import { HealthTab } from "@/widgets/results-dock/ui/health-tab";
 import { KeyspaceTab } from "@/widgets/results-dock/ui/keyspace-tab";
 import { MessagesTab } from "@/widgets/results-dock/ui/messages-tab";
 import { PlanTab } from "@/widgets/results-dock/ui/plan-tab";
@@ -38,13 +39,17 @@ const TABS: { value: DockTab; label: ReactNode; content: ReactNode }[] = [
   { value: "schema", label: <SchemaRisksLabel />, content: <SchemaRisksTab /> },
   { value: "drift", label: "Drift", content: <DriftTab /> },
   { value: "keyspace", label: "Keyspace", content: <KeyspaceTab /> },
+  { value: "health", label: "Health", content: <HealthTab /> },
 ];
 
 export function ResultsDock() {
   const { profile } = useActiveConnection();
   const keyspace = Boolean(profile?.capabilities.keyspace);
+  const health = Boolean(profile?.capabilities.health);
   // Key-value stores have no queries to show; their dock is the keyspace report.
-  const tabs = keyspace ? TABS.filter((t) => t.value === "keyspace") : TABS.filter((t) => t.value !== "keyspace");
+  const tabs = (
+    keyspace ? TABS.filter((t) => t.value === "keyspace") : TABS.filter((t) => t.value !== "keyspace")
+  ).filter((t) => t.value !== "health" || health);
   const stored = useRunStore((s) => s.dockTab);
   const tab = tabs.some((t) => t.value === stored) ? stored : (tabs[0]?.value ?? "results");
   const hide = () => togglePanel("dock");

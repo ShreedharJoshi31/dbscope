@@ -55,12 +55,14 @@ type Capabilities struct {
 	Workload   bool `json:"workload"`
 	// Keyspace is the key-pattern report of key-value stores.
 	Keyspace bool `json:"keyspace"`
+	// Health is the server health checks (docs/HEALTH.md).
+	Health bool `json:"health"`
 }
 
 func (e Engine) Capabilities() Capabilities {
 	switch e {
 	case EnginePostgres:
-		return Capabilities{Query: true, Ask: true, Migrations: true, Workload: true}
+		return Capabilities{Query: true, Ask: true, Migrations: true, Workload: true, Health: true}
 	case EngineSQLite:
 		return Capabilities{Query: true, Migrations: true}
 	case EngineMySQL, EngineClickHouse, EngineCassandra, EngineElasticsearch:

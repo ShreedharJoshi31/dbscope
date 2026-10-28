@@ -250,6 +250,25 @@ func (s *server) keyspace(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, rep)
 }
 
+// serverHealth reads a profile's server health checks (docs/HEALTH.md); s.health is the agent's own.
+func (s *server) serverHealth(w http.ResponseWriter, r *http.Request) {
+	p, password, ok := s.profileWithSecret(w, r)
+	if !ok || !supports(w, p, p.Capabilities.Health, "Health checks") {
+		return
+	}
+	src, ok := s.source.(engineSource)
+	if !ok {
+		s.upstreamError(w, r, errUnsupported)
+		return
+	}
+	rep, err := src.Health(r.Context(), p, password)
+	if err != nil {
+		s.upstreamError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, rep)
+}
+
 func (s *server) workload(w http.ResponseWriter, r *http.Request) {
 	p, password, ok := s.profileWithSecret(w, r)
 	if !ok || !supports(w, p, p.Capabilities.Workload, "Workload") {

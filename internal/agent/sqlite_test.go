@@ -82,6 +82,7 @@ func TestSQLiteProfile(t *testing.T) {
 	if !strings.Contains(w.Body.String(), `"engine":"sqlite"`) || !strings.Contains(w.Body.String(), "DBS-SQLITE-NOT-NULL-NO-DEFAULT") {
 		t.Errorf("analyze %s", w.Body.String())
 	}
+	expect(t, e.do("GET", "/api/profiles/"+p.ID+"/health", ""), 501, "unsupported")
 	// .js migrations are MongoDB's; another engine skips them and says so.
 	w = e.do("POST", "/api/profiles/"+p.ID+"/migrations/analyze", `{"files":[{"name":"1.sql","sql":"SELECT 1;"},{"name":"knexfile.js","sql":"module.exports = {}"}]}`)
 	expect(t, w, 200, "")

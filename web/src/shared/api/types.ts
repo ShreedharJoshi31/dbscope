@@ -25,6 +25,8 @@ export interface Capabilities {
   workload: boolean;
   /** The key-pattern report of Redis and Valkey. */
   keyspace?: boolean;
+  /** Server health checks (docs/HEALTH.md). */
+  health?: boolean;
 }
 
 export interface Profile {

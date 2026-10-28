@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/dbscope/dbscope/internal/conn"
+	"github.com/dbscope/dbscope/internal/health"
 	"github.com/dbscope/dbscope/internal/introspect"
 	"github.com/dbscope/dbscope/internal/migrate"
 	"github.com/dbscope/dbscope/internal/query/exec"
@@ -165,6 +166,17 @@ func (ps *pools) Query(ctx context.Context, p conn.Profile, password string, req
 		return nil, err
 	}
 	return exec.Run(ctx, pool, req)
+}
+
+// Health reads the server's health checks (internal/health.Postgres).
+func (ps *pools) Health(ctx context.Context, p conn.Profile, password string) (*health.Report, error) {
+	ctx, cancel := context.WithTimeout(ctx, statementTimeout(p)+connectSlack)
+	defer cancel()
+	pool, err := ps.get(ctx, p, password)
+	if err != nil {
+		return nil, err
+	}
+	return health.Postgres(ctx, pool)
 }
 
 func (ps *pools) Workload(ctx context.Context, p conn.Profile, password string, m *schema.Model) (*workload.Snapshot, error) {

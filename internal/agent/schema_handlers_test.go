@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/dbscope/dbscope/internal/conn"
+	"github.com/dbscope/dbscope/internal/health"
 	"github.com/dbscope/dbscope/internal/introspect"
 	"github.com/dbscope/dbscope/internal/migrate"
 	"github.com/dbscope/dbscope/internal/pgtest"
@@ -453,6 +454,14 @@ func TestSchemaEndToEnd(t *testing.T) {
 	expect(t, w, 200, "")
 	if got := strings.TrimSpace(w.Body.String()); got != `[{"name":"app","relationCount":5},{"name":"public","relationCount":2}]` {
 		t.Fatalf("namespaces %s", got)
+	}
+
+	w = e.do("GET", base+"/health", "")
+	expect(t, w, 200, "")
+	var rep health.Report
+	json.Unmarshal(w.Body.Bytes(), &rep)
+	if rep.Engine != "postgres" || len(rep.Checks) < 9 {
+		t.Fatalf("health %s", w.Body.String())
 	}
 
 	const legacyKey = "public.legacy_posts(legacy_user_id)->public.legacy_users(id)"
