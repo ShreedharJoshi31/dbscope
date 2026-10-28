@@ -284,8 +284,8 @@ function AnalyzeForm({ onDone }: { onDone: () => void }) {
       ) : (
         <PasteMode name={name} sql={sql} onName={setName} onSql={setSql} />
       )}
-      {/* Transaction mode and lock_timeout are PostgreSQL options; SQLite reads transactions from the files. */}
-      {profile?.engine !== "sqlite" && <ReviewOptionsFields value={options} onChange={setOptions} />}
+      {/* Transaction mode and lock_timeout are PostgreSQL options; other engines read the files as written. */}
+      {(!profile || profile.engine === "postgres") && <ReviewOptionsFields value={options} onChange={setOptions} />}
       {problem && <ProblemView problem={problem} />}
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onDone}>

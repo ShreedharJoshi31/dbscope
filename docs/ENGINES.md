@@ -44,7 +44,7 @@ models of their own rather than being forced into tables and columns.
 |---|---|---|---|---|---|
 | PostgreSQL | yes | yes | yes | yes | yes |
 | SQLite | yes | yes | not yet | yes | n/a |
-| MySQL / MariaDB | yes | yes | not yet | not yet | not yet |
+| MySQL / MariaDB | yes | yes | not yet | yes | not yet |
 
 ### SQLite
 
@@ -145,7 +145,38 @@ servers execute them. The connection test lists write privileges from
 `SHOW GRANTS`: a dedicated read-only user is the stronger guard. Plans are
 tabular `EXPLAIN`, shown as steps.
 
+**Migrations.** `mysql.Analyze` predicts, per ALTER clause, the cheapest
+algorithm the server accepts (INSTANT, MariaDB's NOCOPY, INPLACE, COPY),
+whether writes continue, and whether the table is rebuilt, from the server's
+flavor and version and the base's column types, charsets, row formats, sizes
+and foreign keys. There is no SQL parser dependency: the candidates (vitess
+and TiDB's parser) added 11 to 17 MB to the binary and both reject MariaDB's
+`ALGORITHM=NOCOPY`, `ALTER ONLINE TABLE` and `WAIT n`. A clause scanner on the
+query tokenizer classifies statements instead; the server stays the judge of
+exact grammar. Scripts are split on `;` and the client's `DELIMITER` command.
+
+`TestDDLPredictions` (internal/mysql/ddl_verify_test.go) checks every
+prediction against real servers: it runs each operation with each ALGORITHM,
+then with `LOCK=NONE`, and compares InnoDB's table id before and after. All 28
+cases match on MySQL 8.4 and MariaDB 11.8. Two research claims were corrected
+this way: `CONVERT TO CHARACTER SET` copies on MySQL 8.4, and MariaDB renames
+under `LOCK=EXCLUSIVE`. Rules for versions before MySQL 8.0.29 and MariaDB 10.4
+come from the manuals and are not checked against a server.
+
+| Rule | When |
+|---|---|
+| `DBS-MYSQL-BLOCKS-WRITES` | the operation blocks writes (COPY on MySQL and on MariaDB before 11.2 or with cascading foreign keys, FULLTEXT and SPATIAL index builds, auto-increment columns); critical from 1M rows or 1 GiB, high from 100k rows or 100 MiB, high when the size is unknown |
+| `DBS-MYSQL-TABLE-WORK` | a rebuild or index build that lets writes continue; replicas apply it only after it finishes |
+| `DBS-MYSQL-LOCK-WAIT` | DDL without a short `lock_wait_timeout` (the default is a year) or MariaDB's `WAIT n`/`NOWAIT` |
+| `DBS-MYSQL-ALGORITHM` / `-LOCK-NONE` | an explicit ALGORITHM or LOCK=NONE the operation cannot honour, so the statement fails (ALGORITHM is exact on MySQL, a floor on MariaDB) |
+| `DBS-MYSQL-NOT-NULL` / `-NULLABLE` | NOT NULL that fails on existing NULLs, or a MODIFY that drops NOT NULL by restating the column |
+| `DBS-MYSQL-UNIQUE-DATA`, `-FK-UNCHECKED`, `-PARTITION-DATA`, `-TRUNCATE`, `-ROW-VERSIONS` | data-dependent failures, unchecked foreign keys, partition and table data loss, INSTANT's row-version limit |
+
+The safe alternative names gh-ost or pt-online-schema-change by the table's
+foreign keys and primary key. The CLI takes a live base (`--mysql URL` or
+`DBSCOPE_MYSQL_DSN`) or only a version (`--mysql-version 8.4`, `mariadb-11.8`),
+which assumes type changes copy the table.
+
 ## Next engines
 
-MySQL online-DDL migration risk (the matrix in research-mysql.md), then
-MongoDB or Redis.
+MongoDB, then Redis.

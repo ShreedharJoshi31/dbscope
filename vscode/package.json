@@ -37,6 +37,11 @@
           "default": "",
           "description": "A SQLite database file to check against, relative to the workspace folder. dbscope opens it read-only. Takes precedence over the PostgreSQL settings."
         },
+        "dbscope.mysqlVersion": {
+          "type": "string",
+          "default": "",
+          "description": "Check migrations as MySQL or MariaDB, e.g. 8.4 or mariadb-11.8. With DBSCOPE_MYSQL_DSN set in the environment VS Code starts from, the live server is used instead, with table sizes."
+        },
         "dbscope.schemaDump": {
           "type": "string",
           "default": "",

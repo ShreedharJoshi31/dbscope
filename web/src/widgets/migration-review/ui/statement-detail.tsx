@@ -116,8 +116,10 @@ interface StatementDetailProps {
 /** The selected statement: what it locks and does, its transaction and lock_timeout context, findings and fixes. */
 export function StatementDetail({ review, statement: s, total, unanalyzable, headingRef }: StatementDetailProps) {
   const timeout = lockTimeoutCopy(s.lockTimeout, s.locks.length);
-  // SQLite has no lock_timeout and no lock-class score; its findings carry the sizes.
-  const sqlite = review.model?.report.engine === "sqlite";
+  // The score and lock_timeout are PostgreSQL's; SQLite findings carry the sizes, and MySQL has lock_wait_timeout.
+  const engine = review.model?.report.engine;
+  const sqlite = engine === "sqlite";
+  const timeoutName = engine ? "lock_wait_timeout" : "lock_timeout";
   const diff = review.model?.diff;
   const changed = diff ? diff.added.length + diff.altered.length + diff.dropped.length : 0;
   return (
@@ -153,7 +155,7 @@ export function StatementDetail({ review, statement: s, total, unanalyzable, hea
           <Crosshair aria-hidden />
           Show on canvas
         </Button>
-        {!sqlite && (
+        {!engine && (
           <span
             className="self-center font-mono text-2xs text-text-muted"
             title="Lock class × work × size tier, plus lock-queue, missing lock_timeout and held-lock terms (docs/MIGRATIONS.md)"
@@ -180,14 +182,14 @@ export function StatementDetail({ review, statement: s, total, unanalyzable, hea
         {!sqlite && <Fact term="Size">{sizeWords(s.sizeBytes, s.locks.length)}</Fact>}
         <Fact term="Transaction">{txWords(s.tx)}</Fact>
         {!sqlite && (
-          <Fact term="lock_timeout">
+          <Fact term={timeoutName}>
             <span className="flex items-start gap-1.5">
               {timeout.tone === "success" ? (
                 <Lock aria-hidden className="mt-px size-3.5 shrink-0 text-status-success-fg" />
               ) : (
                 <StatusIcon tone={timeout.tone} className="mt-px size-3.5" />
               )}
-              {timeout.text}
+              {timeout.text.replaceAll("lock_timeout", timeoutName)}
             </span>
           </Fact>
         )}

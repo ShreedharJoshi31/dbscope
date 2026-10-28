@@ -31,7 +31,8 @@ export function activate(context: vscode.ExtensionContext) {
     const fromFolder = (p: string) => (p && !path.isAbsolute(p) ? path.join(folder, p) : p);
     const schemaDump = fromFolder(c.get<string>("schemaDump", ""));
     const sqlite = fromFolder(c.get<string>("sqlite", ""));
-    if (!dsn && !schemaDump && !sqlite) {
+    const mysqlVersion = c.get<string>("mysqlVersion", "");
+    if (!dsn && !schemaDump && !sqlite && !mysqlVersion) {
       if (!warnedNoBase) {
         warnedNoBase = true;
         const open = "Open settings";
@@ -54,6 +55,7 @@ export function activate(context: vscode.ExtensionContext) {
         dsn,
         schemaDump,
         sqlite,
+        mysqlVersion,
         stats: fromFolder(c.get<string>("stats", "")),
       });
       if (runs.get(dir) !== run) return;

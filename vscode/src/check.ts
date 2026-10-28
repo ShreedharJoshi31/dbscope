@@ -10,6 +10,8 @@ export interface CheckOptions {
   stats?: string;
   /** A SQLite database file; when set the PostgreSQL options are not used. */
   sqlite?: string;
+  /** Check as MySQL or MariaDB: a version for --mysql-version, used unless DBSCOPE_MYSQL_DSN is set. */
+  mysqlVersion?: string;
   /** The database URL, from the environment variable the user named. */
   dsn?: string;
 }
@@ -24,7 +26,12 @@ export function check(o: CheckOptions): Promise<CheckResult> {
   const args = ["migrate", "check", o.dir, "--format", "json"];
   const env = { ...process.env };
   delete env.DBSCOPE_DSN;
+  if (!o.mysqlVersion || o.sqlite) delete env.DBSCOPE_MYSQL_DSN;
   if (o.sqlite) args.push("--sqlite", o.sqlite);
+  else if (o.mysqlVersion) {
+    // The CLI reads DBSCOPE_MYSQL_DSN itself; the URL never appears in its arguments.
+    if (!process.env.DBSCOPE_MYSQL_DSN) args.push("--mysql-version", o.mysqlVersion);
+  }
   else if (o.dsn) env.DBSCOPE_DSN = o.dsn;
   else if (o.schemaDump) {
     args.push("--schema-dump", o.schemaDump);

@@ -70,6 +70,20 @@ func (s *server) analyzeMigrations(w http.ResponseWriter, r *http.Request) {
 	// Introspection, sizes and impact queries can each take a statement timeout.
 	ctx, cancel := context.WithTimeout(r.Context(), 3*statementTimeout(p)+connectSlack)
 	defer cancel()
+	if p.Engine == conn.EngineMySQL {
+		src, _ := s.source.(engineSource)[conn.EngineMySQL].(*mysqlSource)
+		if src == nil {
+			s.upstreamError(w, r, errUnsupported)
+			return
+		}
+		rep, err := src.Analyze(ctx, p, password, req.Files)
+		if err != nil {
+			s.upstreamError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, rep)
+		return
+	}
 	if p.Engine == conn.EngineSQLite {
 		rep, err := sqliteSource{}.Analyze(ctx, p, req.Files)
 		if err != nil {

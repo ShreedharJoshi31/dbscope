@@ -149,7 +149,7 @@ export function ReviewHeader({ review, model, onGoTo }: ReviewHeaderProps) {
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
         {/* Transaction mode and lock_timeout are PostgreSQL options. */}
-        {model.report.engine !== "sqlite" && (
+        {!model.report.engine && (
           <ReviewOptionsFields compact value={review.options} onChange={(next) => reanalyze(review.id, next)} />
         )}
         <SchemaChanges model={model} />

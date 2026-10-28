@@ -16,13 +16,18 @@ type Token struct {
 	// Word is the lower-cased text of a keyword or bare name; empty otherwise.
 	Word string
 	Semi bool
+	// Pos is the byte offset of the token in the text Tokens was given.
+	Pos int
 }
 
 // Tokens splits MySQL text into tokens, dropping whitespace and comments.
 // The contents of /*! ... */ and /*M! ... */ comments are kept as tokens:
 // MySQL and MariaDB execute them. Optimizer hints (/*+ ... */) are dropped.
-func Tokens(s string) []Token {
+func Tokens(s string) []Token { return tokensAt(s, 0) }
+
+func tokensAt(s string, base int) []Token {
 	var out []Token
+	emit := func(t Token, at int) { t.Pos = base + at; out = append(out, t) }
 	for i := 0; i < len(s); {
 		c := s[i]
 		switch {
@@ -42,9 +47,9 @@ func Tokens(s string) []Token {
 			}
 			end := strings.Index(s[i:], "*/")
 			if end < 0 {
-				return append(out, Tokens(s[i:])...)
+				return append(out, tokensAt(s[i:], base+i)...)
 			}
-			out = append(out, Tokens(s[i:i+end])...)
+			out = append(out, tokensAt(s[i:i+end], base+i)...)
 			i += end + 2
 		case strings.HasPrefix(s[i:], "/*"):
 			end := strings.Index(s[i+2:], "*/")
@@ -69,23 +74,23 @@ func Tokens(s string) []Token {
 				j++
 			}
 			j = min(j+1, len(s))
-			out = append(out, Token{Text: s[i:j]})
+			emit(Token{Text: s[i:j]}, i)
 			i = j
 		case c == ';':
-			out = append(out, Token{Text: ";", Semi: true})
+			emit(Token{Text: ";", Semi: true}, i)
 			i++
 		case isWord(rune(c)):
 			j := i
 			for j < len(s) && isWord(rune(s[j])) {
 				j++
 			}
-			out = append(out, Token{Text: s[i:j], Word: strings.ToLower(s[i:j])})
+			emit(Token{Text: s[i:j], Word: strings.ToLower(s[i:j])}, i)
 			i = j
 		case c == ':' && i+1 < len(s) && s[i+1] == '=':
-			out = append(out, Token{Text: ":="})
+			emit(Token{Text: ":="}, i)
 			i += 2
 		default:
-			out = append(out, Token{Text: s[i : i+1]})
+			emit(Token{Text: s[i : i+1]}, i)
 			i++
 		}
 	}

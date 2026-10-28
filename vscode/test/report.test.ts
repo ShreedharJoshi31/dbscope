@@ -89,3 +89,17 @@ describe("check, against a SQLite file", () => {
     expect(problems(report, root).map((p) => [p.code, p.severity, p.line])).toEqual([["DBS-SQLITE-VACUUM", "error", 0]]);
   });
 });
+
+describe("check, as MySQL without a server", () => {
+  it("passes --mysql-version and reports MySQL findings", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "dbscope-mysql-"));
+    const migrations = path.join(dir, "migrations");
+    mkdirSync(migrations);
+    writeFileSync(path.join(migrations, "1.sql"), "ALTER TABLE orders MODIFY total BIGINT;\n");
+    const { report, root } = await check({ binary: path.join(repo, "bin/dbscope"), dir: migrations, cwd: dir, mysqlVersion: "8.4" });
+    expect(problems(report, root).map((p) => [p.code, p.severity])).toEqual([
+      ["DBS-MYSQL-BLOCKS-WRITES", "error"],
+      ["DBS-MYSQL-LOCK-WAIT", "warning"],
+    ]);
+  });
+});

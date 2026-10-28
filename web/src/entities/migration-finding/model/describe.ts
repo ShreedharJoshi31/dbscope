@@ -26,6 +26,13 @@ const LOCK_MODES: Record<string, LockMode> = {
   "SHARE ROW EXCLUSIVE": { words: "blocks writes and other SHARE ROW EXCLUSIVE locks; reads continue", tone: "warn" },
   EXCLUSIVE: { words: "blocks writes and SELECT … FOR UPDATE; plain reads continue", tone: "warn" },
   "ACCESS EXCLUSIVE": { words: "blocks reads and writes", tone: "danger" },
+  // MySQL and MariaDB: an online ALTER holds the metadata lock exclusively only at its start and end.
+  "METADATA EXCLUSIVE": {
+    words:
+      "brief at the start and end, but it waits behind open transactions on the table, and every later query waits behind it",
+    tone: "warn",
+  },
+  "SHARED (BLOCKS WRITES)": { words: "blocks writes for the whole operation; reads continue", tone: "danger" },
   // SQLite locks the whole database file, not a table.
   "DATABASE WRITE": {
     words:

@@ -43,7 +43,7 @@ func TestMySQLProfile(t *testing.T) {
 	expect(t, w, 201, "")
 	var p conn.Profile
 	json.Unmarshal(w.Body.Bytes(), &p)
-	if p.Engine != conn.EngineMySQL || !p.Capabilities.Query || p.Capabilities.Migrations {
+	if p.Engine != conn.EngineMySQL || !p.Capabilities.Query || !p.Capabilities.Migrations {
 		t.Fatalf("created %s", w.Body.String())
 	}
 
@@ -62,5 +62,9 @@ func TestMySQLProfile(t *testing.T) {
 	expect(t, e.do("POST", "/api/profiles/"+p.ID+"/query", `{"sql":"SELECT * FROM users INTO OUTFILE '/tmp/x'"}`), 422, "rejected")
 	expect(t, e.do("POST", "/api/profiles/"+p.ID+"/query", `{"sql":"SELECT * FROM nope"}`), 400, "database")
 	expect(t, e.do("GET", "/api/profiles/"+p.ID+"/workload", ""), 501, "unsupported")
-	expect(t, e.do("POST", "/api/profiles/"+p.ID+"/migrations/analyze", `{"files":[{"name":"1.sql","sql":"SELECT 1"}]}`), 501, "unsupported")
+	w = e.do("POST", "/api/profiles/"+p.ID+"/migrations/analyze", `{"files":[{"name":"1.sql","sql":"ALTER TABLE users MODIFY email TEXT NOT NULL;"}]}`)
+	expect(t, w, 200, "")
+	if !strings.Contains(w.Body.String(), `"engine":"mysql"`) || !strings.Contains(w.Body.String(), "DBS-MYSQL-BLOCKS-WRITES") {
+		t.Errorf("analyze %s", w.Body.String())
+	}
 }

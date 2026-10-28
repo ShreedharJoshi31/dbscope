@@ -59,7 +59,7 @@ func TestEngines(t *testing.T) {
 	if p.Path != filepath.Join(dir, "app.db") || p.Host != "" || p.Port != 0 || p.User != "" || p.SSLMode != "" {
 		t.Fatalf("sqlite profile kept network fields: %+v", p)
 	}
-	if p.Capabilities != (Capabilities{Query: true, Migrations: true}) {
+	if p.Capabilities != (Capabilities{Query: true, Migrations: true}) { // SQLite
 		t.Fatalf("sqlite capabilities %+v", p.Capabilities)
 	}
 }

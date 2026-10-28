@@ -24,6 +24,7 @@ import (
 	"github.com/dbscope/dbscope/internal/migrate/report"
 	"github.com/dbscope/dbscope/internal/migrate/score"
 	"github.com/dbscope/dbscope/internal/migrate/stats"
+	"github.com/dbscope/dbscope/internal/mysql"
 	"github.com/dbscope/dbscope/internal/sqlite"
 )
 
@@ -42,6 +43,8 @@ const migrateUsage = `usage:
                         [--tx-mode auto|file|statement|none] [--assume-lock-timeout]
   dbscope migrate check PATH... --sqlite FILE | --sqlite-schema FILE
                         [--fail-on low|medium|high|critical] [--format text|json|sarif|github]
+  dbscope migrate check PATH... --mysql URL | --mysql-version VERSION
+                        [--fail-on low|medium|high|critical] [--format text|json|sarif|github]
 
   dbscope migrate capture --shadow URL [--dsn URL] [--out DIR] [--url-env NAME]...
                           [--allow-nonempty-shadow] -- COMMAND [ARGS...]
@@ -51,7 +54,10 @@ a live database (--dsn, or the DBSCOPE_DSN environment variable), or a
 pg_dump --schema-only file optionally combined with a "dbscope stats export"
 file. For SQLite the base is a database file (--sqlite, opened read-only) or a
 schema script such as the output of sqlite3 app.db .schema (--sqlite-schema);
-see docs/ENGINES.md. Exits 1 when any statement is rated at or above --fail-on (default
+see docs/ENGINES.md. For MySQL and MariaDB the base is a live server
+(--mysql mysql://user:password@host:3306/db, or the DBSCOPE_MYSQL_DSN
+environment variable), or only a server version with no sizes
+(--mysql-version 8.4, or mariadb-11.8). Exits 1 when any statement is rated at or above --fail-on (default
 high), 2 on usage errors and 3 when the base schema cannot be read.
 
 capture runs an ORM's migrate command (bin/rails db:migrate, python manage.py
@@ -142,6 +148,8 @@ func migrateCmd(args []string, stdout, stderr io.Writer) int {
 	assume := fs.Bool("assume-lock-timeout", false, "the deploy tool sets lock_timeout itself")
 	sqliteFile := fs.String("sqlite", "", "SQLite database file to use as the base schema (opened read-only)")
 	sqliteSchema := fs.String("sqlite-schema", "", "SQLite schema script (sqlite3 FILE .schema) to use as the base schema")
+	mysqlURL := fs.String("mysql", "", "mysql:// URL of the base MySQL or MariaDB server (or DBSCOPE_MYSQL_DSN)")
+	mysqlVersion := fs.String("mysql-version", "", "check MySQL migrations without a server, as this version (8.4, mariadb-11.8)")
 	paths, err := parseInterleaved(fs, args[1:])
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -172,6 +180,21 @@ func migrateCmd(args []string, stdout, stderr io.Writer) int {
 	}
 	if len(paths) == 0 {
 		return usage("at least one migration file or directory is required")
+	}
+	if *mysqlURL == "" && *mysqlVersion == "" && *dsnFlag == "" && *dumpPath == "" && *sqliteFile == "" && *sqliteSchema == "" {
+		*mysqlURL = os.Getenv("DBSCOPE_MYSQL_DSN")
+		if *mysqlURL != "" && os.Getenv("DBSCOPE_DSN") != "" {
+			return usage("both DBSCOPE_DSN and DBSCOPE_MYSQL_DSN are set; pass --dsn or --mysql to choose")
+		}
+	}
+	if *mysqlURL != "" || *mysqlVersion != "" {
+		switch {
+		case *mysqlURL != "" && *mysqlVersion != "":
+			return usage("use either --mysql or --mysql-version, not both")
+		case *dsnFlag != "" || *dumpPath != "" || *statsPath != "" || *pgVersion != "" || *txMode != "auto" || *assume || *sqliteFile != "" || *sqliteSchema != "":
+			return usage("--mysql and --mysql-version take no PostgreSQL or SQLite options")
+		}
+		return checkMySQL(stdout, stderr, paths, *mysqlURL, *mysqlVersion, *format, limit)
 	}
 	if *sqliteFile != "" || *sqliteSchema != "" {
 		switch {
@@ -258,6 +281,52 @@ func checkSQLite(stdout, stderr io.Writer, paths []string, file, schemaPath, for
 		fmt.Fprintf(stderr, "dbscope migrate check: %v\n", err)
 		return exitUnavailable
 	}
+	if err := report.Write(stdout, format, rep, agent.Version); err != nil {
+		fmt.Fprintf(stderr, "dbscope migrate check: %v\n", err)
+		return exitUsage
+	}
+	if rep.Exceeds(limit) {
+		return exitThreshold
+	}
+	return exitOK
+}
+
+func checkMySQL(stdout, stderr io.Writer, paths []string, rawURL, version, format string, limit score.Rating) int {
+	cwd, _ := os.Getwd()
+	inputs, err := ingest.ReadPaths(paths, ingest.RepoRoot(cwd))
+	if err != nil {
+		fmt.Fprintf(stderr, "dbscope migrate check: %s\n%s", err, migrateUsage)
+		return exitUsage
+	}
+	var base *mysql.Base
+	if version != "" {
+		srv, err := mysql.ParseServer(version)
+		if err != nil {
+			fmt.Fprintf(stderr, "dbscope migrate check: --mysql-version: %v\n%s", err, migrateUsage)
+			return exitUsage
+		}
+		base = &mysql.Base{Server: srv, Tables: map[string]*mysql.TableInfo{}, Source: "none"}
+	} else {
+		p, password, err := mysql.ParseURL(rawURL)
+		if err != nil {
+			fmt.Fprintf(stderr, "dbscope migrate check: --mysql: %v\n%s", err, migrateUsage)
+			return exitUsage
+		}
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		ctx, cancel := context.WithTimeout(ctx, time.Minute)
+		defer cancel()
+		db, err := mysql.Open(p, password, 30*time.Second)
+		if err == nil {
+			base, err = mysql.ReadBase(ctx, db, nil, p.Database)
+			db.Close()
+		}
+		if err != nil {
+			fmt.Fprintf(stderr, "dbscope migrate check: base schema unavailable: %v\n", err)
+			return exitUnavailable
+		}
+	}
+	rep := mysql.Analyze(base, inputs)
 	if err := report.Write(stdout, format, rep, agent.Version); err != nil {
 		fmt.Fprintf(stderr, "dbscope migrate check: %v\n", err)
 		return exitUsage

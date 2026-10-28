@@ -40,7 +40,7 @@ func (e Engine) Capabilities() Capabilities {
 	case EngineSQLite:
 		return Capabilities{Query: true, Migrations: true}
 	case EngineMySQL:
-		return Capabilities{Query: true}
+		return Capabilities{Query: true, Migrations: true}
 	}
 	return Capabilities{}
 }

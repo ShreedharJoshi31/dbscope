@@ -10,7 +10,7 @@ export const ENGINE_META: Record<Engine, { label: string; description: string; d
   },
   mysql: {
     label: "MySQL / MariaDB",
-    description: "ERD and read-only queries. Migration risk for MySQL is coming.",
+    description: "ERD, read-only queries and online DDL migration risk.",
     defaultPort: 3306,
   },
   sqlite: {

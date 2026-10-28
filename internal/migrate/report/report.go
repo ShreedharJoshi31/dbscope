@@ -173,9 +173,13 @@ func bytesText(n int64) string {
 
 // engineVersion is "PostgreSQL 17.2", or "SQLite 3.54.1" for a SQLite report.
 func engineVersion(rep *migrate.Report) string {
-	if rep.Engine == "sqlite" {
-		v := rep.PGVersion
+	v := rep.PGVersion
+	switch rep.Engine {
+	case "sqlite":
 		return fmt.Sprintf("SQLite %d.%d.%d", v/1_000_000, v/1000%1000, v%1000)
+	case "mysql", "mariadb":
+		name := map[string]string{"mysql": "MySQL", "mariadb": "MariaDB"}[rep.Engine]
+		return fmt.Sprintf("%s %d.%d.%d", name, v/10000, v/100%100, v%100)
 	}
 	return "PostgreSQL " + version(rep.PGVersion)
 }

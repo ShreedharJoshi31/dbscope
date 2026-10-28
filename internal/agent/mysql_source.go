@@ -8,6 +8,7 @@ import (
 	"github.com/dbscope/dbscope/internal/conn"
 	"github.com/dbscope/dbscope/internal/introspect"
 	"github.com/dbscope/dbscope/internal/migrate"
+	"github.com/dbscope/dbscope/internal/migrate/ingest"
 	"github.com/dbscope/dbscope/internal/mysql"
 	"github.com/dbscope/dbscope/internal/query/exec"
 	"github.com/dbscope/dbscope/internal/schema"
@@ -81,6 +82,19 @@ func (ms *mysqlSource) Run(ctx context.Context, p conn.Profile, password, sqlTex
 		return nil, err
 	}
 	return mysql.Run(ctx, db, sqlText, maxRows, explainOnly, statementTimeout(p))
+}
+
+// Analyze checks migration files against the profile's server (internal/mysql.Analyze).
+func (ms *mysqlSource) Analyze(ctx context.Context, p conn.Profile, password string, files []ingest.Input) (*migrate.Report, error) {
+	db, err := ms.get(p, password)
+	if err != nil {
+		return nil, err
+	}
+	base, err := mysql.ReadBase(ctx, db, p.Schemas, p.Database)
+	if err != nil {
+		return nil, err
+	}
+	return mysql.Analyze(base, files), nil
 }
 
 // Query is PostgreSQL's request shape (a parsed tree); MySQL statements go through Run.

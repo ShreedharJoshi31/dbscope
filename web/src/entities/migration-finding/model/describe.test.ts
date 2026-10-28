@@ -8,6 +8,7 @@ import {
   sizeWords,
 } from "@/entities/migration-finding/model/describe";
 import {
+  mysqlVersionLabel,
   pgVersionLabel,
   ratingMeta,
   ratingRank,
@@ -68,6 +69,8 @@ describe("ratings", () => {
     expect(pgVersionLabel(0)).toMatch(/unknown/);
     expect(sqliteVersionLabel(3054001)).toBe("SQLite 3.54.1");
     expect(sqliteVersionLabel(3035005)).toBe("SQLite 3.35.5");
+    expect(mysqlVersionLabel(80413, "mysql")).toBe("MySQL 8.4.13");
+    expect(mysqlVersionLabel(110809, "mariadb")).toBe("MariaDB 11.8.9");
   });
 
   it("describes SQLite's database-wide write lock", () => {

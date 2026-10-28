@@ -34,7 +34,7 @@ const NOW = "2026-10-26T10:00:00Z";
 
 function capabilitiesOf(engine: StubProfile["engine"] | undefined): StubProfile["capabilities"] {
   if (engine === "sqlite") return { query: true, ask: false, migrations: true, workload: false };
-  if (engine === "mysql") return { query: true, ask: false, migrations: false, workload: false };
+  if (engine === "mysql") return { query: true, ask: false, migrations: true, workload: false };
   return { query: true, ask: true, migrations: true, workload: true };
 }
 
