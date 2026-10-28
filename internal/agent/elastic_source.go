@@ -8,6 +8,7 @@ import (
 	"github.com/dbscope/dbscope/internal/elastic"
 	"github.com/dbscope/dbscope/internal/introspect"
 	"github.com/dbscope/dbscope/internal/migrate"
+	"github.com/dbscope/dbscope/internal/migrate/ingest"
 	"github.com/dbscope/dbscope/internal/query/exec"
 	"github.com/dbscope/dbscope/internal/schema"
 	"github.com/dbscope/dbscope/internal/workload"
@@ -67,6 +68,19 @@ func (es *elasticSource) Run(ctx context.Context, p conn.Profile, password strin
 		return nil, err
 	}
 	return elastic.Run(ctx, c, req, maxRows, explainOnly, statementTimeout(p))
+}
+
+// Analyze checks console-format migration requests against the profile's indices (internal/elastic.Analyze).
+func (es *elasticSource) Analyze(ctx context.Context, p conn.Profile, password string, files []ingest.Input) (*migrate.Report, error) {
+	c, err := es.get(p, password)
+	if err != nil {
+		return nil, err
+	}
+	base, err := elastic.ReadBase(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	return elastic.Analyze(base, files), nil
 }
 
 func (es *elasticSource) Query(context.Context, conn.Profile, string, exec.Request) (*exec.Result, error) {

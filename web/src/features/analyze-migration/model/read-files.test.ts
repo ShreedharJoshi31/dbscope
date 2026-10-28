@@ -25,7 +25,11 @@ function dir(name: string, children: (DirectoryHandleLike | { kind: "file"; name
 
 describe("reading migration files", () => {
   it("keeps SQL, Flyway .sql.conf and atlas.sum, and ignores the rest", () => {
-    expect(["a.sql", "V1__x.SQL", "V1__x.sql.conf", "m/atlas.sum", "002_users.cql"].every(isMigrationFile)).toBe(true);
+    expect(
+      ["a.sql", "V1__x.SQL", "V1__x.sql.conf", "m/atlas.sum", "002_users.cql", "V1_1__fields.http"].every(
+        isMigrationFile,
+      ),
+    ).toBe(true);
     expect(["README.md", "a.sql.bak", "schema.json"].some(isMigrationFile)).toBe(false);
     const files = [new File(["x"], "0002_b.sql"), new File(["x"], "notes.txt"), new File(["x"], "0001_a.sql")];
     const { picked, ignored } = collectFileList(files);

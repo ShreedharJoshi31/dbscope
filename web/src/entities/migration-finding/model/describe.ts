@@ -78,6 +78,14 @@ const ENGINE_WORK: Record<string, Partial<Record<StatementWork, string>>> = {
   scylla: CQL_WORK,
 };
 
+// Elasticsearch and OpenSearch: mapping and setting changes apply at once; copies and rewrites run as tasks.
+const SEARCH_WORK: Partial<Record<StatementWork, string>> = {
+  none: "Cluster state only: no documents are read",
+  rewrite: "Reads and indexes documents again as a task; searches and writes continue",
+};
+ENGINE_WORK.elasticsearch = SEARCH_WORK;
+ENGINE_WORK.opensearch = SEARCH_WORK;
+
 export function workWords(work: StatementWork, engine?: string): string {
   return (engine ? ENGINE_WORK[engine]?.[work] : undefined) ?? WORK[work] ?? work;
 }

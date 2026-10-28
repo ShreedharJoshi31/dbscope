@@ -86,7 +86,7 @@ export const ENGINE_META: Record<Engine, EngineMeta> = {
     queryLanguage: "a search request as JSON, or SQL",
     label: "Elasticsearch",
     description:
-      "Elasticsearch or OpenSearch: indices with their mapped fields, shards and mapping risks, fields an alias maps differently, and read-only searches and SQL.",
+      "Elasticsearch or OpenSearch: indices with their mapped fields, shards and mapping risks, fields an alias maps differently, read-only searches and SQL, and which mapping and setting changes fail or reindex.",
     defaultPort: 9200,
     urlExample: "https://user:password@host:9200/index-pattern",
   },

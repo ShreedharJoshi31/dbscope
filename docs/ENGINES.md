@@ -80,7 +80,7 @@ experimental materialized views and SASI indexes).
 | DynamoDB | key schemas + sampled attributes | PartiQL SELECT | not yet | n/a | not yet |
 | Cassandra / ScyllaDB | keyspace tables | CQL SELECT | not yet | CQL schema changes | not yet |
 | Neo4j | labels and relationship types | read-only Cypher | not yet | not yet | not yet |
-| Elasticsearch / OpenSearch | indices, aliases, data streams | search JSON and SQL | not yet | n/a | not yet |
+| Elasticsearch / OpenSearch | indices, aliases, data streams | search JSON and SQL | not yet | console-format requests | not yet |
 | ClickHouse | tables, keys, parts | SQL under readonly | not yet | ALTER mutations | not yet |
 | SQL Server / Azure SQL | tables, views, keys, indexes | SELECT behind a plan gate | not yet | not yet | not yet |
 | Oracle | tables, views, materialized views, keys, indexes | SELECT in a READ ONLY transaction | not yet | not yet | not yet |
@@ -588,8 +588,27 @@ asking for more than 10,000 buckets. For SQL it shows the search request
 Elasticsearch would send (`_sql/translate`) or OpenSearch's plan
 (`_plugins/_sql/_explain`), checked the same way.
 
-Not yet: AWS SigV4, PPL (it needs another cluster permission), cluster
-health and shard allocation, and risks of mapping changes.
+**Migration risk.** Migration files are requests in Kibana console form, a
+method and path line followed by the JSON body, which is what
+elasticsearch-evolution reads (`.http` files are picked up). They are
+checked against the live mappings, flat settings and store sizes of the
+profile's indices, resolving aliases, data streams and wildcards. What each
+cluster refuses was checked on Elasticsearch 9.5 and 8.19 and OpenSearch 3.9
+and 2.19 (`TestMigratePredictions`, 15 requests each): a field's type never
+changes in place, static settings (`number_of_shards`, `analysis`, `codec`,
+`sort` and the like) need a closed index, creating an existing index fails,
+the field limit counts new fields, and `_split`, `_shrink` and `_clone` need a
+write block first (dbscope notices one set earlier in the same file).
+
+Rated besides: `_reindex`, `_update_by_query` and `_forcemerge` by the
+store size they read, a reindex into an index that does not exist yet (it
+gets dynamic mappings), new fields (old documents do not match them until
+reindexed), replica changes (copies over the network, or no copy at 0),
+write blocks, closed indices, templates (new indices only), and deletes of
+indices or documents.
+
+Not yet: AWS SigV4, PPL (it needs another cluster permission), and cluster
+health and shard allocation.
 
 ### ClickHouse
 

@@ -63,13 +63,13 @@ func (e Engine) Capabilities() Capabilities {
 		return Capabilities{Query: true, Ask: true, Migrations: true, Workload: true}
 	case EngineSQLite:
 		return Capabilities{Query: true, Migrations: true}
-	case EngineMySQL, EngineClickHouse, EngineCassandra:
+	case EngineMySQL, EngineClickHouse, EngineCassandra, EngineElasticsearch:
 		return Capabilities{Query: true, Migrations: true}
 	case EngineMongoDB:
 		return Capabilities{Query: true}
 	case EngineRedis:
 		return Capabilities{Keyspace: true}
-	case EngineDynamoDB, EngineNeo4j, EngineElasticsearch, EngineSQLServer, EngineOracle:
+	case EngineDynamoDB, EngineNeo4j, EngineSQLServer, EngineOracle:
 		return Capabilities{Query: true}
 	}
 	return Capabilities{}

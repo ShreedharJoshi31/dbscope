@@ -14,10 +14,10 @@ export function isMigrationFile(name: string): boolean {
   return isSqlFile(base) || base.endsWith(".sql.conf") || base === "atlas.sum";
 }
 
-/** A statement file: .sql, or .cql for Cassandra and ScyllaDB migration tools. */
+/** A statement file: .sql, .cql for Cassandra and ScyllaDB tools, or .http for elasticsearch-evolution. */
 export function isSqlFile(name: string): boolean {
   const lower = name.toLowerCase();
-  return lower.endsWith(".sql") || lower.endsWith(".cql");
+  return lower.endsWith(".sql") || lower.endsWith(".cql") || lower.endsWith(".http");
 }
 
 /** A file and the relative path it was found under. */

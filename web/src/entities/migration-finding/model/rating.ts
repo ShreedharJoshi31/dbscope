@@ -1,4 +1,4 @@
-import type { Rating } from "@/shared/api";
+import type { AnalyzeReport, Rating } from "@/shared/api";
 
 /** Worst first: the order counts, lists and the Markdown summary use. */
 export const RATINGS: readonly Rating[] = ["critical", "high", "medium", "low"];
@@ -59,18 +59,19 @@ export function sqliteVersionLabel(versionNum: number): string {
   return `SQLite ${Math.floor(versionNum / 1_000_000)}.${Math.floor(versionNum / 1000) % 1000}.${versionNum % 1000}`;
 }
 
-/** "MySQL 8.4.13" for 80413, "MariaDB 11.8.9", "ClickHouse 26.8.10" or "ScyllaDB 2025.1.3". */
-export function mysqlVersionLabel(
-  versionNum: number,
-  flavor: "mysql" | "mariadb" | "clickhouse" | "cassandra" | "scylla",
-): string {
-  const name = {
-    mysql: "MySQL",
-    mariadb: "MariaDB",
-    clickhouse: "ClickHouse",
-    cassandra: "Cassandra",
-    scylla: "ScyllaDB",
-  }[flavor];
+const ENGINE_NAMES: Record<Exclude<NonNullable<AnalyzeReport["engine"]>, "sqlite">, string> = {
+  mysql: "MySQL",
+  mariadb: "MariaDB",
+  clickhouse: "ClickHouse",
+  cassandra: "Cassandra",
+  scylla: "ScyllaDB",
+  elasticsearch: "Elasticsearch",
+  opensearch: "OpenSearch",
+};
+
+/** "MySQL 8.4.13" for 80413, "MariaDB 11.8.9", "ClickHouse 26.8.10" or "Elasticsearch 9.5.5". */
+export function mysqlVersionLabel(versionNum: number, flavor: keyof typeof ENGINE_NAMES): string {
+  const name = ENGINE_NAMES[flavor];
   if (!Number.isFinite(versionNum) || versionNum <= 0) return `${name} (unknown version)`;
   return `${name} ${Math.floor(versionNum / 10000)}.${Math.floor(versionNum / 100) % 100}.${versionNum % 100}`;
 }

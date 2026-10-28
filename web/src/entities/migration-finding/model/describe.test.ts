@@ -87,6 +87,7 @@ describe("work in plain words", () => {
     expect(workWords("none", "clickhouse")).toMatch(/^Metadata only/);
     expect(workWords("scan", "clickhouse")).toBe(workWords("scan"));
     expect(workWords("index_build", "scylla")).toMatch(/background on every node/);
+    expect(workWords("rewrite", "opensearch")).toMatch(/as a task/);
   });
 
   it("labels a ClickHouse version", () => {

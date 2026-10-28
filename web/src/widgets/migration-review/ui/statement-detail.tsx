@@ -116,10 +116,10 @@ interface StatementDetailProps {
 /** The selected statement: what it locks and does, its transaction and lock_timeout context, findings and fixes. */
 export function StatementDetail({ review, statement: s, total, unanalyzable, headingRef }: StatementDetailProps) {
   const timeout = lockTimeoutCopy(s.lockTimeout, s.locks.length);
-  // The score and lock_timeout are PostgreSQL's; SQLite, ClickHouse and Cassandra findings carry the sizes and
-  // take no lock to time out, and MySQL has lock_wait_timeout.
+  // The score and lock_timeout are PostgreSQL's and MySQL has lock_wait_timeout; the other engines' findings
+  // carry the sizes and they take no lock to time out.
   const engine = review.model?.report.engine;
-  const noLocks = engine === "sqlite" || engine === "clickhouse" || engine === "cassandra" || engine === "scylla";
+  const noLocks = engine !== undefined && engine !== "mysql" && engine !== "mariadb";
   const timeoutName = engine ? "lock_wait_timeout" : "lock_timeout";
   const diff = review.model?.diff;
   const changed = diff ? diff.added.length + diff.altered.length + diff.dropped.length : 0;

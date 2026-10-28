@@ -104,7 +104,7 @@ export type MigrationBase = "live" | "stats" | "dump" | "sample";
 
 export interface AnalyzeReport {
   /** Omitted for PostgreSQL. */
-  engine?: "sqlite" | "mysql" | "mariadb" | "clickhouse" | "cassandra" | "scylla";
+  engine?: "sqlite" | "mysql" | "mariadb" | "clickhouse" | "cassandra" | "scylla" | "elasticsearch" | "opensearch";
   /** server_version_num used for version-dependent rules, e.g. 170000; SQLITE_VERSION_NUMBER for SQLite. */
   pgVersion: number;
   rating: Rating;
