@@ -11,7 +11,7 @@ function pct(share: number): string {
   return `${Math.round(share * 100)}%`;
 }
 
-function cost(n: number): string {
+export function cost(n: number): string {
   return n >= 1000 ? formatGrouped(Math.round(n)) : n.toFixed(2);
 }
 

@@ -33,6 +33,7 @@ internal/agent     engineSource routes each SchemaSource call by profile engine
   redis_source.go  Redis and Valkey (a client per profile; reports cached 30 s)
 internal/sqlite    SQLite: Open, Introspect, Check, Run, Test, Split, Analyze
 internal/mysql     MySQL and MariaDB: Open, Introspect, Check, Run, Test
+internal/mssql     SQL Server and Azure SQL: Open, Introspect, Check, Run, Test
 internal/mongo     MongoDB: Connect, Introspect (inferred), Parse, Check, Run, Test
 internal/redis     Redis and Valkey: Connect, Analyze (keyspace report), Model, Test
 internal/mytest    MySQL, MariaDB, MongoDB, Redis and Valkey containers for integration tests
@@ -80,6 +81,7 @@ experimental materialized views and SASI indexes).
 | Neo4j | labels and relationship types | read-only Cypher | not yet | not yet | not yet |
 | Elasticsearch / OpenSearch | indices, aliases, data streams | search JSON and SQL | not yet | n/a | not yet |
 | ClickHouse | tables, keys, parts | SQL under readonly | not yet | not yet | not yet |
+| SQL Server / Azure SQL | tables, views, keys, indexes | SELECT behind a plan gate | not yet | not yet | not yet |
 
 ### SQLite
 
@@ -639,6 +641,77 @@ Not yet: migration risk of ALTER (which ALTERs rewrite parts), replication
 lag and queues, and cardinality order of key columns, which needs reading
 data.
 
+### SQL Server and Azure SQL
+
+Tested against SQL Server 2025 and 2022 (Developer edition, the amd64
+images under emulation on arm64) as sa and as a `db_datareader` login. The
+driver is go-mssqldb v1.11. Only SQL authentication: Windows and Entra ID
+logins are not yet supported.
+
+A profile is a host, port (1433), database and user. TDS always encrypts
+the login packet, so sslMode `disable` still protects the password and only
+the session is plaintext; `prefer` and `require` encrypt the session without
+checking the certificate, as libpq does, and the verify modes check it. A
+`sqlserver://` URL pastes like any other; its database is the `database`
+option, and a path (a named instance) is noted and dropped because dbscope
+connects by port.
+
+**Reading safely.** SQL Server has no read-only transaction, so the barrier
+is the compiled statement type. Each query is first compiled under
+`SET SHOWPLAN_XML ON`, which never executes it, and runs only when it
+compiles to exactly one statement of type `SELECT`, `SELECT WITHOUT QUERY`,
+`JSON SELECT` or `XML SELECT`. That catches what text checks cannot:
+T-SQL needs no semicolon, so `SELECT 1 DELETE FROM t` is two statements,
+and `SELECT INTO` compiles as `SELECT INTO`. It then runs in a transaction
+that is always rolled back, with `SET ROWCOUNT` (the row cap, on the
+server) and `SET LOCK_TIMEOUT` (a blocked read fails with error 1222
+instead of waiting); the session settings are put back afterwards, and a
+connection that cannot be reset is closed rather than pooled. Before
+sending, only `SELECT` and `WITH` are accepted, and `INTO`, `EXEC`,
+`OPENROWSET`, `OPENQUERY`, `OPENDATASOURCE`, `NEXT VALUE FOR`, `WAITFOR`
+and the `UPDLOCK`, `XLOCK`, `TABLOCKX` and `HOLDLOCK` hints are refused.
+
+```sql
+CREATE LOGIN dbscope WITH PASSWORD = '...';
+USE app;
+CREATE USER dbscope FOR LOGIN dbscope;
+ALTER ROLE db_datareader ADD MEMBER dbscope;
+GRANT SHOWPLAN TO dbscope;          -- required: every query is compiled first
+GRANT VIEW DEFINITION TO dbscope;   -- defaults and computed and check expressions
+```
+
+The connection test reports `sysadmin` and database permissions that
+write (`INSERT`, `ALTER`, `CONTROL` and the like, from
+`fn_my_permissions`), a database that is not `READ_ONLY`, and a missing
+`SHOWPLAN` or `VIEW DEFINITION`. Without `VIEW DEFINITION` the server
+returns NULL for defaults and for computed and check expressions (verified);
+computed columns are still marked as computed.
+
+**Table map.** The sys catalog views give tables and views in every user
+schema (or the profile's schemas), columns with their declared type
+(`nvarchar(50)`, `decimal(10,2)`), identity, defaults, computed columns,
+`MS_Description` comments, row counts from `sys.partitions`, indexes with
+included columns and filters, foreign keys across schemas with their
+actions, and check constraints. Findings:
+
+| Rule | When |
+|---|---|
+| `DBS-MSSQL-HEAP` | a table without a clustered index (warn from 10,000 rows) |
+| `DBS-MSSQL-GUID-CLUSTER` | a clustered key leading with a `NEWID()` uniqueidentifier |
+| `DBS-MSSQL-UNTRUSTED-FK` / `DISABLED-FK` | a foreign key added or re-enabled `WITH NOCHECK`, or disabled |
+| `DBS-MSSQL-UNTRUSTED-CHECK` | the same for a check constraint |
+| `DBS-MSSQL-DISABLED-INDEX` | a disabled index, neither maintained nor used |
+
+**Plans.** The same estimated plan becomes the plan tree: one node per
+operator with estimated rows and subtree cost. Flagged: a scan that
+filters (an index would let the server seek), key and RID lookups, joins
+without a predicate, the optimizer's missing-index suggestions and
+implicit conversions that may stop a seek.
+
+Not yet: Windows and Entra ID authentication, migration risk of DDL
+(online index operations, which ALTERs are metadata-only), Query Store and
+wait statistics, and Always On replica routing.
+
 ## Next engines
 
-The remaining candidates from the October 2026 list: SQL Server and Oracle. Each gets research first, then a build tested against a real server.
+The remaining candidate from the October 2026 list: Oracle. It gets research first, then a build tested against a real server.

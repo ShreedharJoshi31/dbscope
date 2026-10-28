@@ -3,6 +3,7 @@ import type { Engine, TestResult } from "@/shared/api";
 export const ENGINE_ORDER: readonly Engine[] = [
   "postgres",
   "mysql",
+  "sqlserver",
   "sqlite",
   "mongodb",
   "redis",
@@ -95,6 +96,14 @@ export const ENGINE_META: Record<Engine, EngineMeta> = {
       "Tables with their engines, sorting and partition keys, parts and design risks, and read-only SQL whose plan shows how much the sorting key prunes.",
     defaultPort: 9000,
     urlExample: "clickhouse://user:password@host:9440/database?secure=true",
+  },
+  sqlserver: {
+    queryLanguage: "T-SQL",
+    label: "SQL Server",
+    description:
+      "SQL Server or Azure SQL: ERD from the catalog with design risks, and SELECTs the server compiles before they run, so only reads get through.",
+    defaultPort: 1433,
+    urlExample: "sqlserver://user:password@host:1433?database=name",
   },
   sqlite: {
     queryLanguage: "SQL",

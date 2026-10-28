@@ -19,7 +19,8 @@ export interface StubProfile {
     | "cassandra"
     | "neo4j"
     | "elasticsearch"
-    | "clickhouse";
+    | "clickhouse"
+    | "sqlserver";
   path?: string;
   capabilities: { query: boolean; ask: boolean; migrations: boolean; workload: boolean };
   host: string;

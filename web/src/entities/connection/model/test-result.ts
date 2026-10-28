@@ -38,6 +38,19 @@ export const ERROR_KIND_COPY: Record<TestErrorKind, { title: string; hint: strin
 
 type ServerEngine = TestResult["engine"];
 
+/** What says a server or database accepts writes, for "Read-only by default: no". */
+function readOnlySetting(engine: TestResult["engine"]): string {
+  switch (engine) {
+    case "mysql":
+    case "mariadb":
+      return "the server's read_only is off";
+    case "sqlserver":
+      return "the database is READ_WRITE";
+    default:
+      return "default_transaction_read_only is off";
+  }
+}
+
 /** Where each server is told which addresses to listen on, for "could not reach the server". */
 const LISTEN_SETTING: Partial<Record<NonNullable<ServerEngine>, string>> = {
   postgres: "PostgreSQL accepts TCP connections (listen_addresses)",
@@ -52,6 +65,7 @@ const LISTEN_SETTING: Partial<Record<NonNullable<ServerEngine>, string>> = {
   elasticsearch: "Elasticsearch listens beyond localhost (network.host)",
   opensearch: "OpenSearch listens beyond localhost (network.host)",
   clickhouse: "ClickHouse listens beyond localhost (listen_host) on its native port",
+  sqlserver: "SQL Server has TCP/IP enabled and listens on this port (SQL Server Configuration Manager)",
 };
 
 /**
@@ -123,7 +137,7 @@ export function buildChecklist(result: TestResult, env: Env | undefined): Checkl
     items.push(
       result.defaultReadOnly
         ? { id: "read-only", tone: "success", text: "Read-only by default: yes" }
-        : { id: "read-only", tone: "info", text: "Read-only by default: no (default_transaction_read_only is off)" },
+        : { id: "read-only", tone: "info", text: `Read-only by default: no (${readOnlySetting(result.engine)})` },
     );
   }
 

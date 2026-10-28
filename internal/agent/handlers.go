@@ -12,6 +12,7 @@ import (
 	"github.com/dbscope/dbscope/internal/dynamo"
 	"github.com/dbscope/dbscope/internal/elastic"
 	"github.com/dbscope/dbscope/internal/mongo"
+	"github.com/dbscope/dbscope/internal/mssql"
 	"github.com/dbscope/dbscope/internal/mysql"
 	"github.com/dbscope/dbscope/internal/neo4j"
 	"github.com/dbscope/dbscope/internal/redis"
@@ -230,6 +231,8 @@ func testProfile(ctx context.Context, p conn.Profile, password string) conn.Test
 		return elastic.Test(ctx, p, password)
 	case conn.EngineClickHouse:
 		return clickhouse.Test(ctx, p, password)
+	case conn.EngineSQLServer:
+		return mssql.Test(ctx, p, password)
 	}
 	return conn.Test(ctx, p, password)
 }

@@ -90,6 +90,15 @@ describe("TestResultChecklist", () => {
     );
   });
 
+  it.each([
+    [undefined, "default_transaction_read_only is off"],
+    ["mariadb", "the server's read_only is off"],
+    ["sqlserver", "the database is READ_WRITE"],
+  ] as const)("names the %s setting that leaves the server writable", (engine, setting) => {
+    render(<TestResultChecklist result={{ ...healthy, engine, defaultReadOnly: false }} env="local" />);
+    expect(screen.getByText(`Read-only by default: no (${setting})`)).toBeInTheDocument();
+  });
+
   it("uses a plain warning for write privileges outside prod-replica", () => {
     render(<TestResultChecklist result={{ ...healthy, writePrivileges: ["INSERT on public.orders"] }} env="staging" />);
     const privileges = screen.getByText(/Write privileges: this login can change data \(1\)/).closest("li");

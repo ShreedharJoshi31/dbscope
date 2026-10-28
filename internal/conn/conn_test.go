@@ -151,6 +151,9 @@ func TestParseURL(t *testing.T) {
 		{"neo4j+s://neo4j:pw@graph.example", ParsedURL{Engine: EngineNeo4j, Host: "graph.example", Port: 7687, User: "neo4j", Password: "pw", SSLMode: SSLVerifyFull, Options: "routing=true"}},
 		{"bolt://graph:7688", ParsedURL{Engine: EngineNeo4j, Host: "graph", Port: 7688, SSLMode: SSLDisable}},
 		{"clickhouse://u:p@ch/analytics?secure=true", ParsedURL{Engine: EngineClickHouse, Host: "ch", Port: 9440, Database: "analytics", User: "u", Password: "p", SSLMode: SSLVerifyFull}},
+		{"sqlserver://sa:pw@sql.example:14330?database=shop&encrypt=true&TrustServerCertificate=true", ParsedURL{Engine: EngineSQLServer, Host: "sql.example", Port: 14330, Database: "shop", User: "sa", Password: "pw", SSLMode: SSLRequire}},
+		{"mssql://u@sql/SQLEXPRESS?database=app", ParsedURL{Engine: EngineSQLServer, Host: "sql", Port: 1433, Database: "app", User: "u", SSLMode: SSLPrefer,
+			Notes: []string{"the URL names the instance SQLEXPRESS; dbscope connects by port, so set the port the instance listens on"}}},
 		{"https://elastic:pw@search.example:9243/logs-*", ParsedURL{Engine: EngineElasticsearch, Host: "search.example", Port: 9243, Database: "logs-*", User: "elastic", Password: "pw", SSLMode: SSLVerifyFull}},
 	} {
 		got, err := ParseURL(c.in)

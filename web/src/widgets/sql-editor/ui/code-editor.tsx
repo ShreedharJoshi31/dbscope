@@ -9,7 +9,7 @@ import {
 } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { json } from "@codemirror/lang-json";
-import { Cassandra, MySQL, PostgreSQL, SQLDialect, SQLite, StandardSQL, sql } from "@codemirror/lang-sql";
+import { Cassandra, MSSQL, MySQL, PostgreSQL, SQLDialect, SQLite, StandardSQL, sql } from "@codemirror/lang-sql";
 import { bracketMatching, indentOnInput, syntaxHighlighting } from "@codemirror/language";
 import { type Diagnostic, setDiagnostics } from "@codemirror/lint";
 import { Compartment, EditorSelection, EditorState, Prec } from "@codemirror/state";
@@ -73,6 +73,7 @@ const SQL_DIALECTS = {
   mysql: MySQL,
   sqlite: SQLite,
   clickhouse: ClickHouse,
+  tsql: MSSQL,
   partiql: StandardSQL,
   cql: Cassandra,
 } as const;

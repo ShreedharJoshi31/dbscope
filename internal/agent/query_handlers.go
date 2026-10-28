@@ -15,6 +15,7 @@ import (
 	"github.com/aws/smithy-go"
 	mysqldrv "github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v5/pgconn"
+	mssqldrv "github.com/microsoft/go-mssqldb"
 	neo4jdrv "github.com/neo4j/neo4j-go-driver/v6/neo4j"
 	mongodrv "go.mongodb.org/mongo-driver/v2/mongo"
 	sqlitedrv "modernc.org/sqlite"
@@ -26,6 +27,7 @@ import (
 	"github.com/dbscope/dbscope/internal/dynamo"
 	"github.com/dbscope/dbscope/internal/elastic"
 	"github.com/dbscope/dbscope/internal/mongo"
+	"github.com/dbscope/dbscope/internal/mssql"
 	"github.com/dbscope/dbscope/internal/mysql"
 	"github.com/dbscope/dbscope/internal/neo4j"
 	"github.com/dbscope/dbscope/internal/query/exec"
@@ -193,6 +195,20 @@ func (s *server) execute(ctx context.Context, p conn.Profile, password string, b
 		}
 		return res, nil
 	}
+	if p.Engine == conn.EngineSQLServer {
+		if err := mssql.Check(body.SQL); err != nil {
+			return nil, mapRunError(ctx, err)
+		}
+		src, _ := s.source.(engineSource)[conn.EngineSQLServer].(*mssqlSource)
+		if src == nil {
+			return nil, mapRunError(ctx, errUnsupported)
+		}
+		res, err := src.Run(ctx, p, password, body.SQL, maxRows, explainOnly)
+		if err != nil {
+			return nil, mapRunError(ctx, err)
+		}
+		return res, nil
+	}
 	if p.Engine == conn.EngineElasticsearch {
 		req, err := elastic.Parse(body.SQL, p.Database)
 		if err != nil {
@@ -319,6 +335,7 @@ func mapRunError(ctx context.Context, err error) *runError {
 	var neoErr *neo4jdrv.Neo4jError
 	var esErr *elastic.Error
 	var chErr *chdrv.Exception
+	var msErr mssqldrv.Error
 	switch {
 	case errors.As(err, &ge):
 		return &runError{status: http.StatusUnprocessableEntity, code: "rejected", message: ge.Message, detail: string(ge.Reason),
@@ -366,6 +383,17 @@ func mapRunError(ctx context.Context, err error) *runError {
 			r.message = "Blocked: " + chErr.Message
 		case 159: // TIMEOUT_EXCEEDED
 			r.status, r.code, r.histCode = http.StatusGatewayTimeout, "timeout", "timeout"
+		}
+		return r
+	case !errors.Is(err, exec.ErrConnect) && errors.As(err, &msErr):
+		r := &runError{status: http.StatusBadRequest, code: "database", message: msErr.Message,
+			histStatus: store.HistoryError, histCode: "mssql_" + strconv.Itoa(int(msErr.Number))}
+		switch msErr.Number {
+		case 229, 230, 262, 297, 300: // permission denied
+			r.message = "Blocked: " + msErr.Message
+		case 1222: // lock request time out period exceeded (SET LOCK_TIMEOUT)
+			r.status, r.code, r.histCode = http.StatusGatewayTimeout, "timeout", "timeout"
+			r.message = "Waited for locks for the profile's statement timeout: " + msErr.Message
 		}
 		return r
 	case errors.As(err, &esErr):

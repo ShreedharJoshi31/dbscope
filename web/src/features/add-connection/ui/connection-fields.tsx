@@ -29,6 +29,7 @@ const DATABASE_PLACEHOLDER: Partial<Record<Engine, string>> = {
   redis: "0",
   elasticsearch: "* or logs-*",
   clickhouse: "default",
+  sqlserver: "master",
 };
 
 const USER_PLACEHOLDER: Partial<Record<Engine, string>> = {
@@ -38,6 +39,7 @@ const USER_PLACEHOLDER: Partial<Record<Engine, string>> = {
   neo4j: "neo4j",
   elasticsearch: "dbscope_ro",
   clickhouse: "default",
+  sqlserver: "dbscope_ro",
 };
 
 /** Name, environment and the libpq connection parameters, or the file of a SQLite database. */

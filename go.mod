@@ -15,6 +15,7 @@ require (
 	github.com/aws/smithy-go v1.28.5
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/jackc/pgx/v5 v5.11.0
+	github.com/microsoft/go-mssqldb v1.11.2
 	github.com/moby/moby/api v1.56.1
 	github.com/neo4j/neo4j-go-driver/v6 v6.3.0
 	github.com/oklog/ulid/v2 v2.1.2
@@ -77,6 +78,8 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
+	github.com/golang-sql/civil v0.0.0-20220223132316-b832511892a9 // indirect
+	github.com/golang-sql/sqlexp v0.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/invopop/jsonschema v0.14.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect

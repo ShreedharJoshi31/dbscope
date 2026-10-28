@@ -10,7 +10,8 @@ export type Engine =
   | "cassandra"
   | "neo4j"
   | "elasticsearch"
-  | "clickhouse";
+  | "clickhouse"
+  | "sqlserver";
 export type Env = "local" | "staging" | "prod-replica";
 export type SummaryMode = "off" | "profile" | "rows";
 export type SSLMode = "disable" | "prefer" | "require" | "verify-ca" | "verify-full";

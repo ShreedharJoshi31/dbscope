@@ -31,7 +31,8 @@ var urlEngines = map[string]Engine{
 	"neo4j": EngineNeo4j, "neo4j+s": EngineNeo4j, "neo4j+ssc": EngineNeo4j,
 	"bolt": EngineNeo4j, "bolt+s": EngineNeo4j, "bolt+ssc": EngineNeo4j,
 	"clickhouse": EngineClickHouse,
-	"http":       EngineElasticsearch, "https": EngineElasticsearch,
+	"sqlserver":  EngineSQLServer, "mssql": EngineSQLServer,
+	"http": EngineElasticsearch, "https": EngineElasticsearch,
 }
 
 // mongoCredentialOptions are URI options that carry or select credentials;
@@ -39,7 +40,7 @@ var urlEngines = map[string]Engine{
 var mongoCredentialOptions = map[string]bool{"authmechanismproperties": true, "username": true, "password": true}
 
 // ParseURL reads a connection URL of any engine with one (PostgreSQL, MySQL,
-// MariaDB, MongoDB, Redis, Neo4j, ClickHouse, Elasticsearch over http(s)).
+// MariaDB, MongoDB, Redis, Neo4j, ClickHouse, SQL Server, Elasticsearch over http(s)).
 // Errors never quote the input because it may contain a password.
 func ParseURL(raw string) (ParsedURL, error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
@@ -49,7 +50,7 @@ func ParseURL(raw string) (ParsedURL, error) {
 	scheme := strings.ToLower(u.Scheme)
 	engine, ok := urlEngines[scheme]
 	if !ok {
-		return ParsedURL{}, invalid("url must start with postgres://, mysql://, mongodb://, redis://, neo4j://, bolt://, clickhouse:// or http(s):// for Elasticsearch")
+		return ParsedURL{}, invalid("url must start with postgres://, mysql://, mongodb://, redis://, neo4j://, bolt://, clickhouse://, sqlserver:// or http(s):// for Elasticsearch")
 	}
 	p := ParsedURL{Engine: engine, Database: strings.TrimPrefix(u.Path, "/"), SSLMode: SSLPrefer}
 	host := u.Host
@@ -164,6 +165,21 @@ func ParseURL(raw string) (ParsedURL, error) {
 		} else {
 			p.SSLMode = SSLDisable
 		}
+	case EngineSQLServer:
+		// go-mssqldb's URL form: the database is a query option and a path names an instance.
+		if p.Database != "" {
+			p.Notes = append(p.Notes, "the URL names the instance "+p.Database+"; dbscope connects by port, so set the port the instance listens on")
+		}
+		p.Database = getFold(q, "database")
+		switch strings.ToLower(getFold(q, "encrypt")) {
+		case "disable", "false", "no", "0", "optional":
+			p.SSLMode = SSLDisable
+		case "true", "yes", "1", "mandatory", "strict":
+			p.SSLMode = SSLVerifyFull
+		}
+		if t := strings.ToLower(getFold(q, "trustservercertificate")); t == "true" && p.SSLMode != SSLDisable {
+			p.SSLMode = SSLRequire
+		}
 	case EngineElasticsearch:
 		// The path, if any, is the index pattern.
 		if scheme == "https" {
@@ -180,5 +196,15 @@ func ParseURL(raw string) (ParsedURL, error) {
 
 var defaultPorts = map[Engine]int{
 	EnginePostgres: 5432, EngineMySQL: 3306, EngineMongoDB: 27017, EngineRedis: 6379,
-	EngineNeo4j: 7687, EngineClickHouse: 9000, EngineElasticsearch: 9200,
+	EngineNeo4j: 7687, EngineClickHouse: 9000, EngineElasticsearch: 9200, EngineSQLServer: 1433,
+}
+
+// getFold reads a query option whose name is case-insensitive, as go-mssqldb's are.
+func getFold(q url.Values, name string) string {
+	for k, v := range q {
+		if strings.EqualFold(k, name) && len(v) > 0 {
+			return v[0]
+		}
+	}
+	return ""
 }

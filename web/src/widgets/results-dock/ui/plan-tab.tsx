@@ -10,11 +10,11 @@ import {
   useRunStore,
 } from "@/entities/query";
 import { formatCombo, SHORTCUTS } from "@/shared/config/shortcuts";
-import { formatCompact, formatGrouped } from "@/shared/lib/format-number";
+import { formatCompact } from "@/shared/lib/format-number";
 import { Button } from "@/shared/ui/button";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { StatusIcon } from "@/shared/ui/status-icon";
-import { PlanTreeNode } from "@/widgets/results-dock/ui/plan-tree";
+import { cost, PlanTreeNode } from "@/widgets/results-dock/ui/plan-tree";
 
 function PlanSummary({ output, stepsOnly }: { output: RunOutput; stepsOnly: boolean }) {
   const { plan } = output;
@@ -29,10 +29,9 @@ function PlanSummary({ output, stepsOnly }: { output: RunOutput; stepsOnly: bool
         </p>
       ) : (
         <p className="text-xs text-text-muted">
-          {analyzed ? "Measured with EXPLAIN ANALYZE" : "Estimates only: EXPLAIN without ANALYZE, nothing was measured"}{" "}
-          · total cost{" "}
-          <span className="font-mono text-text-primary tabular-nums">{formatGrouped(Math.round(plan.totalCost))}</span>{" "}
-          · est. <span className="font-mono text-text-primary tabular-nums">{formatCompact(plan.planRows)}</span> rows ·{" "}
+          {analyzed ? "Measured with EXPLAIN ANALYZE" : "Estimates only, nothing was measured"} · total cost{" "}
+          <span className="font-mono text-text-primary tabular-nums">{cost(plan.totalCost)}</span> · est.{" "}
+          <span className="font-mono text-text-primary tabular-nums">{formatCompact(plan.planRows)}</span> rows ·{" "}
           {countPlanNodes(plan)} nodes
         </p>
       )}
