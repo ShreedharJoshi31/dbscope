@@ -24,8 +24,8 @@ function PlanSummary({ output, stepsOnly }: { output: RunOutput; stepsOnly: bool
     <section aria-label="Plan summary" className="flex flex-col gap-1.5 border-b border-border-default px-3 py-2">
       {stepsOnly ? (
         <p className="text-xs text-text-muted">
-          The steps the database will take, without cost estimates · {countPlanNodes(plan) - 1} steps · dbscope does not
-          check plans of this engine for problems
+          The steps the database will take, without cost estimates · {countPlanNodes(plan) - 1} steps
+          {flags.length === 0 && " · dbscope does not check plans of this engine for problems"}
         </p>
       ) : (
         <p className="text-xs text-text-muted">
@@ -36,7 +36,7 @@ function PlanSummary({ output, stepsOnly }: { output: RunOutput; stepsOnly: bool
           {countPlanNodes(plan)} nodes
         </p>
       )}
-      {stepsOnly ? null : flags.length === 0 ? (
+      {stepsOnly && flags.length === 0 ? null : flags.length === 0 ? (
         <p className="flex items-center gap-1 text-xs">
           <StatusIcon tone="success" className="size-3.5" />
           No plan problems flagged.
