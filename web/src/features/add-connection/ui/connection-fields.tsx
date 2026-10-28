@@ -23,7 +23,7 @@ interface ConnectionFieldsProps {
   hasSavedPassword: boolean;
 }
 
-/** Name, environment and the libpq connection parameters. */
+/** Name, environment and the libpq connection parameters, or the file of a SQLite database. */
 export function ConnectionFields({
   values,
   errorFor,
@@ -39,6 +39,7 @@ export function ConnectionFields({
     onBlur: () => onBlur(field),
   });
   const showRootCert = values.sslMode === "verify-ca" || values.sslMode === "verify-full";
+  const sqlite = values.engine === "sqlite";
 
   return (
     <div className="grid grid-cols-6 gap-x-3 gap-y-4">
@@ -56,6 +57,61 @@ export function ConnectionFields({
         />
       </div>
 
+      {sqlite ? (
+        <FormField
+          label="Database file"
+          error={errorFor("path")}
+          className="col-span-6"
+          description="The full path on this machine. dbscope opens it read-only and never creates it."
+        >
+          {(control) => (
+            <Input
+              {...control}
+              ref={register("path")}
+              value={values.path}
+              onChange={(e) => onChange("path", e.target.value)}
+              onBlur={() => onBlur("path")}
+              placeholder="/Users/you/app.db"
+              autoComplete="off"
+              spellCheck={false}
+              className="font-mono"
+            />
+          )}
+        </FormField>
+      ) : (
+        <NetworkFields
+          values={values}
+          errorFor={errorFor}
+          onChange={onChange}
+          register={register}
+          hasSavedPassword={hasSavedPassword}
+          text={text}
+          showRootCert={showRootCert}
+        />
+      )}
+    </div>
+  );
+}
+
+function NetworkFields({
+  values,
+  errorFor,
+  onChange,
+  register,
+  hasSavedPassword,
+  text,
+  showRootCert,
+}: Omit<ConnectionFieldsProps, "onBlur"> & {
+  text: (field: "host" | "port" | "database" | "user") => {
+    ref: (el: HTMLElement | null) => void;
+    value: string;
+    onChange: (e: ChangeEvent<HTMLInputElement>) => void;
+    onBlur: () => void;
+  };
+  showRootCert: boolean;
+}) {
+  return (
+    <>
       <FormField label="Host" error={errorFor("host")} className="col-span-4">
         {(control) => (
           <Input
@@ -161,6 +217,6 @@ export function ConnectionFields({
           )}
         </FormField>
       )}
-    </div>
+    </>
   );
 }

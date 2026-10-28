@@ -10,10 +10,13 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	sqlitedrv "modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 
 	"github.com/dbscope/dbscope/internal/conn"
 	"github.com/dbscope/dbscope/internal/query/exec"
 	qguard "github.com/dbscope/dbscope/internal/query/guard"
+	"github.com/dbscope/dbscope/internal/sqlite"
 	"github.com/dbscope/dbscope/internal/store"
 )
 
@@ -102,7 +105,7 @@ func (s *server) run(w http.ResponseWriter, r *http.Request, body queryBody, max
 		return
 	}
 	p, password, ok := s.profileWithSecret(w, r)
-	if !ok {
+	if !ok || !supports(w, p, p.Capabilities.Query, "Running queries") {
 		return
 	}
 	start := time.Now()
@@ -131,6 +134,16 @@ func (s *server) run(w http.ResponseWriter, r *http.Request, body queryBody, max
 }
 
 func (s *server) execute(ctx context.Context, p conn.Profile, password string, body queryBody, maxRows int, explainOnly bool) (*exec.Result, *runError) {
+	if p.Engine == conn.EngineSQLite {
+		if err := sqlite.Check(body.SQL); err != nil {
+			return nil, mapRunError(ctx, err)
+		}
+		res, err := sqliteSource{}.Run(ctx, p, body.SQL, maxRows, explainOnly)
+		if err != nil {
+			return nil, mapRunError(ctx, err)
+		}
+		return res, nil
+	}
 	parsed, err := qguard.Check(body.SQL)
 	if err != nil {
 		return nil, mapRunError(ctx, err)
@@ -174,6 +187,7 @@ func mapRunError(ctx context.Context, err error) *runError {
 	var ce *exec.CostError
 	var de *exec.DBError
 	var pgErr *pgconn.PgError
+	var liteErr *sqlitedrv.Error
 	switch {
 	case errors.As(err, &ge):
 		return &runError{status: http.StatusUnprocessableEntity, code: "rejected", message: ge.Message, detail: string(ge.Reason),
@@ -191,6 +205,8 @@ func mapRunError(ctx context.Context, err error) *runError {
 			e.position = de.Position
 		}
 		return e
+	case !errors.Is(err, exec.ErrConnect) && errors.As(err, &liteErr):
+		return sqliteError(ctx, liteErr)
 	case !errors.Is(err, exec.ErrConnect) && errors.Is(err, context.DeadlineExceeded):
 		return &runError{status: http.StatusGatewayTimeout, code: "timeout",
 			message:    "the query did not finish within the profile's statement timeout",
@@ -203,6 +219,27 @@ func mapRunError(ctx context.Context, err error) *runError {
 	}
 	return &runError{status: http.StatusBadGateway, code: "upstream", message: te.Message, detail: te.Kind,
 		sqlstate: te.SQLState, histStatus: store.HistoryError, histCode: "upstream"}
+}
+
+// sqliteError maps a SQLite error: the statement's own fault is a 400, an
+// interrupt at the deadline a timeout, and the authorizer's refusal a block.
+func sqliteError(ctx context.Context, e *sqlitedrv.Error) *runError {
+	code := e.Code() & 0xff // the primary result code
+	r := &runError{status: http.StatusBadRequest, code: "database", message: e.Error(),
+		histStatus: store.HistoryError, histCode: "sqlite_" + strconv.Itoa(code)}
+	switch {
+	case code == sqlite3.SQLITE_INTERRUPT && errors.Is(ctx.Err(), context.DeadlineExceeded):
+		r.status, r.code, r.histCode = http.StatusGatewayTimeout, "timeout", "timeout"
+		r.message = "Stopped after the profile's statement timeout"
+	case code == sqlite3.SQLITE_AUTH, code == sqlite3.SQLITE_READONLY:
+		r.message = "Blocked: this would modify data or reach outside the database file (" + e.Error() + ")"
+	case code == sqlite3.SQLITE_BUSY, code == sqlite3.SQLITE_LOCKED:
+		r.status, r.code, r.detail = http.StatusServiceUnavailable, "upstream", "database"
+		r.message = "Another process is writing to the database file; try again (" + e.Error() + ")"
+	case code == sqlite3.SQLITE_CANTOPEN, code == sqlite3.SQLITE_NOTADB, code == sqlite3.SQLITE_CORRUPT:
+		r.status, r.code, r.detail = http.StatusBadGateway, "upstream", "database"
+	}
+	return r
 }
 
 // databaseError maps PostgreSQL errors per docs/QUERY-SAFETY.md.

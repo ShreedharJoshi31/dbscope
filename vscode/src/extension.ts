@@ -30,12 +30,13 @@ export function activate(context: vscode.ExtensionContext) {
     const dsn = dsnEnv ? process.env[dsnEnv] : undefined;
     const fromFolder = (p: string) => (p && !path.isAbsolute(p) ? path.join(folder, p) : p);
     const schemaDump = fromFolder(c.get<string>("schemaDump", ""));
-    if (!dsn && !schemaDump) {
+    const sqlite = fromFolder(c.get<string>("sqlite", ""));
+    if (!dsn && !schemaDump && !sqlite) {
       if (!warnedNoBase) {
         warnedNoBase = true;
         const open = "Open settings";
         const picked = await vscode.window.showWarningMessage(
-          `dbscope needs a base schema to check migrations: set ${dsnEnv || "the dbscope.dsnEnv variable"} in the environment VS Code starts from, or set dbscope.schemaDump to a pg_dump --schema-only file.`,
+          `dbscope needs a base schema to check migrations: set ${dsnEnv || "the dbscope.dsnEnv variable"} in the environment VS Code starts from, set dbscope.schemaDump to a pg_dump --schema-only file, or set dbscope.sqlite to a SQLite database file.`,
           open,
         );
         if (picked === open) void vscode.commands.executeCommand("workbench.action.openSettings", "dbscope");
@@ -52,6 +53,7 @@ export function activate(context: vscode.ExtensionContext) {
         cwd: folder,
         dsn,
         schemaDump,
+        sqlite,
         stats: fromFolder(c.get<string>("stats", "")),
       });
       if (runs.get(dir) !== run) return;

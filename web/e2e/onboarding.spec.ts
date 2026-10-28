@@ -7,7 +7,7 @@ test.describe("first run", () => {
     await stubAgent(page);
     await openApp(page);
 
-    await expect(page.getByRole("heading", { name: "Connect to PostgreSQL" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Connect a database" })).toBeVisible();
     // The token moved to sessionStorage and left the address bar.
     await expect(page).toHaveURL(/\/$/);
 
@@ -17,7 +17,7 @@ test.describe("first run", () => {
     await page.keyboard.press("ControlOrMeta+V");
 
     await expect(page.getByLabel("Host")).toHaveValue("127.0.0.1");
-    await expect(page.getByLabel("Database")).toHaveValue("orders");
+    await expect(page.getByLabel("Database", { exact: true })).toHaveValue("orders");
     await expect(page.getByLabel("User")).toHaveValue("app");
     await expect(page.getByLabel("Name")).toHaveValue("orders@127.0.0.1");
     await expect(url).toHaveValue("");
@@ -72,7 +72,7 @@ test.describe("first run", () => {
     await expect(page.getByRole("heading", { name: "Open dbscope from the URL printed by dbscope ui" })).toBeVisible();
 
     await page.goto(`/#t=${E2E_TOKEN}`);
-    await expect(page.getByRole("heading", { name: "Connect to PostgreSQL" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Connect a database" })).toBeVisible();
     await expect(page).toHaveURL(/\/$/);
   });
 });

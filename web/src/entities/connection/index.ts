@@ -1,5 +1,6 @@
 export { resolveActiveProfile, useActiveConnectionStore } from "@/entities/connection/model/active-connection";
 export { costLimit, DEFAULT_MAX_COST } from "@/entities/connection/model/cost-limit";
+export { ENGINE_META, ENGINE_ORDER, engineLabel } from "@/entities/connection/model/engine";
 export {
   defaultStatementTimeoutMs,
   ENV_META,

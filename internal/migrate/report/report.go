@@ -69,7 +69,7 @@ func Text(w io.Writer, rep *migrate.Report) error {
 			tw.Flush()
 			fmt.Fprintln(ew, file)
 		}
-		fmt.Fprintf(tw, "  %d:%d\t%s\t%d\t%s\t%s\n", s.Line, s.Column, strings.ToUpper(string(s.Rating)), s.Score, s.Kind, details(s))
+		fmt.Fprintf(tw, "  %d:%d\t%s\t%d\t%s\t%s\n", s.Line, s.Column, strings.ToUpper(string(s.Rating)), s.Score, s.Kind, details(s, rep.Engine))
 		for _, f := range s.Findings {
 			fmt.Fprintf(tw, "\t\t\t%s\t%s [%s]\n", f.RuleID, f.Message, f.Rating)
 			if f.SafeAlternative != "" {
@@ -78,8 +78,8 @@ func Text(w io.Writer, rep *migrate.Report) error {
 		}
 	}
 	tw.Flush()
-	fmt.Fprintf(ew, "\n%d statements against PostgreSQL %s (%s base): worst rating %s (%d critical, %d high, %d medium, %d low)\n",
-		len(rep.Statements), version(rep.PGVersion), rep.Base, strings.ToUpper(string(rep.Rating)),
+	fmt.Fprintf(ew, "\n%d statements against %s (%s base): worst rating %s (%d critical, %d high, %d medium, %d low)\n",
+		len(rep.Statements), engineVersion(rep), rep.Base, strings.ToUpper(string(rep.Rating)),
 		counts[score.Critical], counts[score.High], counts[score.Medium], counts[score.Low])
 	d := rep.Diff
 	if len(d.Added)+len(d.Dropped)+len(d.Altered) > 0 {
@@ -137,20 +137,22 @@ func Text(w io.Writer, rep *migrate.Report) error {
 	return ew.err
 }
 
-func details(s migrate.Statement) string {
+func details(s migrate.Statement, engine string) string {
 	var parts []string
 	for _, l := range s.Locks {
 		parts = append(parts, l.Mode+" "+l.Relation)
 	}
-	if len(parts) == 0 {
+	if len(parts) == 0 && engine == "" {
 		parts = append(parts, "no table locks")
+	} else if len(parts) == 0 {
+		parts = append(parts, "no locks") // SQLite locks the database, not tables
 	}
 	parts = append(parts, "work "+s.Work)
 	if s.SizeBytes != nil {
 		parts = append(parts, bytesText(*s.SizeBytes))
 	}
 	parts = append(parts, "tx "+s.Tx)
-	if !s.LockTimeout && len(s.Locks) > 0 {
+	if !s.LockTimeout && len(s.Locks) > 0 && engine == "" {
 		parts = append(parts, "no lock_timeout")
 	}
 	return strings.Join(parts, "; ")
@@ -167,6 +169,15 @@ func bytesText(n int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTP"[exp])
+}
+
+// engineVersion is "PostgreSQL 17.2", or "SQLite 3.54.1" for a SQLite report.
+func engineVersion(rep *migrate.Report) string {
+	if rep.Engine == "sqlite" {
+		v := rep.PGVersion
+		return fmt.Sprintf("SQLite %d.%d.%d", v/1_000_000, v/1000%1000, v%1000)
+	}
+	return "PostgreSQL " + version(rep.PGVersion)
 }
 
 func version(v int) string {

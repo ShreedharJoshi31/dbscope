@@ -53,6 +53,12 @@ export function worstRating(ratings: Iterable<Rating>): Rating {
   return worst;
 }
 
+/** "SQLite 3.54.1" for 3054001. */
+export function sqliteVersionLabel(versionNum: number): string {
+  if (!Number.isFinite(versionNum) || versionNum <= 0) return "SQLite (unknown version)";
+  return `SQLite ${Math.floor(versionNum / 1_000_000)}.${Math.floor(versionNum / 1000) % 1000}.${versionNum % 1000}`;
+}
+
 /** "PostgreSQL 17" for 170000, "PostgreSQL 17.2" for 170002. */
 export function pgVersionLabel(versionNum: number): string {
   if (!Number.isFinite(versionNum) || versionNum <= 0) return "PostgreSQL (unknown version)";

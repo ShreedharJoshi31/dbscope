@@ -148,7 +148,10 @@ export function ReviewHeader({ review, model, onGoTo }: ReviewHeaderProps) {
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-        <ReviewOptionsFields compact value={review.options} onChange={(next) => reanalyze(review.id, next)} />
+        {/* Transaction mode and lock_timeout are PostgreSQL options. */}
+        {model.report.engine !== "sqlite" && (
+          <ReviewOptionsFields compact value={review.options} onChange={(next) => reanalyze(review.id, next)} />
+        )}
         <SchemaChanges model={model} />
       </div>
       {model.unanalyzable.length > 0 && (

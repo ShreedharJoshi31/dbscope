@@ -215,7 +215,7 @@ function withSqlExtension(name: string): string {
 
 function AnalyzeForm({ onDone }: { onDone: () => void }) {
   const { mode, setMode } = useAnalyzeDialog();
-  const { target, label } = useMigrationTarget();
+  const { target, label, profile } = useMigrationTarget();
   const [options, setOptions] = useState<ReviewOptions>(lastReviewOptions);
   const [picked, setPicked] = useState<CollectedFiles | null>(null);
   const [name, setName] = useState("pasted.sql");
@@ -284,7 +284,8 @@ function AnalyzeForm({ onDone }: { onDone: () => void }) {
       ) : (
         <PasteMode name={name} sql={sql} onName={setName} onSql={setSql} />
       )}
-      <ReviewOptionsFields value={options} onChange={setOptions} />
+      {/* Transaction mode and lock_timeout are PostgreSQL options; SQLite reads transactions from the files. */}
+      {profile?.engine !== "sqlite" && <ReviewOptionsFields value={options} onChange={setOptions} />}
       {problem && <ProblemView problem={problem} />}
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onDone}>

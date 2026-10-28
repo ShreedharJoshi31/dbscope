@@ -15,7 +15,7 @@ Stack choices below were researched on 2026-10-26 from primary sources
 | D2 | Three modes: ERD, NL querying, migration analysis. |
 | D3 | LLM: bring-your-own-key (Anthropic, any OpenAI-compatible) and local (Ollama). |
 | D4 | Result summary per connection: `off` / `profile` / `rows`. Default `profile`. |
-| D5 | Postgres only. No driver abstraction. |
+| D5 | Postgres only. No driver abstraction. Superseded in October 2026 by per-engine support, see docs/ENGINES.md. |
 | D6 | Migration analysis is deterministic (libpg_query AST), no LLM. |
 | D7 | Windows, macOS, Linux (amd64 + arm64) for every feature. `CGO_ENABLED=0` always. |
 

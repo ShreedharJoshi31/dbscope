@@ -8,6 +8,7 @@ import (
 
 	"github.com/dbscope/dbscope/internal/conn"
 	"github.com/dbscope/dbscope/internal/secrets"
+	"github.com/dbscope/dbscope/internal/sqlite"
 	"github.com/dbscope/dbscope/internal/store"
 )
 
@@ -64,10 +65,11 @@ func (s *server) storeError(w http.ResponseWriter, r *http.Request, err error) {
 
 func (s *server) createProfile(w http.ResponseWriter, r *http.Request) {
 	in, p, ok := profileInput(w, r)
-	if !ok || s.locked(w) {
+	// Only a password needs the vault; a SQLite file or a passwordless role does not.
+	p.HasPassword = in.Password != nil && *in.Password != ""
+	if !ok || (p.HasPassword && s.locked(w)) {
 		return
 	}
-	p.HasPassword = in.Password != nil && *in.Password != ""
 	p, err := s.store.CreateProfile(r.Context(), p)
 	if err != nil {
 		s.storeError(w, r, err)
@@ -88,7 +90,7 @@ func (s *server) createProfile(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) updateProfile(w http.ResponseWriter, r *http.Request) {
 	in, p, ok := profileInput(w, r)
-	if !ok || s.locked(w) {
+	if !ok || (in.Password != nil && s.locked(w)) {
 		return
 	}
 	old, err := s.store.GetProfile(r.Context(), r.PathValue("id"))
@@ -181,24 +183,22 @@ func (s *server) testUnsaved(w http.ResponseWriter, r *http.Request) {
 	if in.Password != nil {
 		password = *in.Password
 	}
-	writeJSON(w, http.StatusOK, conn.Test(r.Context(), p, password))
+	writeJSON(w, http.StatusOK, testProfile(r.Context(), p, password))
 }
 
 func (s *server) testSaved(w http.ResponseWriter, r *http.Request) {
-	if s.locked(w) {
+	p, password, ok := s.profileWithSecret(w, r)
+	if !ok {
 		return
 	}
-	p, err := s.store.GetProfile(r.Context(), r.PathValue("id"))
-	if err != nil {
-		s.storeError(w, r, err)
-		return
+	writeJSON(w, http.StatusOK, testProfile(r.Context(), p, password))
+}
+
+func testProfile(ctx context.Context, p conn.Profile, password string) conn.TestResult {
+	if p.Engine == conn.EngineSQLite {
+		return sqlite.Test(ctx, p.Path)
 	}
-	password, _, err := s.vault.Get(p.ID)
-	if err != nil {
-		s.secretError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, conn.Test(r.Context(), p, password))
+	return conn.Test(ctx, p, password)
 }
 
 func (s *server) secretsStatus(w http.ResponseWriter, r *http.Request) {

@@ -20,6 +20,7 @@ information.
 | `dbscope.migrations` | `**/migrations/**/*.sql`, `**/migrate/**/*.sql` | Which `.sql` files are migrations. |
 | `dbscope.dsnEnv` | `DBSCOPE_DSN` | The environment variable holding the database URL. The URL is never stored in settings. |
 | `dbscope.schemaDump` | | A `pg_dump --schema-only` file, used when the variable is unset. |
+| `dbscope.sqlite` | | A SQLite database file (opened read-only). When set, migrations are checked as SQLite and the PostgreSQL settings are not used. |
 | `dbscope.stats` | | A `dbscope stats export` file that adds table sizes to the dump. |
 | `dbscope.checkOnSave` | `true` | Check on save. |
 

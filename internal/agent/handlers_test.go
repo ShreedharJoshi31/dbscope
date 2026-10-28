@@ -373,16 +373,19 @@ func TestLockedVault(t *testing.T) {
 	if st := decodeBody[secrets.Status](t, e.do("GET", "/api/secrets/status", "")); st != (secrets.Status{Backend: secrets.BackendPassphrase, Locked: true, Initialized: true}) {
 		t.Fatalf("status %+v", st)
 	}
-	// Profiles created out of band, since the API refuses while locked.
-	base, _ := conn.ProfileInput{Name: "plain", Host: "h", Database: "d", User: "u", Env: conn.EnvLocal}.Profile()
-	plain, _ := e.store.CreateProfile(t.Context(), base)
-	base.Name, base.HasPassword = "secret", true
+	// A profile with a stored password is created out of band, since the API needs the vault for it.
+	base, _ := conn.ProfileInput{Name: "secret", Host: "h", Database: "d", User: "u", Env: conn.EnvLocal}.Profile()
+	base.HasPassword = true
 	withPass, _ := e.store.CreateProfile(t.Context(), base)
 
 	expect(t, e.do("GET", "/api/profiles", ""), 200, "")
-	expect(t, e.do("POST", "/api/profiles", validBody), 423, "secrets_locked")
-	expect(t, e.do("PUT", "/api/profiles/"+plain.ID, validBody), 423, "secrets_locked")
-	expect(t, e.do("POST", "/api/profiles/"+plain.ID+"/test", ""), 423, "secrets_locked")
+	// Only passwords need the vault: a profile without one is created, edited and tested while locked.
+	plain := decodeBody[conn.Profile](t, e.do("POST", "/api/profiles", validBody))
+	expect(t, e.do("PUT", "/api/profiles/"+plain.ID, validBody), 200, "")
+	withPassword := strings.Replace(validBody, `"env"`, `"password":"`+testPass+`","env"`, 1)
+	expect(t, e.do("POST", "/api/profiles", strings.Replace(withPassword, "Orders", "Other", 1)), 423, "secrets_locked")
+	expect(t, e.do("PUT", "/api/profiles/"+plain.ID, withPassword), 423, "secrets_locked")
+	expect(t, e.do("POST", "/api/profiles/"+withPass.ID+"/test", ""), 423, "secrets_locked")
 	expect(t, e.do("DELETE", "/api/profiles/"+withPass.ID, ""), 423, "secrets_locked")
 	expect(t, e.do("DELETE", "/api/profiles/"+plain.ID, ""), 204, "")
 

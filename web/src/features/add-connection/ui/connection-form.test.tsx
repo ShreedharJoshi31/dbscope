@@ -13,6 +13,33 @@ function renderForm() {
 }
 
 describe("ConnectionForm", () => {
+  it("switches to a SQLite file and saves its path", async () => {
+    let sent: ProfileInput | undefined;
+    server.use(
+      http.post("/api/profiles", async ({ request }) => {
+        sent = (await request.json()) as ProfileInput;
+        return HttpResponse.json(makeProfile({ ...sent, id: "01JB0000000000000000000009" }), { status: 201 });
+      }),
+    );
+    const { user, onSaved } = renderForm();
+
+    await user.click(screen.getByRole("radio", { name: "SQLite" }));
+    expect(screen.queryByLabelText("Paste a connection URL")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Host")).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText("Name"), "shop");
+    await user.click(screen.getByRole("radio", { name: /local/ }));
+    await user.type(screen.getByLabelText("Database file"), "shop.db");
+    await user.click(screen.getByRole("button", { name: "Save and open" }));
+    expect(await screen.findByText(/full path of the database file/)).toBeInTheDocument();
+    expect(sent).toBeUndefined();
+
+    await user.clear(screen.getByLabelText("Database file"));
+    await user.type(screen.getByLabelText("Database file"), "/Users/me/shop.db");
+    await user.click(screen.getByRole("button", { name: "Save and open" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(sent).toMatchObject({ engine: "sqlite", path: "/Users/me/shop.db", name: "shop", env: "local" });
+  });
+
   it("shows inline errors on Enter and focuses the first invalid field", async () => {
     const { user, onSaved } = renderForm();
 

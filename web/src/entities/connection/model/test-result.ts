@@ -1,3 +1,4 @@
+import { engineLabel } from "@/entities/connection/model/engine";
 import type { Env, TestErrorKind, TestResult } from "@/shared/api";
 import type { StatusTone } from "@/shared/ui/status-icon";
 
@@ -46,7 +47,11 @@ export function buildChecklist(result: TestResult, env: Env | undefined): Checkl
   ];
 
   if (result.serverVersion) {
-    items.push({ id: "version", tone: "info", text: `Server version: PostgreSQL ${result.serverVersion}` });
+    items.push({
+      id: "version",
+      tone: "info",
+      text: `Server version: ${engineLabel(result.engine)} ${result.serverVersion}`,
+    });
   }
 
   if (result.isReplica !== undefined) {

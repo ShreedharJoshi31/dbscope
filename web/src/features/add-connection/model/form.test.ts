@@ -41,11 +41,33 @@ describe("validateConnectionForm", () => {
   });
 });
 
+describe("SQLite", () => {
+  const sqlite = { ...EMPTY_CONNECTION_FORM, engine: "sqlite" as const, name: "shop", env: "local" as const };
+
+  it("needs only an absolute file path, not network details", () => {
+    expect(Object.keys(validateConnectionForm({ ...sqlite, path: "" }))).toEqual(["path"]);
+    for (const path of ["app.db", "./app.db", "~/app.db"]) {
+      expect(validateConnectionForm({ ...sqlite, path }).path).toMatch(/full path/);
+    }
+    for (const path of ["/Users/me/app.db", "C:\\data\\app.db", "D:/app.db", "\\\\server\\share\\app.db"]) {
+      expect(validateConnectionForm({ ...sqlite, path })).toEqual({});
+    }
+  });
+
+  it("sends the engine and path and no network fields", () => {
+    const input = toProfileInput({ ...sqlite, path: " /data/app.db ", host: "ignored", password: "ignored" });
+    expect(input).toMatchObject({ engine: "sqlite", path: "/data/app.db", host: "", user: "", schemas: [] });
+    expect(input).not.toHaveProperty("password");
+    expect(input).not.toHaveProperty("maxCost");
+  });
+});
+
 describe("toProfileInput", () => {
   it("trims, converts numbers, splits schemas and omits an empty password", () => {
     expect(
       toProfileInput({ ...valid, name: " orders-dev ", port: "6432", schemas: "public, billing ,", password: "" }),
     ).toEqual({
+      engine: "postgres",
       name: "orders-dev",
       host: "localhost",
       port: 6432,

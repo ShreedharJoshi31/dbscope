@@ -64,12 +64,21 @@ func (s *server) analyzeMigrations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, password, ok := s.profileWithSecret(w, r)
-	if !ok {
+	if !ok || !supports(w, p, p.Capabilities.Migrations, "Migration analysis") {
 		return
 	}
 	// Introspection, sizes and impact queries can each take a statement timeout.
 	ctx, cancel := context.WithTimeout(r.Context(), 3*statementTimeout(p)+connectSlack)
 	defer cancel()
+	if p.Engine == conn.EngineSQLite {
+		rep, err := sqliteSource{}.Analyze(ctx, p, req.Files)
+		if err != nil {
+			s.upstreamError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, rep)
+		return
+	}
 	base, err := s.source.MigrationBase(ctx, p, password)
 	if err != nil {
 		s.upstreamError(w, r, err)

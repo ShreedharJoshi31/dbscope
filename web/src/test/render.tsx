@@ -36,6 +36,8 @@ export function makeProfile(overrides: Partial<Profile> = {}): Profile {
   return {
     id: "01JB0000000000000000000001",
     name: "orders-dev",
+    engine: "postgres",
+    capabilities: { query: true, ask: true, migrations: true, workload: true },
     host: "localhost",
     port: 5432,
     database: "orders",

@@ -80,11 +80,13 @@ interface PlanTreeNodeProps {
   id: string;
   depth: number;
   analyzed: boolean;
+  /** The engine's plan names steps without estimates (SQLite's EXPLAIN QUERY PLAN). */
+  stepsOnly?: boolean;
   collapsed: ReadonlySet<string>;
   onToggle: (id: string) => void;
 }
 
-export function PlanTreeNode({ node, id, depth, analyzed, collapsed, onToggle }: PlanTreeNodeProps) {
+export function PlanTreeNode({ node, id, depth, analyzed, stepsOnly, collapsed, onToggle }: PlanTreeNodeProps) {
   const children = node.children ?? [];
   const open = !collapsed.has(id);
   const title = nodeTitle(node);
@@ -115,7 +117,7 @@ export function PlanTreeNode({ node, id, depth, analyzed, collapsed, onToggle }:
               {node.condition}
             </span>
           )}
-          <Metrics node={node} analyzed={analyzed} />
+          {!stepsOnly && <Metrics node={node} analyzed={analyzed} />}
           {(node.flags ?? []).map((f) => (
             <span key={f.code + f.message} data-flag={f.code} className="flex items-start gap-1 text-xs">
               <StatusIcon tone={FLAG_TONE[f.level]} className="mt-0.5 size-3.5" />
@@ -136,6 +138,7 @@ export function PlanTreeNode({ node, id, depth, analyzed, collapsed, onToggle }:
                 id={childId}
                 depth={depth + 1}
                 analyzed={analyzed}
+                stepsOnly={stepsOnly}
                 collapsed={collapsed}
                 onToggle={onToggle}
               />

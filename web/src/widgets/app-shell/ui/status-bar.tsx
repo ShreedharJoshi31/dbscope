@@ -1,5 +1,5 @@
 import { FlaskConical, LoaderCircle, ShieldAlert } from "lucide-react";
-import { EnvBadge, ERROR_KIND_COPY } from "@/entities/connection";
+import { EnvBadge, ERROR_KIND_COPY, engineLabel } from "@/entities/connection";
 import { useRunStore } from "@/entities/query";
 import { useWorkbenchSchema } from "@/features/load-schema";
 import { type Profile, useHealth, useSavedProfileTest } from "@/shared/api";
@@ -42,7 +42,11 @@ function ConnectionState({ profile }: { profile: Profile }) {
         Connected
         {result.latencyMs !== undefined && <span className="font-mono tabular-nums">{result.latencyMs} ms</span>}
       </span>
-      {result.serverVersion && <span className="font-mono">PostgreSQL {result.serverVersion}</span>}
+      {result.serverVersion && (
+        <span className="font-mono">
+          {engineLabel(result.engine)} {result.serverVersion}
+        </span>
+      )}
     </>
   );
 }

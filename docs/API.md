@@ -23,11 +23,14 @@ stale token (e.g. the agent restarted), `403 forbidden` for a foreign Host or Or
 type Env = "local" | "staging" | "prod-replica";
 type SummaryMode = "off" | "profile" | "rows";
 type SSLMode = "disable" | "prefer" | "require" | "verify-ca" | "verify-full";
+type Engine = "postgres" | "sqlite";   // docs/ENGINES.md
 
 interface Profile {
   id: string;               // ULID
   name: string;             // unique, 1-80 chars
-  host: string;
+  engine: Engine;           // default "postgres"
+  path?: string;            // sqlite only: absolute path of the database file
+  host: string;             // the network fields below are empty for sqlite
   port: number;             // 1-65535, default 5432
   database: string;
   user: string;
@@ -39,14 +42,19 @@ interface Profile {
   maxRowsToLLM: number;     // default 50, 1-500
   statementTimeoutMs: number; // default 30000 local/staging, 10000 prod-replica
   hasPassword: boolean;     // the password itself is never returned
+  capabilities: {           // derived from engine; never sent back
+    query: boolean; ask: boolean; migrations: boolean; workload: boolean;
+  };
   createdAt: string;        // RFC 3339
   updatedAt: string;
 }
 ```
 
 - `GET /api/profiles` → `200 Profile[]` (sorted by name)
-- `POST /api/profiles` body: Profile fields minus `id/hasPassword/createdAt/updatedAt`, plus optional `password` → `201 Profile`
+- `POST /api/profiles` body: Profile fields minus `id/hasPassword/capabilities/createdAt/updatedAt`, plus optional `password` → `201 Profile`
 - `PUT /api/profiles/{id}` same body; omitting `password` keeps the stored one, `"password": ""` clears it → `200 Profile`
+- Only a request that stores or changes a password needs the vault unlocked (`423 secrets_locked` otherwise); a SQLite profile has no password.
+- A mode outside the profile's `capabilities` answers `501 {"error":{"code":"unsupported"}}` before doing any work.
 - `DELETE /api/profiles/{id}` → `204` (also deletes its secret)
 - `POST /api/connection-url/parse` body `{"url":"postgres://u:p@h:5432/db?sslmode=require"}` → `200 {host,port,database,user,password?,sslMode}`; accepts `postgres://` and `postgresql://`
 

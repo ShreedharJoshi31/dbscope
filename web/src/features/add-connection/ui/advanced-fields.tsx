@@ -120,26 +120,28 @@ export function AdvancedFields({
           )}
         </FormField>
 
-        <FormField
-          label="Cost limit"
-          optional
-          error={errors.maxCost}
-          description="Queries whose EXPLAIN cost is higher ask before running. Blank = environment default (prod-replica 1,000,000; staging 10,000,000; local no limit), 0 = no limit."
-          className="max-w-80"
-        >
-          {(control) => (
-            <Input
-              {...control}
-              ref={maxCostRef}
-              inputMode="decimal"
-              value={values.maxCost}
-              onChange={(e) => onChange("maxCost", e.target.value)}
-              onBlur={() => onBlur("maxCost")}
-              placeholder="Environment default"
-              className="font-mono tabular-nums"
-            />
-          )}
-        </FormField>
+        {values.engine !== "sqlite" && (
+          <FormField
+            label="Cost limit"
+            optional
+            error={errors.maxCost}
+            description="Queries whose EXPLAIN cost is higher ask before running. Blank = environment default (prod-replica 1,000,000; staging 10,000,000; local no limit), 0 = no limit."
+            className="max-w-80"
+          >
+            {(control) => (
+              <Input
+                {...control}
+                ref={maxCostRef}
+                inputMode="decimal"
+                value={values.maxCost}
+                onChange={(e) => onChange("maxCost", e.target.value)}
+                onBlur={() => onBlur("maxCost")}
+                placeholder="Environment default"
+                className="font-mono tabular-nums"
+              />
+            )}
+          </FormField>
+        )}
       </CollapsibleContent>
     </Collapsible>
   );

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -74,5 +74,18 @@ describe("check, against the real CLI", () => {
     await expect(check({ binary: "/nonexistent/dbscope", dir: fixture, cwd: fixture, schemaDump: "x" })).rejects.toThrow(
       "/nonexistent/dbscope was not found",
     );
+  });
+});
+
+describe("check, against a SQLite file", () => {
+  it("passes --sqlite and maps SQLite findings", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "dbscope-sqlite-"));
+    const migrations = path.join(dir, "migrations");
+    mkdirSync(migrations);
+    writeFileSync(path.join(migrations, "1.sql"), "VACUUM;\n");
+    const db = path.join(dir, "app.db");
+    writeFileSync(db, "");
+    const { report, root } = await check({ binary: path.join(repo, "bin/dbscope"), dir: migrations, cwd: dir, sqlite: db });
+    expect(problems(report, root).map((p) => [p.code, p.severity, p.line])).toEqual([["DBS-SQLITE-VACUUM", "error", 0]]);
   });
 });

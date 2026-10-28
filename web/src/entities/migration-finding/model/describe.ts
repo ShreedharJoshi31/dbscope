@@ -26,10 +26,16 @@ const LOCK_MODES: Record<string, LockMode> = {
   "SHARE ROW EXCLUSIVE": { words: "blocks writes and other SHARE ROW EXCLUSIVE locks; reads continue", tone: "warn" },
   EXCLUSIVE: { words: "blocks writes and SELECT … FOR UPDATE; plain reads continue", tone: "warn" },
   "ACCESS EXCLUSIVE": { words: "blocks reads and writes", tone: "danger" },
+  // SQLite locks the whole database file, not a table.
+  "DATABASE WRITE": {
+    words:
+      "blocks every other writer to the database; in WAL mode readers continue, in rollback-journal mode they wait while it commits",
+    tone: "warn",
+  },
 };
 
 export function lockModeWords(mode: string): string {
-  return LOCK_MODES[mode.toUpperCase()]?.words ?? "a PostgreSQL lock mode dbscope has no description for";
+  return LOCK_MODES[mode.toUpperCase()]?.words ?? "a lock mode dbscope has no description for";
 }
 
 export function lockModeTone(mode: string): LockTone {

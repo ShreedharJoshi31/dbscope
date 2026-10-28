@@ -447,7 +447,7 @@ func TestSchemaEndToEnd(t *testing.T) {
 	}
 	p := e.createProfile(body(10000))
 	base := "/api/profiles/" + p.ID
-	pools := e.agent.source.(*pools)
+	pools := e.agent.source.(engineSource)[conn.EnginePostgres].(*pools)
 
 	w := e.do("GET", base+"/namespaces", "")
 	expect(t, w, 200, "")

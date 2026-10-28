@@ -43,6 +43,27 @@ func TestProfileDefaults(t *testing.T) {
 	}
 }
 
+func TestEngines(t *testing.T) {
+	in := validInput()
+	p, err := in.Profile()
+	if err != nil || p.Engine != EnginePostgres || !p.Capabilities.Migrations {
+		t.Fatalf("default engine: %+v, %v", p, err)
+	}
+	dir := t.TempDir()
+	sep := string(filepath.Separator)
+	in.Engine, in.Path = EngineSQLite, dir+sep+"x"+sep+".."+sep+"app.db"
+	p, err = in.Profile()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Path != filepath.Join(dir, "app.db") || p.Host != "" || p.Port != 0 || p.User != "" || p.SSLMode != "" {
+		t.Fatalf("sqlite profile kept network fields: %+v", p)
+	}
+	if p.Capabilities != (Capabilities{Query: true, Migrations: true}) {
+		t.Fatalf("sqlite capabilities %+v", p.Capabilities)
+	}
+}
+
 func TestCostLimit(t *testing.T) {
 	for env, want := range map[Env]float64{EnvLocal: 0, EnvStaging: 1e7, EnvProdReplica: 1e6} {
 		in := validInput()
@@ -80,6 +101,15 @@ func TestProfileValidation(t *testing.T) {
 		"timeout 0":     func(in *ProfileInput) { in.StatementTimeoutMs = ptr(0) },
 		"negative port": func(in *ProfileInput) { in.Port = ptr(-1) },
 		"negative cost": func(in *ProfileInput) { in.MaxCost = ptr(-1.0) },
+		"bad engine":    func(in *ProfileInput) { in.Engine = "oracle" },
+		"postgres path": func(in *ProfileInput) { in.Path = "/tmp/app.db" },
+		"sqlite relative path": func(in *ProfileInput) {
+			in.Engine, in.Path = EngineSQLite, "app.db"
+		},
+		"sqlite no path": func(in *ProfileInput) { in.Engine = EngineSQLite },
+		"sqlite password": func(in *ProfileInput) {
+			in.Engine, in.Path, in.Password = EngineSQLite, filepath.Join(os.TempDir(), "app.db"), ptr("pw")
+		},
 	} {
 		in := validInput()
 		mut(&in)

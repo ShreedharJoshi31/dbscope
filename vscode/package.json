@@ -32,6 +32,11 @@
           "default": ["**/migrations/**/*.sql", "**/migrate/**/*.sql"],
           "description": "Glob patterns for migration files. Saving one checks every migration in its folder, in order."
         },
+        "dbscope.sqlite": {
+          "type": "string",
+          "default": "",
+          "description": "A SQLite database file to check against, relative to the workspace folder. dbscope opens it read-only. Takes precedence over the PostgreSQL settings."
+        },
         "dbscope.schemaDump": {
           "type": "string",
           "default": "",

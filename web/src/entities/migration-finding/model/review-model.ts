@@ -1,4 +1,10 @@
-import { pgMajor, pgVersionLabel, RATINGS, worstRating } from "@/entities/migration-finding/model/rating";
+import {
+  pgMajor,
+  pgVersionLabel,
+  RATINGS,
+  sqliteVersionLabel,
+  worstRating,
+} from "@/entities/migration-finding/model/rating";
 import type {
   AnalyzedStatement,
   AnalyzeReport,
@@ -154,7 +160,7 @@ export function toReviewModel(report: AnalyzeReport, sources: readonly Migration
   return {
     report,
     pgVersion: report.pgVersion,
-    pgLabel: pgVersionLabel(report.pgVersion),
+    pgLabel: report.engine === "sqlite" ? sqliteVersionLabel(report.pgVersion) : pgVersionLabel(report.pgVersion),
     rating: statements.length > 0 ? report.rating : worstRating([]),
     counts,
     findingCount,

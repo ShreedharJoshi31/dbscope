@@ -21,7 +21,9 @@ type TestError struct {
 }
 
 type TestResult struct {
-	OK               bool       `json:"ok"`
+	OK bool `json:"ok"`
+	// Engine is empty for PostgreSQL.
+	Engine           Engine     `json:"engine,omitempty"`
 	LatencyMs        *int64     `json:"latencyMs,omitempty"`
 	ServerVersion    string     `json:"serverVersion,omitempty"`
 	ServerVersionNum int        `json:"serverVersionNum,omitempty"`

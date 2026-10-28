@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/dbscope/dbscope/internal/conn"
 )
 
 func TestHistory(t *testing.T) {
@@ -95,7 +97,8 @@ func TestMigration0003OnExistingData(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, q := range []string{`DROP TABLE llm_settings`, `DROP TABLE glossary`, `DROP TABLE query_history`,
-		`ALTER TABLE profiles DROP COLUMN max_cost`, `DELETE FROM schema_migrations WHERE version >= 3`} {
+		`ALTER TABLE profiles DROP COLUMN max_cost`, `ALTER TABLE profiles DROP COLUMN engine`, `ALTER TABLE profiles DROP COLUMN path`,
+		`DELETE FROM schema_migrations WHERE version >= 3`} {
 		if _, err := s.db.Exec(q); err != nil {
 			t.Fatal(err)
 		}
@@ -107,7 +110,7 @@ func TestMigration0003OnExistingData(t *testing.T) {
 	}
 	defer s2.Close()
 	got, err := s2.GetProfile(ctx, p.ID)
-	if err != nil || got.MaxCost != nil || got.Name != "a" {
+	if err != nil || got.MaxCost != nil || got.Name != "a" || got.Engine != conn.EnginePostgres || !got.Capabilities.Migrations {
 		t.Fatalf("after upgrade: %+v %v", got, err)
 	}
 	if _, err := s2.AddHistory(ctx, p.ID, HistoryEntry{SQL: "SELECT 1", StartedAt: time.Now(), Status: HistoryOK}); err != nil {

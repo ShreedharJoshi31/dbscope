@@ -7,7 +7,13 @@ import {
   lockTimeoutCopy,
   sizeWords,
 } from "@/entities/migration-finding/model/describe";
-import { pgVersionLabel, ratingMeta, ratingRank, worstRating } from "@/entities/migration-finding/model/rating";
+import {
+  pgVersionLabel,
+  ratingMeta,
+  ratingRank,
+  sqliteVersionLabel,
+  worstRating,
+} from "@/entities/migration-finding/model/rating";
 
 describe("lock modes in plain words", () => {
   it("names what each PostgreSQL lock mode blocks", () => {
@@ -60,5 +66,12 @@ describe("ratings", () => {
     expect(pgVersionLabel(170000)).toBe("PostgreSQL 17");
     expect(pgVersionLabel(170002)).toBe("PostgreSQL 17.2");
     expect(pgVersionLabel(0)).toMatch(/unknown/);
+    expect(sqliteVersionLabel(3054001)).toBe("SQLite 3.54.1");
+    expect(sqliteVersionLabel(3035005)).toBe("SQLite 3.35.5");
+  });
+
+  it("describes SQLite's database-wide write lock", () => {
+    expect(lockModeWords("DATABASE WRITE")).toMatch(/^blocks every other writer/);
+    expect(lockModeTone("DATABASE WRITE")).toBe("warn");
   });
 });

@@ -1,6 +1,12 @@
 import { CircleAlert, LoaderCircle, PlugZap } from "lucide-react";
-import { type FormEvent, useEffect, useRef, useState } from "react";
-import { defaultStatementTimeoutMs, summarizeTest, TestResultChecklist } from "@/entities/connection";
+import { type FormEvent, useEffect, useId, useRef, useState } from "react";
+import {
+  defaultStatementTimeoutMs,
+  ENGINE_META,
+  ENGINE_ORDER,
+  summarizeTest,
+  TestResultChecklist,
+} from "@/entities/connection";
 import {
   applyParsedUrl,
   type ConnectionField,
@@ -27,9 +33,14 @@ import {
 } from "@/shared/api";
 import { announce } from "@/shared/lib/announcer";
 import { Button } from "@/shared/ui/button";
+import { SegmentedControl } from "@/shared/ui/segmented-control";
+
+const ENGINE_OPTIONS = ENGINE_ORDER.map((engine) => ({ value: engine, label: ENGINE_META[engine].label }));
 
 /** Fields whose change makes a previous test result stale. */
 const CONNECTION_FIELDS: ReadonlySet<ConnectionField> = new Set([
+  "engine",
+  "path",
   "host",
   "port",
   "database",
@@ -66,6 +77,8 @@ export function ConnectionForm({ profile, submitLabel, onSaved, onCancel, autoFo
   const [nameConflict, setNameConflict] = useState<string | null>(null);
 
   const urlRef = useRef<HTMLInputElement>(null);
+  const engineLabelId = useId();
+  const engineDescriptionId = useId();
   const fieldRefs = useRef<Partial<Record<ConnectionField, HTMLElement | null>>>({});
   const register = (field: ConnectionField) => (el: HTMLElement | null) => {
     fieldRefs.current[field] = el;
@@ -175,13 +188,32 @@ export function ConnectionForm({ profile, submitLabel, onSaved, onCancel, autoFo
 
   return (
     <form noValidate onSubmit={onSubmit} className="flex flex-col gap-5" aria-label="Connection details">
-      <ConnectionUrlField onParsed={onParsed} inputRef={urlRef} />
-
-      <div className="flex items-center gap-3 text-2xs font-medium tracking-wide text-text-muted uppercase">
-        <span className="h-px flex-1 bg-border-default" />
-        or enter the details
-        <span className="h-px flex-1 bg-border-default" />
+      <div className="flex flex-col gap-1">
+        <span id={engineLabelId} className="text-xs font-medium">
+          Database type
+        </span>
+        <SegmentedControl
+          options={ENGINE_OPTIONS}
+          value={values.engine}
+          onValueChange={(engine) => change("engine", engine)}
+          aria-labelledby={engineLabelId}
+          aria-describedby={engineDescriptionId}
+        />
+        <p id={engineDescriptionId} className="text-xs text-text-muted">
+          {ENGINE_META[values.engine].description}
+        </p>
       </div>
+
+      {values.engine === "postgres" && (
+        <>
+          <ConnectionUrlField onParsed={onParsed} inputRef={urlRef} />
+          <div className="flex items-center gap-3 text-2xs font-medium tracking-wide text-text-muted uppercase">
+            <span className="h-px flex-1 bg-border-default" />
+            or enter the details
+            <span className="h-px flex-1 bg-border-default" />
+          </div>
+        </>
+      )}
 
       <ConnectionFields
         values={values}

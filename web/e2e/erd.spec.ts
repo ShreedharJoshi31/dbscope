@@ -39,7 +39,7 @@ test.describe("ERD canvas", () => {
     expect((await layoutMeasures(page))[0]).toMatchObject({ algorithm: "layered", nodes: TABLES });
 
     await page.getByRole("button", { name: "Exit sample" }).click();
-    await expect(page.getByRole("heading", { name: "Connect to PostgreSQL" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Connect a database" })).toBeVisible();
   });
 
   test("the minimap draws the tables and a click there moves the canvas", async ({ page }) => {
@@ -82,7 +82,7 @@ test.describe("ERD canvas", () => {
     await expect(page.locator('[data-testid="table-node"]')).toHaveCount(0);
 
     // A table well inside the pane, wherever the layout put it.
-    const ids = model.relations.map((r) => `${r.schema}.${r.name}`);
+    const ids = (model.relations ?? []).map((r) => `${r.schema}.${r.name}`);
     const target = await page.evaluate((ids) => {
       const probe = window.__dbscopeCanvas;
       const v = probe?.getViewport();

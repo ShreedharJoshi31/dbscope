@@ -43,6 +43,10 @@ func (s *server) upstreamError(w http.ResponseWriter, r *http.Request, err error
 		writeError(w, http.StatusServiceUnavailable, "internal", err.Error())
 		return
 	}
+	if errors.Is(err, errUnsupported) {
+		writeError(w, http.StatusNotImplemented, "unsupported", err.Error())
+		return
+	}
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "57014" {
 		writeError(w, http.StatusGatewayTimeout, "timeout",
@@ -183,7 +187,7 @@ func (s *server) sampleSchema(w http.ResponseWriter, r *http.Request) {
 // attributed to the tables of its current schema.
 func (s *server) workload(w http.ResponseWriter, r *http.Request) {
 	p, password, ok := s.profileWithSecret(w, r)
-	if !ok {
+	if !ok || !supports(w, p, p.Capabilities.Workload, "Workload") {
 		return
 	}
 	m, err := s.source.Introspect(r.Context(), p, password)

@@ -404,7 +404,7 @@ func (s *server) ask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, password, ok := s.profileWithSecret(w, r)
-	if !ok {
+	if !ok || !supports(w, p, p.Capabilities.Ask, "Asking questions") {
 		return
 	}
 	provider, settings, ok := s.provider(w, r)

@@ -9,6 +9,9 @@ export type Env = "local" | "staging" | "prod-replica";
 export interface StubProfile {
   id: string;
   name: string;
+  engine: "postgres" | "sqlite";
+  path?: string;
+  capabilities: { query: boolean; ask: boolean; migrations: boolean; workload: boolean };
   host: string;
   port: number;
   database: string;
@@ -29,10 +32,17 @@ export const E2E_TOKEN = "e2e-session-token";
 
 const NOW = "2026-10-26T10:00:00Z";
 
+function capabilitiesOf(engine: StubProfile["engine"] | undefined): StubProfile["capabilities"] {
+  const all = engine !== "sqlite";
+  return { query: all, ask: all, migrations: all, workload: all };
+}
+
 export function stubProfile(overrides: Partial<StubProfile> = {}): StubProfile {
   return {
     id: "01JB00000000000000000000AA",
     name: "orders-dev",
+    engine: "postgres",
+    capabilities: { query: true, ask: true, migrations: true, workload: true },
     host: "localhost",
     port: 5432,
     database: "orders",
@@ -122,13 +132,19 @@ export async function stubAgent(page: Page, options: StubOptions = {}) {
         ...input,
         id: `01JB0000000000000000000N${nextId++}`,
         hasPassword: Boolean(password),
+        capabilities: capabilitiesOf(input.engine),
       });
       profiles.push(created);
       return json(route, 201, created);
     }
     if (byId?.[2] && method === "POST") return json(route, 200, HEALTHY_TEST);
     if (byId && !byId[2] && method === "PUT") {
-      const { password, ...input } = request.postDataJSON() as Omit<StubProfile, "id"> & { password?: string };
+      const body: Record<string, unknown> = request.postDataJSON();
+      // The agent rejects unknown fields; capabilities are derived, never sent.
+      if ("capabilities" in body) {
+        return json(route, 400, { error: { code: "validation", message: "unknown field capabilities" } });
+      }
+      const { password, ...input } = body as Omit<StubProfile, "id"> & { password?: string };
       const index = profiles.findIndex((p) => p.id === byId[1]);
       const current = profiles[index];
       if (!current) return json(route, 404, { error: { code: "not_found", message: "no such profile" } });

@@ -1,9 +1,12 @@
 import { defaultStatementTimeoutMs } from "@/entities/connection";
-import type { Env, ParsedConnectionUrl, Profile, ProfileInput, SSLMode, SummaryMode } from "@/shared/api";
+import type { Engine, Env, ParsedConnectionUrl, Profile, ProfileInput, SSLMode, SummaryMode } from "@/shared/api";
 
 /** Raw form state. Numbers stay strings until validated so partial input is kept. */
 export interface ConnectionFormValues {
   name: string;
+  engine: Engine;
+  /** The database file, for SQLite. */
+  path: string;
   host: string;
   port: string;
   database: string;
@@ -27,6 +30,7 @@ export type ConnectionFormErrors = Partial<Record<ConnectionField, string>>;
 export const FIELD_ORDER: readonly ConnectionField[] = [
   "name",
   "env",
+  "path",
   "host",
   "port",
   "database",
@@ -42,6 +46,8 @@ export const FIELD_ORDER: readonly ConnectionField[] = [
 
 export const EMPTY_CONNECTION_FORM: ConnectionFormValues = {
   name: "",
+  engine: "postgres",
+  path: "",
   host: "",
   port: "5432",
   database: "",
@@ -60,6 +66,8 @@ export const EMPTY_CONNECTION_FORM: ConnectionFormValues = {
 export function formFromProfile(profile: Profile): ConnectionFormValues {
   return {
     name: profile.name,
+    engine: profile.engine,
+    path: profile.path ?? "",
     host: profile.host,
     port: String(profile.port),
     database: profile.database,
@@ -89,14 +97,19 @@ export function validateConnectionForm(values: ConnectionFormValues): Connection
   else if (name.length > NAME_MAX) errors.name = `Use at most ${NAME_MAX} characters (now ${name.length}).`;
 
   if (!values.env) errors.env = "Choose the environment this database belongs to.";
-  if (!values.host.trim()) errors.host = "Enter the server host name or IP address.";
-
-  const port = Number(values.port);
-  if (!isWholeNumber(values.port) || port < 1 || port > 65_535) {
-    errors.port = "Port must be a whole number from 1 to 65535.";
+  if (values.engine === "sqlite") {
+    if (!isAbsolutePath(values.path.trim())) {
+      errors.path = "Enter the full path of the database file, e.g. /Users/you/app.db or C:\\data\\app.db.";
+    }
+  } else {
+    if (!values.host.trim()) errors.host = "Enter the server host name or IP address.";
+    const port = Number(values.port);
+    if (!isWholeNumber(values.port) || port < 1 || port > 65_535) {
+      errors.port = "Port must be a whole number from 1 to 65535.";
+    }
+    if (!values.database.trim()) errors.database = "Enter the database name.";
+    if (!values.user.trim()) errors.user = "Enter the user name.";
   }
-  if (!values.database.trim()) errors.database = "Enter the database name.";
-  if (!values.user.trim()) errors.user = "Enter the user name.";
 
   if (!isWholeNumber(values.statementTimeoutMs) || Number(values.statementTimeoutMs) < 1) {
     errors.statementTimeoutMs = "Timeout must be a whole number of milliseconds, 1 or more.";
@@ -106,6 +119,11 @@ export function validateConnectionForm(values: ConnectionFormValues): Connection
     errors.maxCost = "Cost limit must be 0 (no limit) or a positive number, or empty for the default.";
   }
   return errors;
+}
+
+/** An absolute POSIX path or a Windows drive or UNC path; the agent checks it again. */
+function isAbsolutePath(path: string): boolean {
+  return path.startsWith("/") || /^[A-Za-z]:[\\/]/.test(path) || path.startsWith("\\\\");
 }
 
 export function firstInvalidField(errors: ConnectionFormErrors): ConnectionField | undefined {
@@ -125,7 +143,25 @@ export function parseSchemas(raw: string): string[] {
  */
 export function toProfileInput(values: ConnectionFormValues): ProfileInput {
   if (!values.env) throw new Error("toProfileInput requires a validated form with env set");
+  if (values.engine === "sqlite") {
+    return {
+      name: values.name.trim(),
+      engine: "sqlite",
+      path: values.path.trim(),
+      host: "",
+      port: 0,
+      database: "",
+      user: "",
+      sslMode: "prefer",
+      env: values.env,
+      schemas: [],
+      summaryMode: values.summaryMode,
+      maxRowsToLLM: values.maxRowsToLLM,
+      statementTimeoutMs: Number(values.statementTimeoutMs),
+    };
+  }
   const input: ProfileInput = {
+    engine: "postgres",
     name: values.name.trim(),
     host: values.host.trim(),
     port: Number(values.port),

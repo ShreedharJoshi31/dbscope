@@ -1,5 +1,6 @@
 import { ChevronsDownUp, ChevronsUpDown, ListTree } from "lucide-react";
 import { useState } from "react";
+import { useActiveConnection } from "@/entities/connection";
 import {
   countPlanNodes,
   ExecutedSql,
@@ -16,19 +17,26 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import { StatusIcon } from "@/shared/ui/status-icon";
 import { PlanTreeNode } from "@/widgets/results-dock/ui/plan-tree";
 
-function PlanSummary({ output }: { output: RunOutput }) {
+function PlanSummary({ output, stepsOnly }: { output: RunOutput; stepsOnly: boolean }) {
   const { plan } = output;
   const analyzed = isAnalyzed(plan);
   const flags = summarizeFlags(plan);
   return (
     <section aria-label="Plan summary" className="flex flex-col gap-1.5 border-b border-border-default px-3 py-2">
-      <p className="text-xs text-text-muted">
-        {analyzed ? "Measured with EXPLAIN ANALYZE" : "Estimates only: EXPLAIN without ANALYZE, nothing was measured"} ·
-        total cost{" "}
-        <span className="font-mono text-text-primary tabular-nums">{formatGrouped(Math.round(plan.totalCost))}</span> ·
-        est. <span className="font-mono text-text-primary tabular-nums">{formatCompact(plan.planRows)}</span> rows ·{" "}
-        {countPlanNodes(plan)} nodes
-      </p>
+      {stepsOnly ? (
+        <p className="text-xs text-text-muted">
+          EXPLAIN QUERY PLAN: the steps SQLite will take, without cost or row estimates · {countPlanNodes(plan) - 1}{" "}
+          steps
+        </p>
+      ) : (
+        <p className="text-xs text-text-muted">
+          {analyzed ? "Measured with EXPLAIN ANALYZE" : "Estimates only: EXPLAIN without ANALYZE, nothing was measured"}{" "}
+          · total cost{" "}
+          <span className="font-mono text-text-primary tabular-nums">{formatGrouped(Math.round(plan.totalCost))}</span>{" "}
+          · est. <span className="font-mono text-text-primary tabular-nums">{formatCompact(plan.planRows)}</span> rows ·{" "}
+          {countPlanNodes(plan)} nodes
+        </p>
+      )}
       {flags.length === 0 ? (
         <p className="flex items-center gap-1 text-xs">
           <StatusIcon tone="success" className="size-3.5" />
@@ -61,10 +69,11 @@ function PlanView({ output }: { output: RunOutput }) {
       return next;
     });
   const all = planNodeIds(output.plan).filter((id) => id !== "0");
+  const stepsOnly = useActiveConnection().profile?.engine === "sqlite";
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <PlanSummary output={output} />
+      <PlanSummary output={output} stepsOnly={stepsOnly} />
       <div className="flex shrink-0 items-center gap-1 border-b border-border-default px-2 py-0.5">
         <Button variant="ghost" size="xs" onClick={() => setCollapsed(new Set())}>
           <ChevronsUpDown aria-hidden />
@@ -81,6 +90,7 @@ function PlanView({ output }: { output: RunOutput }) {
           id="0"
           depth={0}
           analyzed={isAnalyzed(output.plan)}
+          stepsOnly={stepsOnly}
           collapsed={collapsed}
           onToggle={toggle}
         />

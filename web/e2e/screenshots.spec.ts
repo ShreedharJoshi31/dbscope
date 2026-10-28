@@ -15,7 +15,7 @@ for (const colorScheme of ["light", "dark"] as const) {
     test(`onboarding screenshot (${colorScheme})`, async ({ page }) => {
       await stubAgent(page);
       await openApp(page);
-      await expect(page.getByRole("heading", { name: "Connect to PostgreSQL" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Connect a database" })).toBeVisible();
       await loadFonts(page);
       await expect(page).toHaveScreenshot(`onboarding-${colorScheme}.png`, { fullPage: true });
     });

@@ -20,7 +20,7 @@ var (
 	ErrNameTaken = errors.New("a profile with this name already exists")
 )
 
-const profileColumns = `id, name, host, port, database, username, ssl_mode, ssl_root_cert, env, schemas,
+const profileColumns = `id, name, engine, path, host, port, database, username, ssl_mode, ssl_root_cert, env, schemas,
 	summary_mode, max_rows_to_llm, statement_timeout_ms, max_cost, has_password, created_at, updated_at`
 
 func (s *Store) ListProfiles(ctx context.Context) ([]conn.Profile, error) {
@@ -58,8 +58,8 @@ func (s *Store) CreateProfile(ctx context.Context, p conn.Profile) (conn.Profile
 		return conn.Profile{}, err
 	}
 	_, err = s.db.ExecContext(ctx, `INSERT INTO profiles (`+profileColumns+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		p.ID, p.Name, p.Host, p.Port, p.Database, p.User, p.SSLMode, p.SSLRootCert, p.Env, string(schemas),
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		p.ID, p.Name, p.Engine, p.Path, p.Host, p.Port, p.Database, p.User, p.SSLMode, p.SSLRootCert, p.Env, string(schemas),
 		p.SummaryMode, p.MaxRowsToLLM, p.StatementTimeoutMs, p.MaxCost, p.HasPassword, formatTime(p.CreatedAt), formatTime(p.UpdatedAt))
 	if err != nil {
 		return conn.Profile{}, mapErr(err)
@@ -76,11 +76,11 @@ func (s *Store) UpdateProfile(ctx context.Context, p conn.Profile) (conn.Profile
 		return conn.Profile{}, err
 	}
 	var created string
-	err = s.db.QueryRowContext(ctx, `UPDATE profiles SET name = ?, host = ?, port = ?, database = ?, username = ?,
+	err = s.db.QueryRowContext(ctx, `UPDATE profiles SET name = ?, engine = ?, path = ?, host = ?, port = ?, database = ?, username = ?,
 		ssl_mode = ?, ssl_root_cert = ?, env = ?, schemas = ?, summary_mode = ?, max_rows_to_llm = ?,
 		statement_timeout_ms = ?, max_cost = ?, has_password = ?, updated_at = ?
 		WHERE id = ? RETURNING created_at`,
-		p.Name, p.Host, p.Port, p.Database, p.User, p.SSLMode, p.SSLRootCert, p.Env, string(schemas),
+		p.Name, p.Engine, p.Path, p.Host, p.Port, p.Database, p.User, p.SSLMode, p.SSLRootCert, p.Env, string(schemas),
 		p.SummaryMode, p.MaxRowsToLLM, p.StatementTimeoutMs, p.MaxCost, p.HasPassword, formatTime(p.UpdatedAt), p.ID).Scan(&created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return conn.Profile{}, ErrNotFound
@@ -110,7 +110,7 @@ func (s *Store) DeleteProfile(ctx context.Context, id string) error {
 func scanProfile(row interface{ Scan(...any) error }) (conn.Profile, error) {
 	var p conn.Profile
 	var schemas, created, updated string
-	err := row.Scan(&p.ID, &p.Name, &p.Host, &p.Port, &p.Database, &p.User, &p.SSLMode, &p.SSLRootCert, &p.Env,
+	err := row.Scan(&p.ID, &p.Name, &p.Engine, &p.Path, &p.Host, &p.Port, &p.Database, &p.User, &p.SSLMode, &p.SSLRootCert, &p.Env,
 		&schemas, &p.SummaryMode, &p.MaxRowsToLLM, &p.StatementTimeoutMs, &p.MaxCost, &p.HasPassword, &created, &updated)
 	if err != nil {
 		return conn.Profile{}, err
@@ -121,6 +121,7 @@ func scanProfile(row interface{ Scan(...any) error }) (conn.Profile, error) {
 	if p.Schemas == nil {
 		p.Schemas = []string{}
 	}
+	p.Capabilities = p.Engine.Capabilities()
 	if p.CreatedAt, err = time.Parse(time.RFC3339Nano, created); err != nil {
 		return conn.Profile{}, err
 	}

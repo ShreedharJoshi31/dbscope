@@ -52,7 +52,7 @@ func TestOpenCreatesPrivateDirAndIsIdempotent(t *testing.T) {
 	}
 	defer s2.Close()
 	var n int
-	if err := s2.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&n); err != nil || n != 4 {
+	if err := s2.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&n); err != nil || n != 5 {
 		t.Fatalf("schema_migrations rows = %d, err %v", n, err)
 	}
 	ps, err := s2.ListProfiles(context.Background())

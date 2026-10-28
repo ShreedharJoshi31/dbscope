@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/dbscope/dbscope/internal/conn"
 	"github.com/dbscope/dbscope/internal/nl"
 	qguard "github.com/dbscope/dbscope/internal/query/guard"
 	"github.com/dbscope/dbscope/internal/secrets"
@@ -31,8 +32,8 @@ type Config struct {
 	Store   *store.Store
 	Secrets *secrets.Vault
 	Logger  *slog.Logger
-	// Schema reads database structure and runs queries; nil keeps a pgx
-	// pool per profile.
+	// Schema reads PostgreSQL structure and runs queries; nil keeps a pgx
+	// pool per profile. Other engines have their own sources.
 	Schema SchemaSource
 	// NewProvider builds the LLM client from the saved settings and the
 	// vault's key; nil uses the real Anthropic and OpenAI-compatible clients.
@@ -83,6 +84,7 @@ func New(cfg Config) (*Agent, error) {
 	if s.source == nil {
 		s.source = newPools()
 	}
+	s.source = engineSource{conn.EnginePostgres: s.source, conn.EngineSQLite: sqliteSource{}}
 	qguard.Warm() // the first parse loads a WebAssembly module (~600 ms)
 
 	mux := http.NewServeMux()

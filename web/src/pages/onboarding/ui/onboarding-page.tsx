@@ -20,9 +20,9 @@ export function OnboardingPage() {
       <main className="flex flex-1 justify-center px-4 py-12">
         <div className="flex w-full max-w-xl flex-col gap-6">
           <div className="flex flex-col gap-1">
-            <h1 className="text-xl font-semibold tracking-tight">Connect to PostgreSQL</h1>
+            <h1 className="text-xl font-semibold tracking-tight">Connect a database</h1>
             <p className="text-sm text-text-muted">
-              Paste a connection URL or enter the details, test the connection, then save it to open the workbench.
+              Choose PostgreSQL or a SQLite file, test the connection, then save it to open the workbench.
             </p>
           </div>
           <div className="rounded-lg border border-border-default bg-surface-raised p-6 shadow-sm">

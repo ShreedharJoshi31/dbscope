@@ -15,6 +15,8 @@ type Rating = score.Rating
 
 // Report is the API's AnalyzeReport.
 type Report struct {
+	// Engine is empty for PostgreSQL; for SQLite PGVersion holds the SQLITE_VERSION_NUMBER checked with.
+	Engine       string                   `json:"engine,omitempty"`
 	PGVersion    int                      `json:"pgVersion"`
 	Rating       Rating                   `json:"rating"`
 	Statements   []Statement              `json:"statements"`

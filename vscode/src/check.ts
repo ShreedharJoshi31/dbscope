@@ -8,6 +8,8 @@ export interface CheckOptions {
   cwd: string;
   schemaDump?: string;
   stats?: string;
+  /** A SQLite database file; when set the PostgreSQL options are not used. */
+  sqlite?: string;
   /** The database URL, from the environment variable the user named. */
   dsn?: string;
 }
@@ -22,7 +24,8 @@ export function check(o: CheckOptions): Promise<CheckResult> {
   const args = ["migrate", "check", o.dir, "--format", "json"];
   const env = { ...process.env };
   delete env.DBSCOPE_DSN;
-  if (o.dsn) env.DBSCOPE_DSN = o.dsn;
+  if (o.sqlite) args.push("--sqlite", o.sqlite);
+  else if (o.dsn) env.DBSCOPE_DSN = o.dsn;
   else if (o.schemaDump) {
     args.push("--schema-dump", o.schemaDump);
     if (o.stats) args.push("--stats", o.stats);

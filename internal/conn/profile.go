@@ -1,15 +1,43 @@
 // Package conn holds connection profiles, their validation, and everything
-// that turns a profile into a live PostgreSQL connection.
+// that turns a profile into a live PostgreSQL connection. Other engines'
+// connections live in their own packages; profiles name the engine.
 package conn
 
 import (
 	"fmt"
 	"math"
 	"net"
+	"path/filepath"
 	"strings"
 	"time"
 	"unicode/utf8"
 )
+
+// Engine is the kind of database a profile connects to (docs/ENGINES.md).
+type Engine string
+
+const (
+	EnginePostgres Engine = "postgres"
+	EngineSQLite   Engine = "sqlite"
+)
+
+// Capabilities are the modes an engine supports beyond the ERD, which every engine has.
+type Capabilities struct {
+	Query      bool `json:"query"`
+	Ask        bool `json:"ask"`
+	Migrations bool `json:"migrations"`
+	Workload   bool `json:"workload"`
+}
+
+func (e Engine) Capabilities() Capabilities {
+	switch e {
+	case EnginePostgres:
+		return Capabilities{Query: true, Ask: true, Migrations: true, Workload: true}
+	case EngineSQLite:
+		return Capabilities{Query: true, Migrations: true}
+	}
+	return Capabilities{}
+}
 
 type Env string
 
@@ -48,8 +76,11 @@ func (m SSLMode) valid() bool {
 // Profile is a saved connection. The password lives in the secrets vault;
 // HasPassword only records whether one is stored.
 type Profile struct {
-	ID                 string      `json:"id"`
-	Name               string      `json:"name"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Engine Engine `json:"engine"`
+	// Path is the database file of a file-based engine (SQLite); network engines leave it empty.
+	Path               string      `json:"path,omitempty"`
 	Host               string      `json:"host"`
 	Port               int         `json:"port"`
 	Database           string      `json:"database"`
@@ -63,10 +94,12 @@ type Profile struct {
 	StatementTimeoutMs int         `json:"statementTimeoutMs"`
 	// MaxCost is the EXPLAIN cost above which a query needs confirming;
 	// 0 means no limit and nil means the env default (see CostLimit).
-	MaxCost     *float64  `json:"maxCost,omitempty"`
-	HasPassword bool      `json:"hasPassword"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	MaxCost     *float64 `json:"maxCost,omitempty"`
+	HasPassword bool     `json:"hasPassword"`
+	// Capabilities follow from Engine; they are sent so the UI need not know each engine.
+	Capabilities Capabilities `json:"capabilities"`
+	CreatedAt    time.Time    `json:"createdAt"`
+	UpdatedAt    time.Time    `json:"updatedAt"`
 }
 
 // ProfileInput is the create/update/test request body. Pointer fields
@@ -74,6 +107,8 @@ type Profile struct {
 // an explicit value.
 type ProfileInput struct {
 	Name               string      `json:"name"`
+	Engine             Engine      `json:"engine"`
+	Path               string      `json:"path"`
 	Host               string      `json:"host"`
 	Port               *int        `json:"port"`
 	Database           string      `json:"database"`
@@ -102,6 +137,7 @@ func invalid(format string, args ...any) error {
 func (in ProfileInput) Profile() (Profile, error) {
 	p := Profile{
 		Name:        strings.TrimSpace(in.Name),
+		Engine:      in.Engine,
 		Host:        in.Host,
 		Port:        5432,
 		Database:    in.Database,
@@ -115,43 +151,86 @@ func (in ProfileInput) Profile() (Profile, error) {
 	if n := utf8.RuneCountInString(p.Name); n < 1 || n > 80 {
 		return Profile{}, invalid("name must be 1-80 characters")
 	}
+	switch p.Engine {
+	case "":
+		p.Engine = EnginePostgres
+	case EnginePostgres, EngineSQLite:
+	default:
+		return Profile{}, invalid("engine must be one of postgres, sqlite")
+	}
+	p.Capabilities = p.Engine.Capabilities()
+	if p.Engine == EngineSQLite {
+		if err := p.fileTarget(in); err != nil {
+			return Profile{}, err
+		}
+	} else if err := p.networkTarget(in); err != nil {
+		return Profile{}, err
+	}
+	if err := p.options(in); err != nil {
+		return Profile{}, err
+	}
+	return p, nil
+}
+
+// fileTarget validates a file-based profile: an absolute path and no network fields.
+func (p *Profile) fileTarget(in ProfileInput) error {
+	p.Path = filepath.Clean(strings.TrimSpace(in.Path))
+	if in.Path == "" || !filepath.IsAbs(p.Path) {
+		return invalid("path must be the absolute path of the database file")
+	}
+	if in.Password != nil && *in.Password != "" {
+		return invalid("a %s database has no password", p.Engine)
+	}
+	p.Host, p.Port, p.Database, p.User, p.SSLMode, p.SSLRootCert = "", 0, "", "", "", ""
+	return nil
+}
+
+func (p *Profile) networkTarget(in ProfileInput) error {
+	if in.Path != "" {
+		return invalid("path is only for file-based engines")
+	}
 	if p.Host == "" {
-		return Profile{}, invalid("host is required")
+		return invalid("host is required")
 	}
 	if strings.ContainsAny(p.Host, " \t\r\n,/") {
-		return Profile{}, invalid("host must be a single hostname or IP address")
+		return invalid("host must be a single hostname or IP address")
 	}
 	if in.Port != nil {
 		p.Port = *in.Port
 	}
 	if p.Port < 1 || p.Port > 65535 {
-		return Profile{}, invalid("port must be 1-65535")
+		return invalid("port must be 1-65535")
 	}
 	if p.Database == "" {
-		return Profile{}, invalid("database is required")
+		return invalid("database is required")
 	}
 	if p.User == "" {
-		return Profile{}, invalid("user is required")
+		return invalid("user is required")
 	}
 	if p.SSLMode == "" {
 		p.SSLMode = SSLPrefer
 	}
 	if !p.SSLMode.valid() {
-		return Profile{}, invalid("sslMode must be one of disable, prefer, require, verify-ca, verify-full")
+		return invalid("sslMode must be one of disable, prefer, require, verify-ca, verify-full")
 	}
+	return nil
+}
+
+// options validates the settings every engine shares.
+func (p *Profile) options(in ProfileInput) error {
 	switch p.Env {
 	case EnvLocal, EnvStaging, EnvProdReplica:
 	case "":
-		return Profile{}, invalid("env is required")
+		return invalid("env is required")
 	default:
-		return Profile{}, invalid("env must be one of local, staging, prod-replica")
+		return invalid("env must be one of local, staging, prod-replica")
 	}
 	if p.Schemas == nil {
 		p.Schemas = []string{}
 	}
 	for _, s := range p.Schemas {
 		if s == "" {
-			return Profile{}, invalid("schemas must not contain empty names")
+			return invalid("schemas must not contain empty names")
 		}
 	}
 	switch p.SummaryMode {
@@ -159,14 +238,14 @@ func (in ProfileInput) Profile() (Profile, error) {
 		p.SummaryMode = SummaryProfile
 	case SummaryOff, SummaryProfile, SummaryRows:
 	default:
-		return Profile{}, invalid("summaryMode must be one of off, profile, rows")
+		return invalid("summaryMode must be one of off, profile, rows")
 	}
 	p.MaxRowsToLLM = 50
 	if in.MaxRowsToLLM != nil {
 		p.MaxRowsToLLM = *in.MaxRowsToLLM
 	}
 	if p.MaxRowsToLLM < 1 || p.MaxRowsToLLM > 500 {
-		return Profile{}, invalid("maxRowsToLLM must be 1-500")
+		return invalid("maxRowsToLLM must be 1-500")
 	}
 	p.StatementTimeoutMs = 30000
 	if p.Env == EnvProdReplica {
@@ -176,16 +255,16 @@ func (in ProfileInput) Profile() (Profile, error) {
 		p.StatementTimeoutMs = *in.StatementTimeoutMs
 	}
 	if p.StatementTimeoutMs < 1 {
-		return Profile{}, invalid("statementTimeoutMs must be a positive number of milliseconds")
+		return invalid("statementTimeoutMs must be a positive number of milliseconds")
 	}
 	if in.MaxCost != nil {
 		if c := *in.MaxCost; c < 0 || math.IsNaN(c) || math.IsInf(c, 0) {
-			return Profile{}, invalid("maxCost must be 0 (no limit) or a positive number")
+			return invalid("maxCost must be 0 (no limit) or a positive number")
 		}
 		c := *in.MaxCost
 		p.MaxCost = &c
 	}
-	return p, nil
+	return nil
 }
 
 // Default EXPLAIN cost limits per env; local has none.

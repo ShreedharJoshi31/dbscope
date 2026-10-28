@@ -24,6 +24,7 @@ import (
 	"github.com/dbscope/dbscope/internal/migrate/report"
 	"github.com/dbscope/dbscope/internal/migrate/score"
 	"github.com/dbscope/dbscope/internal/migrate/stats"
+	"github.com/dbscope/dbscope/internal/sqlite"
 )
 
 // Exit codes of migrate check and stats export (docs/API.md).
@@ -39,6 +40,8 @@ const migrateUsage = `usage:
   dbscope migrate check PATH... [--dsn URL | --schema-dump FILE [--stats FILE]] [--pg-version N]
                         [--fail-on low|medium|high|critical] [--format text|json|sarif|github]
                         [--tx-mode auto|file|statement|none] [--assume-lock-timeout]
+  dbscope migrate check PATH... --sqlite FILE | --sqlite-schema FILE
+                        [--fail-on low|medium|high|critical] [--format text|json|sarif|github]
 
   dbscope migrate capture --shadow URL [--dsn URL] [--out DIR] [--url-env NAME]...
                           [--allow-nonempty-shadow] -- COMMAND [ARGS...]
@@ -46,7 +49,9 @@ const migrateUsage = `usage:
 Analyzes migration files (or directories of them) against a base schema:
 a live database (--dsn, or the DBSCOPE_DSN environment variable), or a
 pg_dump --schema-only file optionally combined with a "dbscope stats export"
-file. Exits 1 when any statement is rated at or above --fail-on (default
+file. For SQLite the base is a database file (--sqlite, opened read-only) or a
+schema script such as the output of sqlite3 app.db .schema (--sqlite-schema);
+see docs/ENGINES.md. Exits 1 when any statement is rated at or above --fail-on (default
 high), 2 on usage errors and 3 when the base schema cannot be read.
 
 capture runs an ORM's migrate command (bin/rails db:migrate, python manage.py
@@ -135,6 +140,8 @@ func migrateCmd(args []string, stdout, stderr io.Writer) int {
 	format := fs.String("format", "text", "text, json, sarif or github")
 	txMode := fs.String("tx-mode", "auto", "auto, file, statement or none")
 	assume := fs.Bool("assume-lock-timeout", false, "the deploy tool sets lock_timeout itself")
+	sqliteFile := fs.String("sqlite", "", "SQLite database file to use as the base schema (opened read-only)")
+	sqliteSchema := fs.String("sqlite-schema", "", "SQLite schema script (sqlite3 FILE .schema) to use as the base schema")
 	paths, err := parseInterleaved(fs, args[1:])
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -165,6 +172,15 @@ func migrateCmd(args []string, stdout, stderr io.Writer) int {
 	}
 	if len(paths) == 0 {
 		return usage("at least one migration file or directory is required")
+	}
+	if *sqliteFile != "" || *sqliteSchema != "" {
+		switch {
+		case *sqliteFile != "" && *sqliteSchema != "":
+			return usage("use either --sqlite or --sqlite-schema, not both")
+		case *dsnFlag != "" || *dumpPath != "" || *statsPath != "" || *pgVersion != "" || *txMode != "auto" || *assume:
+			return usage("--sqlite and --sqlite-schema take no PostgreSQL options (--dsn, --schema-dump, --stats, --pg-version, --tx-mode, --assume-lock-timeout)")
+		}
+		return checkSQLite(stdout, stderr, paths, *sqliteFile, *sqliteSchema, *format, limit)
 	}
 	dsn := dsnFrom(*dsnFlag)
 	switch {
@@ -202,6 +218,47 @@ func migrateCmd(args []string, stdout, stderr io.Writer) int {
 		return exitUnavailable
 	}
 	if err := report.Write(stdout, *format, rep, agent.Version); err != nil {
+		fmt.Fprintf(stderr, "dbscope migrate check: %v\n", err)
+		return exitUsage
+	}
+	if rep.Exceeds(limit) {
+		return exitThreshold
+	}
+	return exitOK
+}
+
+func checkSQLite(stdout, stderr io.Writer, paths []string, file, schemaPath, format string, limit score.Rating) int {
+	cwd, _ := os.Getwd()
+	inputs, err := ingest.ReadPaths(paths, ingest.RepoRoot(cwd))
+	if err != nil {
+		fmt.Fprintf(stderr, "dbscope migrate check: %s\n%s", err, migrateUsage)
+		return exitUsage
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	var base *sqlite.Base
+	if file != "" {
+		var db *sqlite.DB
+		if db, err = sqlite.Open(file, 5*time.Second); err == nil {
+			base, err = sqlite.ReadBase(ctx, db.DB)
+			db.Close()
+		}
+	} else {
+		var b []byte
+		if b, err = os.ReadFile(schemaPath); err == nil {
+			base = sqlite.BaseFromDump(string(b))
+		}
+	}
+	if err != nil {
+		fmt.Fprintf(stderr, "dbscope migrate check: base schema unavailable: %v\n", err)
+		return exitUnavailable
+	}
+	rep, err := sqlite.Analyze(ctx, base, inputs)
+	if err != nil {
+		fmt.Fprintf(stderr, "dbscope migrate check: %v\n", err)
+		return exitUnavailable
+	}
+	if err := report.Write(stdout, format, rep, agent.Version); err != nil {
 		fmt.Fprintf(stderr, "dbscope migrate check: %v\n", err)
 		return exitUsage
 	}

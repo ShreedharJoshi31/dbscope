@@ -52,8 +52,16 @@ export function SqlEditor({ tab }: { tab: SqlTab }) {
   const busy = running !== null;
 
   const run = (kind: "query" | "explain") => {
-    if (profile && runnable) runner.request({ profile, sql: tab.sql, kind, analyze, maxRows, tabId: tab.id });
-    else runner.runActive(undefined, kind);
+    if (profile && runnable) {
+      runner.request({
+        profile,
+        sql: tab.sql,
+        kind,
+        analyze: analyze && profile.engine !== "sqlite",
+        maxRows,
+        tabId: tab.id,
+      });
+    } else runner.runActive(undefined, kind);
   };
 
   return (
@@ -82,15 +90,18 @@ export function SqlEditor({ tab }: { tab: SqlTab }) {
           <ScanText aria-hidden />
           Explain
         </ToolbarButton>
-        <label htmlFor={analyzeId} className="flex items-center gap-1.5 text-xs text-text-muted">
-          <Checkbox
-            id={analyzeId}
-            checked={analyze}
-            onCheckedChange={(on) => useTabRunOptions.getState().set(tab.id, { analyze: on })}
-          />
-          with ANALYZE
-          <span className="sr-only">(executes the query to measure it)</span>
-        </label>
+        {/* SQLite has no EXPLAIN ANALYZE. */}
+        {profile?.engine !== "sqlite" && (
+          <label htmlFor={analyzeId} className="flex items-center gap-1.5 text-xs text-text-muted">
+            <Checkbox
+              id={analyzeId}
+              checked={analyze}
+              onCheckedChange={(on) => useTabRunOptions.getState().set(tab.id, { analyze: on })}
+            />
+            with ANALYZE
+            <span className="sr-only">(executes the query to measure it)</span>
+          </label>
+        )}
         <label htmlFor={rowsId} className="flex items-center gap-1 text-xs text-text-muted">
           Max rows
           <NativeSelect

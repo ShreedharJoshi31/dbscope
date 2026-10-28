@@ -1,6 +1,7 @@
 import { cn } from "cn";
 import { Activity, Info, LoaderCircle, TriangleAlert } from "lucide-react";
 import { useEffect, useRef } from "react";
+import { useActiveConnection } from "@/entities/connection";
 import { type OverlayEntry, useCanvasStore } from "@/entities/schema";
 import {
   METRIC_LABELS,
@@ -23,6 +24,12 @@ const ALL: WorkloadMetric[] = ["time", "calls", "reads", "writes"];
  * control then switches itself off.
  */
 export function WorkloadControl({ profileId }: { profileId: string | undefined }) {
+  const { profile } = useActiveConnection();
+  if (profile && !profile.capabilities.workload) return null;
+  return <WorkloadToggle profileId={profileId} />;
+}
+
+function WorkloadToggle({ profileId }: { profileId: string | undefined }) {
   const { on, metric, setOn, setMetric } = useWorkloadView();
   const workload = useWorkload(profileId, on);
   const applied = useRef<Record<string, OverlayEntry> | null>(null);

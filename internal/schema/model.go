@@ -20,7 +20,9 @@ const (
 )
 
 type Model struct {
-	ServerVersion  int        `json:"serverVersion"` // server_version_num, e.g. 170002
+	// Engine is the database kind; empty means PostgreSQL (docs/ENGINES.md).
+	Engine         string     `json:"engine,omitempty"`
+	ServerVersion  int        `json:"serverVersion"` // server_version_num, e.g. 170002; SQLITE_VERSION_NUMBER for SQLite
 	Schemas        []string   `json:"schemas"`
 	Relations      []Relation `json:"relations"`
 	Enums          []Enum     `json:"enums"`

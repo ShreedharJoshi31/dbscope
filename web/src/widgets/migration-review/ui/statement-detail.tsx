@@ -116,6 +116,8 @@ interface StatementDetailProps {
 /** The selected statement: what it locks and does, its transaction and lock_timeout context, findings and fixes. */
 export function StatementDetail({ review, statement: s, total, unanalyzable, headingRef }: StatementDetailProps) {
   const timeout = lockTimeoutCopy(s.lockTimeout, s.locks.length);
+  // SQLite has no lock_timeout and no lock-class score; its findings carry the sizes.
+  const sqlite = review.model?.report.engine === "sqlite";
   const diff = review.model?.diff;
   const changed = diff ? diff.added.length + diff.altered.length + diff.dropped.length : 0;
   return (
@@ -151,12 +153,14 @@ export function StatementDetail({ review, statement: s, total, unanalyzable, hea
           <Crosshair aria-hidden />
           Show on canvas
         </Button>
-        <span
-          className="self-center font-mono text-2xs text-text-muted"
-          title="Lock class × work × size tier, plus lock-queue, missing lock_timeout and held-lock terms (docs/MIGRATIONS.md)"
-        >
-          score {s.score}
-        </span>
+        {!sqlite && (
+          <span
+            className="self-center font-mono text-2xs text-text-muted"
+            title="Lock class × work × size tier, plus lock-queue, missing lock_timeout and held-lock terms (docs/MIGRATIONS.md)"
+          >
+            score {s.score}
+          </span>
+        )}
       </div>
       <SqlCode sql={s.sql} label={`SQL of the statement at ${s.file} line ${s.line}`} className="max-h-40" />
       {unanalyzable && (
@@ -173,18 +177,20 @@ export function StatementDetail({ review, statement: s, total, unanalyzable, hea
           <Locks statement={s} />
         </Fact>
         <Fact term="Work">{workWords(s.work)}</Fact>
-        <Fact term="Size">{sizeWords(s.sizeBytes, s.locks.length)}</Fact>
+        {!sqlite && <Fact term="Size">{sizeWords(s.sizeBytes, s.locks.length)}</Fact>}
         <Fact term="Transaction">{txWords(s.tx)}</Fact>
-        <Fact term="lock_timeout">
-          <span className="flex items-start gap-1.5">
-            {timeout.tone === "success" ? (
-              <Lock aria-hidden className="mt-px size-3.5 shrink-0 text-status-success-fg" />
-            ) : (
-              <StatusIcon tone={timeout.tone} className="mt-px size-3.5" />
-            )}
-            {timeout.text}
-          </span>
-        </Fact>
+        {!sqlite && (
+          <Fact term="lock_timeout">
+            <span className="flex items-start gap-1.5">
+              {timeout.tone === "success" ? (
+                <Lock aria-hidden className="mt-px size-3.5 shrink-0 text-status-success-fg" />
+              ) : (
+                <StatusIcon tone={timeout.tone} className="mt-px size-3.5" />
+              )}
+              {timeout.text}
+            </span>
+          </Fact>
+        )}
       </dl>
       <section aria-labelledby="statement-findings-heading" className="flex flex-col gap-2">
         <h4 id="statement-findings-heading" className="text-2xs font-semibold tracking-wide text-text-muted uppercase">
