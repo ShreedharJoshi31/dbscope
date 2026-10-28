@@ -44,6 +44,11 @@ func TestMongoProfile(t *testing.T) {
 	if p.Options != srv.Options || !p.Capabilities.Query || !p.Capabilities.Migrations {
 		t.Fatalf("created %s", w.Body.String())
 	}
+	w = e.do("GET", "/api/profiles/"+p.ID+"/health", "")
+	expect(t, w, 200, "")
+	if !strings.Contains(w.Body.String(), `"id":"mongo.connections"`) {
+		t.Errorf("health %s", w.Body.String())
+	}
 	w = e.do("GET", "/api/profiles/"+p.ID+"/schema", "")
 	expect(t, w, 200, "")
 	var m schema.Model

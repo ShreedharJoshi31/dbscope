@@ -7,6 +7,7 @@ import (
 	mongodrv "go.mongodb.org/mongo-driver/v2/mongo"
 
 	"github.com/dbscope/dbscope/internal/conn"
+	"github.com/dbscope/dbscope/internal/health"
 	"github.com/dbscope/dbscope/internal/introspect"
 	"github.com/dbscope/dbscope/internal/migrate"
 	"github.com/dbscope/dbscope/internal/migrate/ingest"
@@ -84,6 +85,17 @@ func (ms *mongoSource) Run(ctx context.Context, p conn.Profile, password, text s
 		return nil, err
 	}
 	return mongo.Run(ctx, c.Database(p.Database), cmd, maxRows, explainOnly, statementTimeout(p))
+}
+
+// Health reads the server's health checks (internal/mongo.Health).
+func (ms *mongoSource) Health(ctx context.Context, p conn.Profile, password string) (*health.Report, error) {
+	ctx, cancel := context.WithTimeout(ctx, statementTimeout(p)+connectSlack)
+	defer cancel()
+	c, err := ms.get(p, password)
+	if err != nil {
+		return nil, err
+	}
+	return mongo.Health(ctx, c, p.Database)
 }
 
 func (ms *mongoSource) Query(context.Context, conn.Profile, string, exec.Request) (*exec.Result, error) {

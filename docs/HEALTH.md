@@ -52,3 +52,39 @@ with only SELECT.
 Both servers refuse `INNODB_TRX` and `INNODB_METRICS` without `PROCESS`, and
 replica status without `REPLICATION CLIENT` (MySQL) or `SLAVE MONITOR`
 (MariaDB); those checks then say which grant is missing.
+
+## MongoDB
+
+Checked on MongoDB 8.0 standalone and as a one-member replica set
+(`internal/mongo/health_test.go`), with a slow `$where` query running and a
+user with only the `read` role.
+
+| Check | Warn | Danger | Notes |
+|---|---|---|---|
+| Connections | 80% of current plus available | 95% | `serverStatus.connections` |
+| WiredTiger cache | 5% dirty | 20% dirty | above 5% eviction slows writes; above 20% application threads evict |
+| Replication | a secondary 30 s behind | 5 min, or a member not PRIMARY, SECONDARY or ARBITER | a standalone is reported as such |
+| Oplog window | under 24 h | under 6 h | rated only once the oplog is 90% full; a young set's window is just its age |
+| Long-running operations | 1 over a minute | 5 | from `currentOp`, without internal ones |
+
+`serverStatus`, `replSetGetStatus` and `currentOp` need the `clusterMonitor`
+role; without it those checks name it.
+
+## Elasticsearch and OpenSearch
+
+Checked on Elasticsearch 9.5 and OpenSearch 3.9 (`internal/elastic/health_test.go`)
+with an index whose replica a single node cannot assign and an index with a
+write block.
+
+| Check | Warn | Danger | Notes |
+|---|---|---|---|
+| Cluster status | yellow | red | with unassigned and relocating shards |
+| Pending cluster tasks | 10 | 100 | |
+| Disk use | 85% (low watermark) | 90% (high watermark) | the busiest node |
+| Shards per node | 80% of `cluster.max_shards_per_node` | 95% | at the limit, creating an index fails |
+| JVM heap | 75% | 90% | the busiest node |
+| Indices blocked for writes | | any | `read_only_allow_delete` (flood stage), `read_only` or `write` blocks |
+
+Every check needs the `monitor` cluster privilege (`cluster_monitor` on
+OpenSearch). Without it the clusters refuse even `GET /`, so dbscope cannot
+connect as that user at all.

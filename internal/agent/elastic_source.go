@@ -6,6 +6,7 @@ import (
 
 	"github.com/dbscope/dbscope/internal/conn"
 	"github.com/dbscope/dbscope/internal/elastic"
+	"github.com/dbscope/dbscope/internal/health"
 	"github.com/dbscope/dbscope/internal/introspect"
 	"github.com/dbscope/dbscope/internal/migrate"
 	"github.com/dbscope/dbscope/internal/migrate/ingest"
@@ -81,6 +82,17 @@ func (es *elasticSource) Analyze(ctx context.Context, p conn.Profile, password s
 		return nil, err
 	}
 	return elastic.Analyze(base, files), nil
+}
+
+// Health reads the server's health checks (internal/elastic.Health).
+func (es *elasticSource) Health(ctx context.Context, p conn.Profile, password string) (*health.Report, error) {
+	ctx, cancel := context.WithTimeout(ctx, statementTimeout(p)+connectSlack)
+	defer cancel()
+	c, err := es.get(p, password)
+	if err != nil {
+		return nil, err
+	}
+	return elastic.Health(ctx, c)
 }
 
 func (es *elasticSource) Query(context.Context, conn.Profile, string, exec.Request) (*exec.Result, error) {

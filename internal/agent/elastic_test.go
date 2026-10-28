@@ -26,6 +26,11 @@ func TestElasticProfile(t *testing.T) {
 	if !strings.Contains(w.Body.String(), `"ok":true`) || !strings.Contains(w.Body.String(), "cluster all") {
 		t.Fatalf("test %s", w.Body.String())
 	}
+	w = e.do("GET", "/api/profiles/"+p.ID+"/health", "")
+	expect(t, w, 200, "")
+	if !strings.Contains(w.Body.String(), `"id":"es.cluster_status"`) {
+		t.Errorf("health %s", w.Body.String())
+	}
 	w = e.do("GET", "/api/profiles/"+p.ID+"/schema", "")
 	expect(t, w, 200, "")
 	var m schema.Model
