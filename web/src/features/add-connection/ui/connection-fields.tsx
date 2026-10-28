@@ -57,7 +57,9 @@ export function ConnectionFields({
         />
       </div>
 
-      {sqlite ? (
+      {values.engine === "dynamodb" ? (
+        <AwsFields values={values} errorFor={errorFor} onChange={onChange} register={register} />
+      ) : sqlite ? (
         <FormField
           label="Database file"
           error={errorFor("path")}
@@ -216,6 +218,63 @@ function NetworkFields({
             />
           )}
         </FormField>
+      )}
+    </>
+  );
+}
+
+/** DynamoDB is reached by region with the AWS SDK's own credentials; the three fields become the profile's options. */
+function AwsFields({
+  values,
+  errorFor,
+  onChange,
+  register,
+}: Pick<ConnectionFieldsProps, "values" | "errorFor" | "onChange" | "register">) {
+  const params = new URLSearchParams(values.options);
+  const set = (key: string, value: string) => {
+    const next = new URLSearchParams(values.options);
+    if (value.trim()) next.set(key, value.trim());
+    else next.delete(key);
+    onChange("options", next.toString());
+  };
+  const field = (key: string, label: string, placeholder: string, description: string, optional: boolean) => (
+    <FormField
+      label={label}
+      optional={optional}
+      error={key === "region" ? errorFor("options") : undefined}
+      className="col-span-6"
+      description={description}
+    >
+      {(control) => (
+        <Input
+          {...control}
+          ref={key === "region" ? register("options") : undefined}
+          value={params.get(key) ?? ""}
+          onChange={(e) => set(key, e.target.value)}
+          placeholder={placeholder}
+          autoComplete="off"
+          spellCheck={false}
+          className="font-mono"
+        />
+      )}
+    </FormField>
+  );
+  return (
+    <>
+      {field("region", "Region", "eu-west-1", "The AWS region of the tables.", false)}
+      {field(
+        "profile",
+        "AWS profile",
+        "default",
+        "A profile from ~/.aws/config. Empty uses the environment and the default profile. dbscope stores no AWS secrets.",
+        true,
+      )}
+      {field(
+        "endpoint",
+        "Endpoint",
+        "http://localhost:8000",
+        "Only for DynamoDB Local or another compatible endpoint.",
+        true,
       )}
     </>
   );

@@ -81,6 +81,23 @@ describe("MongoDB", () => {
   });
 });
 
+describe("DynamoDB", () => {
+  it("needs a region and sends only options", () => {
+    const base = {
+      ...EMPTY_CONNECTION_FORM,
+      engine: "dynamodb" as const,
+      name: "dyn",
+      env: "local" as const,
+      host: "",
+      user: "",
+    };
+    expect(Object.keys(validateConnectionForm({ ...base, options: "" }))).toEqual(["options"]);
+    const ok = { ...base, options: "region=eu-west-1&profile=dev" };
+    expect(validateConnectionForm(ok)).toEqual({});
+    expect(toProfileInput(ok)).toMatchObject({ engine: "dynamodb", options: "region=eu-west-1&profile=dev", host: "" });
+  });
+});
+
 describe("toProfileInput", () => {
   it("trims, converts numbers, splits schemas and omits an empty password", () => {
     expect(

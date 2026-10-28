@@ -1,6 +1,6 @@
 import type { Engine, TestResult } from "@/shared/api";
 
-export const ENGINE_ORDER: readonly Engine[] = ["postgres", "mysql", "sqlite", "mongodb", "redis"];
+export const ENGINE_ORDER: readonly Engine[] = ["postgres", "mysql", "sqlite", "mongodb", "redis", "dynamodb"];
 
 export const ENGINE_META: Record<Engine, { label: string; description: string; defaultPort?: number }> = {
   postgres: {
@@ -24,6 +24,11 @@ export const ENGINE_META: Record<Engine, { label: string; description: string; d
     description:
       "Redis or Valkey: a map of key patterns with memory and expiry, big keys and server risks, read without touching values.",
     defaultPort: 6379,
+  },
+  dynamodb: {
+    label: "DynamoDB",
+    description:
+      "Tables, keys and indexes with attributes from a small sample, and PartiQL SELECTs whose plan says when they scan. Uses your AWS credentials.",
   },
   sqlite: {
     label: "SQLite",

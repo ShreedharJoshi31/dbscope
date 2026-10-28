@@ -51,6 +51,7 @@ models of their own rather than being forced into tables and columns.
 | MySQL / MariaDB | yes | yes | not yet | yes | not yet |
 | MongoDB | inferred | yes | not yet | not yet | n/a |
 | Redis / Valkey | key patterns | n/a | n/a | n/a | keyspace report |
+| DynamoDB | key schemas + sampled attributes | PartiQL SELECT | not yet | n/a | not yet |
 
 ### SQLite
 
@@ -268,8 +269,70 @@ allowed to run it can use; otherwise it says it could not check.
 Not yet: cluster mode (SCAN is per node), hot keys (LFU's OBJECT FREQ or Redis
 8.6's HOTKEYS), and SLOWLOG, which needs an admin grant.
 
+### DynamoDB
+
+Research with sources: [research-dynamodb.md](research-dynamodb.md). Tested
+against DynamoDB Local; nothing has been run against AWS itself.
+
+A profile has no host, user or password, only `options`: `region`
+(required), `profile` (a name from the AWS shared config) and `endpoint` (an
+http(s) URL, for DynamoDB Local). Credentials come from the SDK's own chain
+(environment, shared config and SSO, instance roles); dbscope stores none.
+For a loopback endpoint with no credentials found, dummy ones are used, as
+DynamoDB Local accepts any. The connection test warns when
+`AWS_ACCESS_KEY_ID` in dbscope's environment overrides the named profile, or
+when `AWS_ENDPOINT_URL(_DYNAMODB)` redirects requests.
+
+**Table map.** Every table in the region becomes a relation in the `tables`
+schema: its key schema is the primary key (partition and sort key in the
+column comments), GSIs and LSIs are indexes (`gsi keys_only`, `lsi all`),
+billing mode and size are the comment, and the TTL attribute is marked.
+Other attributes have no declared type, so each table is sampled with an
+eventually consistent Scan of at most 100 items or 25 read units, and every
+attribute seen gets its type mix and coverage, as for MongoDB. Item counts
+and sizes are DynamoDB's own, refreshed about every six hours.
+
+**Queries.** A query is one PartiQL `SELECT`; anything else, or a second
+statement, is refused before it is sent, and batch and transaction APIs are
+never used. Rows are paged with `Limit` and the consumed read units are
+reported. The plan says whether the statement reads by key or scans: it is a
+`Query` only when the WHERE clause gives every partition-key attribute of the
+table or index (a GSI can have up to four) with `=` or `IN`; otherwise it is
+flagged as a full scan, which reads and bills every item before any filter.
+
+**Read-only role.** IAM is the real guard; dbscope's checks only refuse early.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    { "Effect": "Allow", "Action": "dynamodb:ListTables", "Resource": "*" },
+    { "Effect": "Allow",
+      "Action": ["dynamodb:DescribeTable", "dynamodb:DescribeTimeToLive", "dynamodb:Scan",
+                 "dynamodb:Query", "dynamodb:PartiQLSelect"],
+      "Resource": ["arn:aws:dynamodb:REGION:ACCOUNT:table/*"] },
+    { "Effect": "Deny",
+      "Action": ["dynamodb:PartiQLInsert", "dynamodb:PartiQLUpdate", "dynamodb:PartiQLDelete"],
+      "Resource": "*" }
+  ]
+}
+```
+
+To forbid full scans through PartiQL as well, add a Deny of `dynamodb:PartiQLSelect`
+with the condition `"Bool": {"dynamodb:FullTableScan": "true"}`; dbscope's
+attribute sampling uses `Scan`, which that condition does not cover.
+
+**DynamoDB Local.** Without `-sharedDb` (or `-inMemory`), Local keeps a
+separate database per access key and region, so dbscope with dummy
+credentials sees none of the tables another client created with its own.
+Start it with `-sharedDb` when sharing data with other tools.
+
+Not yet: access-pattern findings (hot or low-cardinality partition keys,
+large items, missing TTL, GSI back-pressure, provisioned capacity without
+auto scaling) and CloudWatch or Contributor Insights reports.
+
 ## Next engines
 
-The remaining candidates from the October 2026 list: DynamoDB, Cassandra and
+The remaining candidates from the October 2026 list: Cassandra and
 ScyllaDB, Neo4j, Elasticsearch and OpenSearch, ClickHouse, SQL Server and
 Oracle. Each gets research first, then a build tested against a real server.

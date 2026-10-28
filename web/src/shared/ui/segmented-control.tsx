@@ -53,7 +53,7 @@ export function SegmentedControl<T extends string>({
           value={option.value}
           ref={index === 0 ? firstRadioRef : undefined}
           className={cn(
-            "inline-flex items-center gap-1 rounded-sm text-text-muted outline-none transition-colors",
+            "inline-flex min-h-6 items-center justify-center gap-1 rounded-sm text-text-muted outline-none transition-colors",
             size === "sm" ? "px-2 text-xs" : "px-3 text-sm",
             "hover:bg-surface-hover hover:text-text-primary",
             "focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-border-focus",

@@ -29,6 +29,8 @@ const (
 	// EngineRedis covers Redis and Valkey; EngineValkey appears only in test results.
 	EngineRedis  Engine = "redis"
 	EngineValkey Engine = "valkey"
+	// EngineDynamoDB reaches a region's DynamoDB with the AWS SDK's own credentials.
+	EngineDynamoDB Engine = "dynamodb"
 )
 
 // Capabilities are the modes an engine supports beyond the ERD, which every engine has.
@@ -53,6 +55,8 @@ func (e Engine) Capabilities() Capabilities {
 		return Capabilities{Query: true}
 	case EngineRedis:
 		return Capabilities{Keyspace: true}
+	case EngineDynamoDB:
+		return Capabilities{Query: true}
 	}
 	return Capabilities{}
 }
@@ -175,9 +179,9 @@ func (in ProfileInput) Profile() (Profile, error) {
 	switch p.Engine {
 	case "":
 		p.Engine = EnginePostgres
-	case EnginePostgres, EngineSQLite, EngineMySQL, EngineMongoDB, EngineRedis:
+	case EnginePostgres, EngineSQLite, EngineMySQL, EngineMongoDB, EngineRedis, EngineDynamoDB:
 	default:
-		return Profile{}, invalid("engine must be one of postgres, sqlite, mysql, mongodb, redis")
+		return Profile{}, invalid("engine must be one of postgres, sqlite, mysql, mongodb, redis, dynamodb")
 	}
 	p.Capabilities = p.Engine.Capabilities()
 	switch p.Engine {
@@ -202,6 +206,10 @@ func (in ProfileInput) Profile() (Profile, error) {
 		if err := p.fileTarget(in); err != nil {
 			return Profile{}, err
 		}
+	} else if p.Engine == EngineDynamoDB {
+		if err := p.awsTarget(in); err != nil {
+			return Profile{}, err
+		}
 	} else if err := p.networkTarget(in); err != nil {
 		return Profile{}, err
 	}
@@ -218,8 +226,8 @@ func (p *Profile) connOptions(in ProfileInput) error {
 	if p.Options == "" {
 		return nil
 	}
-	if p.Engine != EngineMongoDB {
-		return invalid("options are only for MongoDB profiles")
+	if p.Engine != EngineMongoDB && p.Engine != EngineDynamoDB {
+		return invalid("options are only for MongoDB and DynamoDB profiles")
 	}
 	q, err := url.ParseQuery(p.Options)
 	if err != nil {
@@ -231,6 +239,33 @@ func (p *Profile) connOptions(in ProfileInput) error {
 			return invalid("options must not hold credentials; use the user and password fields")
 		}
 	}
+	return nil
+}
+
+// awsTarget validates a DynamoDB profile: everything is in options, a region,
+// and optionally an AWS profile name and an endpoint (DynamoDB Local).
+// Credentials come from the AWS SDK's chain, never from dbscope.
+func (p *Profile) awsTarget(in ProfileInput) error {
+	q, _ := url.ParseQuery(p.Options)
+	if q.Get("region") == "" {
+		return invalid("a DynamoDB profile needs region in its options, such as region=eu-west-1")
+	}
+	for k := range q {
+		switch k {
+		case "region", "profile", "endpoint":
+		default:
+			return invalid("DynamoDB options take region, profile and endpoint, not %s", k)
+		}
+	}
+	if e := q.Get("endpoint"); e != "" {
+		if u, err := url.Parse(e); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return invalid("endpoint must be an http(s) URL such as http://localhost:8000")
+		}
+	}
+	if in.Password != nil && *in.Password != "" {
+		return invalid("a DynamoDB profile stores no password; credentials come from the AWS profile or environment")
+	}
+	p.Host, p.Port, p.Database, p.User, p.SSLMode, p.SSLRootCert = "", 0, "", "", "", ""
 	return nil
 }
 

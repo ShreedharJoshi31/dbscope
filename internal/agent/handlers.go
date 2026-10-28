@@ -7,6 +7,7 @@ import (
 	"runtime"
 
 	"github.com/dbscope/dbscope/internal/conn"
+	"github.com/dbscope/dbscope/internal/dynamo"
 	"github.com/dbscope/dbscope/internal/mongo"
 	"github.com/dbscope/dbscope/internal/mysql"
 	"github.com/dbscope/dbscope/internal/redis"
@@ -215,6 +216,8 @@ func testProfile(ctx context.Context, p conn.Profile, password string) conn.Test
 		return mongo.Test(ctx, p, password)
 	case conn.EngineRedis:
 		return redis.Test(ctx, p, password)
+	case conn.EngineDynamoDB:
+		return dynamo.Test(ctx, p)
 	}
 	return conn.Test(ctx, p, password)
 }

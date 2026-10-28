@@ -1,6 +1,6 @@
 /** Wire types for the Phase 0 agent API (docs/API.md). */
 
-export type Engine = "postgres" | "mysql" | "sqlite" | "mongodb" | "redis";
+export type Engine = "postgres" | "mysql" | "sqlite" | "mongodb" | "redis" | "dynamodb";
 export type Env = "local" | "staging" | "prod-replica";
 export type SummaryMode = "off" | "profile" | "rows";
 export type SSLMode = "disable" | "prefer" | "require" | "verify-ca" | "verify-full";

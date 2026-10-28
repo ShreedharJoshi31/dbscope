@@ -33,6 +33,7 @@ export const FIELD_ORDER: readonly ConnectionField[] = [
   "name",
   "env",
   "path",
+  "options",
   "host",
   "port",
   "database",
@@ -101,7 +102,9 @@ export function validateConnectionForm(values: ConnectionFormValues): Connection
   else if (name.length > NAME_MAX) errors.name = `Use at most ${NAME_MAX} characters (now ${name.length}).`;
 
   if (!values.env) errors.env = "Choose the environment this database belongs to.";
-  if (values.engine === "sqlite") {
+  if (values.engine === "dynamodb") {
+    if (!new URLSearchParams(values.options).get("region")) errors.options = "Enter the AWS region, such as eu-west-1.";
+  } else if (values.engine === "sqlite") {
     if (!isAbsolutePath(values.path.trim())) {
       errors.path = "Enter the full path of the database file, e.g. /Users/you/app.db or C:\\data\\app.db.";
     }
@@ -153,6 +156,23 @@ export function parseSchemas(raw: string): string[] {
  */
 export function toProfileInput(values: ConnectionFormValues): ProfileInput {
   if (!values.env) throw new Error("toProfileInput requires a validated form with env set");
+  if (values.engine === "dynamodb") {
+    return {
+      name: values.name.trim(),
+      engine: "dynamodb",
+      options: values.options,
+      host: "",
+      port: 0,
+      database: "",
+      user: "",
+      sslMode: "prefer",
+      env: values.env,
+      schemas: [],
+      summaryMode: values.summaryMode,
+      maxRowsToLLM: values.maxRowsToLLM,
+      statementTimeoutMs: Number(values.statementTimeoutMs),
+    };
+  }
   if (values.engine === "sqlite") {
     return {
       name: values.name.trim(),

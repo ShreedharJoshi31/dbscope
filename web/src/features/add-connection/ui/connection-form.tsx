@@ -205,6 +205,7 @@ export function ConnectionForm({ profile, submitLabel, onSaved, onCancel, autoFo
           onValueChange={(engine) => change("engine", engine)}
           aria-labelledby={engineLabelId}
           aria-describedby={engineDescriptionId}
+          className="grid h-auto w-full grid-cols-3"
         />
         <p id={engineDescriptionId} className="text-xs text-text-muted">
           {ENGINE_META[values.engine].description}

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/smithy-go"
 	mysqldrv "github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v5/pgconn"
 	mongodrv "go.mongodb.org/mongo-driver/v2/mongo"
@@ -16,6 +17,7 @@ import (
 	sqlite3 "modernc.org/sqlite/lib"
 
 	"github.com/dbscope/dbscope/internal/conn"
+	"github.com/dbscope/dbscope/internal/dynamo"
 	"github.com/dbscope/dbscope/internal/mongo"
 	"github.com/dbscope/dbscope/internal/mysql"
 	"github.com/dbscope/dbscope/internal/query/exec"
@@ -148,6 +150,20 @@ func (s *server) execute(ctx context.Context, p conn.Profile, password string, b
 		}
 		return res, nil
 	}
+	if p.Engine == conn.EngineDynamoDB {
+		if err := dynamo.Check(body.SQL); err != nil {
+			return nil, mapRunError(ctx, err)
+		}
+		src, _ := s.source.(engineSource)[conn.EngineDynamoDB].(*dynamoSource)
+		if src == nil {
+			return nil, mapRunError(ctx, errUnsupported)
+		}
+		res, err := src.Run(ctx, p, body.SQL, maxRows, explainOnly)
+		if err != nil {
+			return nil, mapRunError(ctx, err)
+		}
+		return res, nil
+	}
 	if p.Engine == conn.EngineMongoDB {
 		cmd, err := mongo.Parse(body.SQL)
 		if err == nil {
@@ -226,6 +242,7 @@ func mapRunError(ctx context.Context, err error) *runError {
 	var liteErr *sqlitedrv.Error
 	var myErr *mysqldrv.MySQLError
 	var mongoErr mongodrv.CommandError
+	var awsErr smithy.APIError
 	switch {
 	case errors.As(err, &ge):
 		return &runError{status: http.StatusUnprocessableEntity, code: "rejected", message: ge.Message, detail: string(ge.Reason),
@@ -254,6 +271,17 @@ func mapRunError(ctx context.Context, err error) *runError {
 	case mongo.IsTimeout(err):
 		return &runError{status: http.StatusGatewayTimeout, code: "timeout", message: "Stopped after the profile's statement timeout",
 			histStatus: store.HistoryError, histCode: "timeout"}
+	case errors.As(err, &awsErr):
+		r := &runError{status: http.StatusBadRequest, code: "database", message: awsErr.ErrorMessage(),
+			histStatus: store.HistoryError, histCode: "aws_" + awsErr.ErrorCode()}
+		switch awsErr.ErrorCode() {
+		case "AccessDeniedException":
+			r.message = "Blocked: the AWS credentials do not allow this (" + awsErr.ErrorMessage() + ")"
+		case "ProvisionedThroughputExceededException", "ThrottlingException", "RequestLimitExceeded":
+			r.status, r.code = http.StatusServiceUnavailable, "upstream"
+			r.message = "DynamoDB throttled the read; try again or read less (" + awsErr.ErrorMessage() + ")"
+		}
+		return r
 	case errors.As(err, &mongoErr):
 		r := &runError{status: http.StatusBadRequest, code: "database", message: mongoErr.Message,
 			histStatus: store.HistoryError, histCode: "mongo_" + strconv.Itoa(int(mongoErr.Code))}
