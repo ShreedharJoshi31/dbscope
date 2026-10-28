@@ -320,3 +320,30 @@ func TestIntegrationPool(t *testing.T) {
 		t.Fatalf("pool unusable after cancel: %v", err)
 	}
 }
+
+// TestIntegrationRDSIAMReplacesPassword shows the RDS IAM token, not the
+// stored password, is what reaches the server: with the right password and
+// auth=rds-iam, the login fails because the token is sent instead.
+func TestIntegrationRDSIAMReplacesPassword(t *testing.T) {
+	t.Setenv("AWS_ACCESS_KEY_ID", "AKIDEXAMPLE")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "secret")
+	t.Setenv("AWS_CONFIG_FILE", "/dev/null")
+	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", "/dev/null")
+	p, pass := testDB(t)
+	if res := Test(t.Context(), p, pass); !res.OK {
+		t.Fatalf("plain login: %+v", res.Error)
+	}
+	p.Options = "auth=rds-iam&region=eu-west-1"
+	res := Test(t.Context(), p, pass)
+	if res.OK || res.Error == nil || res.Error.SQLState != "28P01" {
+		t.Fatalf("the stored password was used, or another error: %+v", res.Error)
+	}
+	pool, err := NewPool(t.Context(), p, pass)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	if err := pool.Ping(t.Context()); err == nil || !strings.Contains(err.Error(), "28P01") {
+		t.Fatalf("pool login with the stored password: %v", err)
+	}
+}

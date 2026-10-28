@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 
+	"github.com/dbscope/dbscope/internal/awsauth"
 	"github.com/dbscope/dbscope/internal/conn"
 )
 
@@ -43,6 +44,20 @@ func Open(p conn.Profile, password string, timeout time.Duration) (*sql.DB, erro
 		cfg.TLSConfig = "preferred"
 	default:
 		cfg.TLS = tlsCfgs[0]
+	}
+	if s := awsauth.FromOptions(p.Options); s.Auth == "rds-iam" {
+		// RDS sends the token through mysql_clear_password, which validation allows only over TLS.
+		cfg.AllowCleartextPasswords = true
+		if err := cfg.Apply(mysql.BeforeConnect(func(ctx context.Context, c *mysql.Config) error {
+			aws, err := awsauth.Load(ctx, s)
+			if err != nil {
+				return err
+			}
+			c.Passwd, err = awsauth.RDSToken(ctx, aws, p.Host, p.Port, p.User)
+			return err
+		})); err != nil {
+			return nil, err
+		}
 	}
 	c, err := mysql.NewConnector(cfg)
 	if err != nil {

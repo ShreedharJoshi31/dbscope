@@ -30,6 +30,10 @@ export const ERROR_KIND_COPY: Record<TestErrorKind, { title: string; hint: strin
     title: "Database not available",
     hint: "Check that the database exists and that you are allowed to open it.",
   },
+  aws: {
+    title: "AWS sign-in failed",
+    hint: "dbscope found no usable AWS credentials on this machine. Run aws sso login or aws configure, or set the AWS profile; the identity also needs rds-db:connect for this database user (RDS) or es:ESHttp* (OpenSearch).",
+  },
   other: {
     title: "Connection failed",
     hint: "Read the server message above for the cause.",

@@ -95,6 +95,13 @@ function isWholeNumber(value: string): boolean {
   return /^\d+$/.test(value.trim());
 }
 
+/** The AWS sign-in an engine offers instead of a password: RDS IAM tokens or SigV4-signed requests. */
+export function awsAuthKind(engine: Engine): "rds-iam" | "sigv4" | undefined {
+  if (engine === "postgres" || engine === "mysql") return "rds-iam";
+  if (engine === "elasticsearch") return "sigv4";
+  return undefined;
+}
+
 export function validateConnectionForm(values: ConnectionFormValues): ConnectionFormErrors {
   const errors: ConnectionFormErrors = {};
   const name = values.name.trim();
@@ -102,6 +109,13 @@ export function validateConnectionForm(values: ConnectionFormValues): Connection
   else if (name.length > NAME_MAX) errors.name = `Use at most ${NAME_MAX} characters (now ${name.length}).`;
 
   if (!values.env) errors.env = "Choose the environment this database belongs to.";
+  const aws = new URLSearchParams(values.options);
+  if (awsAuthKind(values.engine) && aws.get("auth")) {
+    if (!aws.get("region")) errors.options = "Enter the AWS region, such as eu-west-1.";
+    if (values.sslMode === "disable" || values.sslMode === "prefer") {
+      errors.sslMode = "AWS sign-in needs TLS: choose require, verify-ca or verify-full.";
+    }
+  }
   if (values.engine === "dynamodb") {
     if (!new URLSearchParams(values.options).get("region")) errors.options = "Enter the AWS region, such as eu-west-1.";
   } else if (values.engine === "sqlite") {
@@ -198,7 +212,10 @@ export function toProfileInput(values: ConnectionFormValues): ProfileInput {
   }
   const input: ProfileInput = {
     engine: values.engine,
-    ...((values.engine === "mongodb" || values.engine === "cassandra" || values.engine === "neo4j") &&
+    ...((values.engine === "mongodb" ||
+      values.engine === "cassandra" ||
+      values.engine === "neo4j" ||
+      Boolean(awsAuthKind(values.engine) && new URLSearchParams(values.options).get("auth"))) &&
     values.options.trim()
       ? { options: values.options.trim() }
       : {}),
@@ -220,7 +237,10 @@ export function toProfileInput(values: ConnectionFormValues): ProfileInput {
   if (rootCert && (values.sslMode === "verify-ca" || values.sslMode === "verify-full")) {
     input.sslRootCert = rootCert;
   }
-  if (values.password) input.password = values.password;
+  // AWS sign-in stores no password: the token or signature comes from the AWS SDK.
+  if (values.password && !(awsAuthKind(values.engine) && new URLSearchParams(values.options).get("auth"))) {
+    input.password = values.password;
+  }
   return input;
 }
 

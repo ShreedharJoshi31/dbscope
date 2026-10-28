@@ -14,6 +14,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgconn/ctxwatch"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/dbscope/dbscope/internal/awsauth"
 )
 
 // baseConnString pins every setting pgx would otherwise take from PG*
@@ -49,8 +51,25 @@ func NewPool(ctx context.Context, p Profile, password string) (*pgxpool.Pool, er
 	if err := configure(pc.ConnConfig, p, password); err != nil {
 		return nil, err
 	}
+	if awsauth.FromOptions(p.Options).Auth == "rds-iam" {
+		// A token lasts 15 minutes, so every new connection gets a fresh one.
+		pc.BeforeConnect = func(ctx context.Context, cc *pgx.ConnConfig) error {
+			tok, err := rdsToken(ctx, p)
+			cc.Password = tok
+			return err
+		}
+	}
 	pc.MaxConns = 2
 	return pgxpool.NewWithConfig(ctx, pc)
+}
+
+// rdsToken builds the RDS IAM authentication token that is a profile's password.
+func rdsToken(ctx context.Context, p Profile) (string, error) {
+	cfg, err := awsauth.Load(ctx, awsauth.FromOptions(p.Options))
+	if err != nil {
+		return "", err
+	}
+	return awsauth.RDSToken(ctx, cfg, p.Host, p.Port, p.User)
 }
 
 func configure(cc *pgx.ConnConfig, p Profile, password string) error {

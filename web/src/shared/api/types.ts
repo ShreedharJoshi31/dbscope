@@ -77,7 +77,7 @@ export interface ParsedConnectionUrl {
   notes?: string[];
 }
 
-export type TestErrorKind = "auth" | "network" | "tls" | "timeout" | "database" | "other";
+export type TestErrorKind = "auth" | "network" | "tls" | "timeout" | "database" | "aws" | "other";
 
 export interface TestResult {
   ok: boolean;

@@ -68,6 +68,33 @@ ClickHouse (`DBS-CH-*`), Elasticsearch and OpenSearch (`DBS-ES-*`) and
 Cassandra (`DBS-CQL-*`: `gc_grace_seconds` of 0, and Cassandra's
 experimental materialized views and SASI indexes).
 
+## AWS sign-in
+
+PostgreSQL and MySQL on RDS or Aurora can sign in with IAM instead of a
+password, and Elasticsearch profiles can sign requests with SigV4 for
+Amazon OpenSearch Service (`es`) or OpenSearch Serverless (`aoss`). The
+profile's options hold `auth=rds-iam` or `auth=sigv4`, a `region`, and
+optionally a shared-config `profile` (and `service` for SigV4); the form's
+"Sign in with" control writes them. Credentials come from the AWS SDK's
+chain on this machine (environment, `~/.aws`, SSO, an instance role), the
+same way DynamoDB profiles work, so dbscope stores no password or key
+(`internal/awsauth`). Both need TLS, so `sslMode` must be `require` or
+stricter: RDS refuses IAM logins without it and Amazon OpenSearch serves
+only HTTPS.
+
+An IAM token lasts 15 minutes, so each new connection gets a fresh one
+(pgxpool's and go-sql-driver's `BeforeConnect`). MySQL receives the token
+through `mysql_clear_password`, which dbscope enables only for these
+profiles and only over TLS. Missing or unusable credentials are reported as
+an AWS sign-in failure, not a wrong password.
+
+What is verified without an AWS account: the token's form (host, `Action=connect`,
+`DBUser`, 900 s expiry, credential scope) and the SigV4 header of every
+OpenSearch request against a local HTTPS server; and, on real PostgreSQL
+and MySQL servers, that the token replaces the stored password (the right
+password then fails to log in). That RDS and OpenSearch accept them is not
+verified here.
+
 ## Engines
 
 | Engine | ERD | Query | Ask | Migrations | Workload / keyspace |

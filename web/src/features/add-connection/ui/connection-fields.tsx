@@ -1,5 +1,5 @@
 import type { ChangeEvent } from "react";
-import type { ConnectionField, ConnectionFormValues } from "@/features/add-connection/model/form";
+import { awsAuthKind, type ConnectionField, type ConnectionFormValues } from "@/features/add-connection/model/form";
 import { EnvField } from "@/features/add-connection/ui/env-field";
 import type { Engine, SSLMode } from "@/shared/api";
 import { FormField } from "@/shared/ui/form-field";
@@ -188,31 +188,36 @@ function NetworkFields({
         )}
       </FormField>
 
-      <FormField
-        label="Password"
-        optional
-        className="col-span-3"
-        description={
-          hasSavedPassword
-            ? "Leave empty to keep the saved password."
-            : values.engine === "elasticsearch"
-              ? "With no user, an API key (its encoded value). Stored in the encrypted vault on this machine."
-              : "Stored in the encrypted vault on this machine."
-        }
-      >
-        {(control) => (
-          <Input
-            {...control}
-            ref={register("password")}
-            type="password"
-            value={values.password}
-            onChange={(e) => onChange("password", e.target.value)}
-            placeholder={hasSavedPassword ? "••••••••" : undefined}
-            autoComplete="new-password"
-          />
-        )}
-      </FormField>
-      <FormField label="SSL mode" className="col-span-3">
+      {awsAuthKind(values.engine) && (
+        <AwsAuthField values={values} errorFor={errorFor} onChange={onChange} register={register} />
+      )}
+      {new URLSearchParams(values.options).get("auth") ? null : (
+        <FormField
+          label="Password"
+          optional
+          className="col-span-3"
+          description={
+            hasSavedPassword
+              ? "Leave empty to keep the saved password."
+              : values.engine === "elasticsearch"
+                ? "With no user, an API key (its encoded value). Stored in the encrypted vault on this machine."
+                : "Stored in the encrypted vault on this machine."
+          }
+        >
+          {(control) => (
+            <Input
+              {...control}
+              ref={register("password")}
+              type="password"
+              value={values.password}
+              onChange={(e) => onChange("password", e.target.value)}
+              placeholder={hasSavedPassword ? "••••••••" : undefined}
+              autoComplete="new-password"
+            />
+          )}
+        </FormField>
+      )}
+      <FormField label="SSL mode" error={errorFor("sslMode")} className="col-span-3">
         {(control) => (
           <Select
             items={SSL_OPTIONS}
@@ -310,6 +315,121 @@ function AwsFields({
         "http://localhost:8000",
         "Only for DynamoDB Local or another compatible endpoint.",
         true,
+      )}
+    </>
+  );
+}
+
+/**
+ * Password or AWS sign-in for PostgreSQL and MySQL on RDS (IAM tokens) and Amazon OpenSearch (SigV4).
+ * AWS sign-in uses the AWS SDK's own credentials, so no password is stored; it needs TLS.
+ */
+function AwsAuthField({
+  values,
+  errorFor,
+  onChange,
+  register,
+}: Pick<ConnectionFieldsProps, "values" | "errorFor" | "onChange" | "register">) {
+  const kind = awsAuthKind(values.engine);
+  const params = new URLSearchParams(values.options);
+  const on = Boolean(params.get("auth"));
+  const set = (key: string, value: string) => {
+    const next = new URLSearchParams(values.options);
+    if (value.trim()) next.set(key, value.trim());
+    else next.delete(key);
+    onChange("options", next.toString());
+  };
+  const choose = (aws: boolean) => {
+    if (!aws) {
+      onChange("options", "");
+      return;
+    }
+    onChange("options", new URLSearchParams({ auth: kind ?? "", region: params.get("region") ?? "" }).toString());
+    if (values.sslMode === "disable" || values.sslMode === "prefer") onChange("sslMode", "require");
+  };
+  const label = kind === "sigv4" ? "AWS SigV4 (Amazon OpenSearch)" : "AWS IAM (RDS and Aurora)";
+  return (
+    <>
+      <FormField
+        label="Sign in with"
+        className="col-span-6"
+        description={
+          on
+            ? "Credentials come from the AWS SDK on this machine (environment, ~/.aws, SSO, instance role); no password is stored."
+            : undefined
+        }
+      >
+        {(control) => (
+          <Select
+            items={[
+              { value: "password", label: "Password" },
+              { value: "aws", label },
+            ]}
+            value={on ? "aws" : "password"}
+            onValueChange={(v) => choose(v === "aws")}
+          >
+            <SelectTrigger {...control} className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="password">Password</SelectItem>
+              <SelectItem value="aws">{label}</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
+      </FormField>
+      {on && (
+        <>
+          <FormField label="AWS region" error={errorFor("options")} className="col-span-3">
+            {(control) => (
+              <Input
+                {...control}
+                ref={register("options")}
+                value={params.get("region") ?? ""}
+                onChange={(e) => set("region", e.target.value)}
+                placeholder="eu-west-1"
+                autoComplete="off"
+                spellCheck={false}
+                className="font-mono"
+              />
+            )}
+          </FormField>
+          <FormField label="AWS profile" optional className="col-span-3" description="A profile in ~/.aws/config.">
+            {(control) => (
+              <Input
+                {...control}
+                value={params.get("profile") ?? ""}
+                onChange={(e) => set("profile", e.target.value)}
+                placeholder="default"
+                autoComplete="off"
+                spellCheck={false}
+                className="font-mono"
+              />
+            )}
+          </FormField>
+          {kind === "sigv4" && (
+            <FormField label="Service" className="col-span-6">
+              {(control) => (
+                <Select
+                  items={[
+                    { value: "es", label: "es (managed domain)" },
+                    { value: "aoss", label: "aoss (OpenSearch Serverless)" },
+                  ]}
+                  value={params.get("service") ?? "es"}
+                  onValueChange={(v) => set("service", v === "es" ? "" : String(v))}
+                >
+                  <SelectTrigger {...control} className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="es">es (managed domain)</SelectItem>
+                    <SelectItem value="aoss">aoss (OpenSearch Serverless)</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            </FormField>
+          )}
+        </>
       )}
     </>
   );

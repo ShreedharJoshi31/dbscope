@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dbscope/dbscope/internal/awsauth"
 	"github.com/dbscope/dbscope/internal/conn"
 	"github.com/dbscope/dbscope/internal/schema"
 )
@@ -68,8 +69,18 @@ func Connect(p conn.Profile, password string) (*Client, error) {
 	if pattern == "" {
 		pattern = "*"
 	}
-	return &Client{base: fmt.Sprintf("%s://%s", scheme, netHost(p)), http: &http.Client{Transport: tr, Timeout: 2 * time.Minute},
-		user: p.User, password: password, Pattern: pattern}, nil
+	var rt http.RoundTripper = tr
+	user := p.User
+	if s := awsauth.FromOptions(p.Options); s.Auth == "sigv4" {
+		// Amazon OpenSearch Service: requests are signed instead of carrying a user or API key.
+		cfg, err := awsauth.Load(context.Background(), s)
+		if err != nil {
+			return nil, err
+		}
+		rt, user, password = awsauth.NewTransport(tr, cfg, s.Service), "", ""
+	}
+	return &Client{base: fmt.Sprintf("%s://%s", scheme, netHost(p)), http: &http.Client{Transport: rt, Timeout: 2 * time.Minute},
+		user: user, password: password, Pattern: pattern}, nil
 }
 
 func netHost(p conn.Profile) string {

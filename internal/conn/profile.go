@@ -274,12 +274,16 @@ func (p *Profile) connOptions(in ProfileInput) error {
 	if p.Options == "" {
 		return nil
 	}
-	if p.Engine != EngineMongoDB && p.Engine != EngineDynamoDB && p.Engine != EngineCassandra && p.Engine != EngineNeo4j {
-		return invalid("options are only for MongoDB, DynamoDB, Cassandra and Neo4j profiles")
-	}
 	q, err := url.ParseQuery(p.Options)
 	if err != nil {
 		return invalid("options must be a URL query like authSource=admin&replicaSet=rs0")
+	}
+	switch p.Engine {
+	case EnginePostgres, EngineMySQL, EngineElasticsearch:
+		return p.awsAuthOptions(q)
+	case EngineMongoDB, EngineDynamoDB, EngineCassandra, EngineNeo4j:
+	default:
+		return invalid("options are only for MongoDB, DynamoDB, Cassandra, Neo4j, and AWS authentication of PostgreSQL, MySQL and Elasticsearch profiles")
 	}
 	for k := range q {
 		switch strings.ToLower(k) {
@@ -300,6 +304,42 @@ func (p *Profile) connOptions(in ProfileInput) error {
 				return invalid("Neo4j options take routing=true (a cluster's neo4j:// routing), not %s", k)
 			}
 		}
+	}
+	return nil
+}
+
+// awsAuthOptions validates AWS authentication options: auth=rds-iam (PostgreSQL
+// and MySQL on RDS or Aurora) or auth=sigv4 (Amazon OpenSearch Service), with
+// a region and optionally a shared-config profile and, for SigV4, the service
+// (es or aoss). Both need TLS: RDS refuses IAM logins without it and Amazon
+// OpenSearch serves only HTTPS.
+func (p *Profile) awsAuthOptions(q url.Values) error {
+	want := "rds-iam"
+	if p.Engine == EngineElasticsearch {
+		want = "sigv4"
+	}
+	for k := range q {
+		switch k {
+		case "auth", "region", "profile":
+		case "service":
+			if p.Engine != EngineElasticsearch {
+				return invalid("service is an option of SigV4 (Elasticsearch) profiles only")
+			}
+		default:
+			return invalid("the options of this profile are auth=%s, region and profile, not %s", want, k)
+		}
+	}
+	if q.Get("auth") != want {
+		return invalid("auth must be %s for this engine", want)
+	}
+	if q.Get("region") == "" {
+		return invalid("AWS authentication needs region in the options, such as region=eu-west-1")
+	}
+	if s := q.Get("service"); s != "" && s != "es" && s != "aoss" {
+		return invalid("service must be es (a managed domain) or aoss (OpenSearch Serverless)")
+	}
+	if p.SSLMode == SSLDisable || p.SSLMode == SSLPrefer || p.SSLMode == "" {
+		return invalid("AWS authentication needs TLS: set sslMode to require, verify-ca or verify-full")
 	}
 	return nil
 }

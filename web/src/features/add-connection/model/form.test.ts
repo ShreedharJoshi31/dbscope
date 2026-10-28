@@ -63,7 +63,7 @@ describe("SQLite", () => {
 });
 
 describe("MongoDB", () => {
-  it("sends connection options only for MongoDB", () => {
+  it("sends connection options for MongoDB, and for PostgreSQL only as AWS sign-in", () => {
     const base = {
       ...EMPTY_CONNECTION_FORM,
       name: "docs",
@@ -267,5 +267,22 @@ describe("maxCost", () => {
     expect(validateConnectionForm({ ...valid, maxCost: "lots" }).maxCost).toBeDefined();
     expect(validateConnectionForm({ ...valid, maxCost: "1e6" }).maxCost).toBeDefined();
     expect(validateConnectionForm({ ...valid, maxCost: "1500.5" }).maxCost).toBeUndefined();
+  });
+});
+
+describe("AWS sign-in", () => {
+  const rds = { ...valid, options: "auth=rds-iam&region=eu-west-1", sslMode: "require" as const, password: "typed" };
+
+  it("needs a region and TLS", () => {
+    expect(validateConnectionForm(rds)).toEqual({});
+    expect(validateConnectionForm({ ...rds, options: "auth=rds-iam" }).options).toMatch(/region/);
+    expect(validateConnectionForm({ ...rds, sslMode: "prefer" }).sslMode).toMatch(/TLS/);
+  });
+
+  it("sends the options but never a password", () => {
+    const input = toProfileInput(rds);
+    expect(input.options).toBe("auth=rds-iam&region=eu-west-1");
+    expect(input.password).toBeUndefined();
+    expect(toProfileInput({ ...valid, password: "typed" }).password).toBe("typed");
   });
 });

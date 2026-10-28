@@ -12,10 +12,12 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/dbscope/dbscope/internal/awsauth"
 )
 
 type TestError struct {
-	Kind     string `json:"kind"` // auth | network | tls | timeout | database | other
+	Kind     string `json:"kind"` // auth | network | tls | timeout | database | aws | other
 	Message  string `json:"message"`
 	SQLState string `json:"sqlstate,omitempty"`
 }
@@ -49,6 +51,14 @@ func Test(ctx context.Context, p Profile, password string) TestResult {
 	res := TestResult{Warnings: []string{}}
 	if p.SSLMode == SSLDisable && !isLoopback(p.Host) {
 		res.Warnings = append(res.Warnings, "sslMode is disable on a non-loopback host, so the password and query results travel unencrypted.")
+	}
+	if awsauth.FromOptions(p.Options).Auth == "rds-iam" {
+		tok, err := rdsToken(ctx, p)
+		if err != nil {
+			res.Error = classify(err)
+			return res
+		}
+		password = tok
 	}
 	cc, err := connConfig(p, password)
 	if err != nil {
@@ -187,6 +197,9 @@ func pgStatStatements(ctx context.Context, c *pgx.Conn) (bool, error) {
 }
 
 func classify(err error) *TestError {
+	if errors.Is(err, awsauth.ErrCredentials) {
+		return &TestError{Kind: "aws", Message: err.Error()}
+	}
 	msg := err.Error()
 	var ce *pgconn.ConnectError
 	if errors.As(err, &ce) && ce.Unwrap() != nil {

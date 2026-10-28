@@ -15,6 +15,8 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/dbscope/dbscope/internal/awsauth"
 )
 
 func ptr[T any](v T) *T { return &v }
@@ -123,6 +125,40 @@ func TestProfileValidation(t *testing.T) {
 	in.Name = strings.Repeat("é", 80)
 	if _, err := in.Profile(); err != nil {
 		t.Fatalf("80 runes rejected: %v", err)
+	}
+}
+
+func TestAWSAuthOptions(t *testing.T) {
+	base := ProfileInput{Name: "rds", Host: "db.example", Database: "app", User: "app_iam", Env: EnvStaging, SSLMode: SSLRequire}
+	for _, c := range []struct {
+		engine  Engine
+		options string
+		ssl     SSLMode
+		ok      bool
+	}{
+		{EnginePostgres, "auth=rds-iam&region=eu-west-1", SSLRequire, true},
+		{EngineMySQL, "auth=rds-iam&region=eu-west-1&profile=prod", SSLVerifyFull, true},
+		{EngineElasticsearch, "auth=sigv4&region=eu-west-1&service=aoss", SSLRequire, true},
+		{EnginePostgres, "auth=rds-iam&region=eu-west-1", SSLPrefer, false},
+		{EnginePostgres, "auth=rds-iam", SSLRequire, false},
+		{EnginePostgres, "auth=sigv4&region=eu-west-1", SSLRequire, false},
+		{EnginePostgres, "auth=rds-iam&region=eu-west-1&service=es", SSLRequire, false},
+		{EngineElasticsearch, "auth=sigv4&region=eu-west-1&service=s3", SSLRequire, false},
+		{EnginePostgres, "sslcert=x", SSLRequire, false},
+	} {
+		in := base
+		in.Engine, in.Options, in.SSLMode = c.engine, c.options, c.ssl
+		_, err := in.Profile()
+		if (err == nil) != c.ok {
+			t.Errorf("%s %s %s: %v", c.engine, c.options, c.ssl, err)
+		}
+	}
+}
+
+func TestClassifyAWSCredentials(t *testing.T) {
+	err := fmt.Errorf("connecting: %w", fmt.Errorf("%w for the RDS IAM token: no EC2 IMDS role found", awsauth.ErrCredentials))
+	if te := Classify(err); te.Kind != "aws" || !strings.Contains(te.Message, "no EC2 IMDS role") {
+		t.Errorf("classified %+v", te)
 	}
 }
 
