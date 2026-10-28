@@ -33,7 +33,7 @@ jobs:
         env:
           DBSCOPE_TEST_DSN: ${{ steps.pg.outputs.connection-uri }}
         run: |
-          if [ "$RUNNER_OS" = "Linux" ]; then go test -race -count=1 ./...; else go test -count=1 ./...; fi
+          if [ "$RUNNER_OS" = "Linux" ]; then go test -race -count=1 -p 2 -timeout 30m ./...; else go test -count=1 -p 2 -timeout 30m ./...; fi
       - name: cross-compile without cgo
         if: runner.os == 'Linux'
         run: |

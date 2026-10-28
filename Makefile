@@ -21,10 +21,12 @@ go:
 test: test-go test-web
 
 # Database tests start PostgreSQL containers through Docker, or use
-# DBSCOPE_TEST_DSN; without either they are skipped.
+# DBSCOPE_TEST_DSN; without either they are skipped. Each engine's package
+# starts its own servers (several JVMs among them), so packages run two at a
+# time: all at once, they exhausted a 4 GB Docker VM and timed out.
 test-go:
 	go vet ./...
-	go test -count=1 ./...
+	go test -count=1 -p 2 -timeout 30m ./...
 
 test-web:
 	$(PNPM) --dir web install --frozen-lockfile
