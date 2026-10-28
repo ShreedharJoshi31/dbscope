@@ -134,6 +134,8 @@ func classify(err error) *conn.TestError {
 		return &conn.TestError{Kind: "auth", Message: ce.Message}
 	case errors.As(err, &ce):
 		return &conn.TestError{Kind: "database", Message: ce.Message}
+	case conn.NetworkText(err.Error()): // a refused dial surfaces as a server selection timeout
+		return &conn.TestError{Kind: "network", Message: err.Error()}
 	case mongo.IsTimeout(err), errors.Is(err, context.DeadlineExceeded):
 		return &conn.TestError{Kind: "timeout", Message: err.Error()}
 	case strings.Contains(err.Error(), "auth error"), strings.Contains(err.Error(), "AuthenticationFailed"):

@@ -201,6 +201,9 @@ func classify(err error) *TestError {
 		}
 		return &TestError{Kind: kind, Message: pgErr.Message, SQLState: pgErr.Code}
 	}
+	if NetworkText(msg) { // before the timeout check: a refused dial can end as a driver's deadline
+		return &TestError{Kind: "network", Message: msg}
+	}
 	if errors.Is(err, context.DeadlineExceeded) || pgconn.Timeout(err) || isNetTimeout(err) {
 		return &TestError{Kind: "timeout", Message: msg}
 	}
@@ -214,6 +217,21 @@ func classify(err error) *TestError {
 		return &TestError{Kind: "network", Message: msg}
 	}
 	return &TestError{Kind: "other", Message: msg}
+}
+
+// networkMarkers are how dial failures read once a driver has flattened
+// them into text (gocql does; the MongoDB driver nests them in a server
+// selection timeout).
+var networkMarkers = []string{"connect: connection refused", "no such host", "network is unreachable", "connection reset by peer", "no route to host"}
+
+// NetworkText reports whether an error message shows the server could not be reached.
+func NetworkText(msg string) bool {
+	for _, m := range networkMarkers {
+		if strings.Contains(msg, m) {
+			return true
+		}
+	}
+	return false
 }
 
 func isNetTimeout(err error) bool {

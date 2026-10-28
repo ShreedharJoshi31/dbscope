@@ -246,6 +246,8 @@ func TestClassify(t *testing.T) {
 		{x509.UnknownAuthorityError{}, "tls", ""},
 		{fmt.Errorf("failed to write startup message: %w", &tls.CertificateVerificationError{Err: errors.New("x")}), "tls", ""},
 		{errors.New("server refused TLS connection"), "tls", ""},
+		{errors.New("gocql: unable to create session: unable to discover protocol version: dial tcp 127.0.0.1:9042: connect: connection refused"), "network", ""},
+		{fmt.Errorf("server selection error: %w, last error: dial tcp 127.0.0.1:27017: connect: connection refused", context.DeadlineExceeded), "network", ""},
 		{errors.New("something else"), "other", ""},
 	} {
 		got := classify(c.err)
