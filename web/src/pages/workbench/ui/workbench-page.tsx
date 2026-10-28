@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useActiveConnection, useActiveConnectionStore } from "@/entities/connection";
 import { type DocTab, type SqlTab, useRunStore, useSqlTabsScope } from "@/entities/query";
-import { useWorkspaceStore } from "@/entities/schema";
+import { useCanvasStore, useWorkspaceStore } from "@/entities/schema";
 import { ConnectionFormDialog } from "@/features/add-connection";
 import { AnalyzeMigrationDialog, MigrationDropTarget } from "@/features/analyze-migration";
 import { DeleteConnectionDialog } from "@/features/delete-connection";
@@ -24,11 +24,24 @@ import { SqlEditor } from "@/widgets/sql-editor";
 const renderSqlTab = (tab: SqlTab) => <SqlEditor tab={tab} />;
 const renderDocTab = (tab: DocTab) => <MigrationReviewTab id={tab.id} />;
 
-/** SQL tabs are kept per connection (and separately for the sample workspace). */
+/**
+ * SQL tabs are kept per connection (and separately for the sample workspace);
+ * the dock's results, plan and messages, and the canvas overlay a query
+ * drew, belong to the connection they ran on.
+ */
 function useTabScope() {
   const { profile } = useActiveConnection();
   const sample = useWorkspaceStore((s) => s.source === "sample");
-  useSqlTabsScope(sample ? "sample" : (profile?.id ?? null));
+  const scope = sample ? "sample" : (profile?.id ?? null);
+  useSqlTabsScope(scope);
+  const first = useRef(scope);
+  useEffect(() => {
+    if (scope !== first.current) {
+      first.current = scope;
+      useRunStore.getState().reset();
+      useCanvasStore.getState().clearOverlay();
+    }
+  }, [scope]);
 }
 
 /** The dock is collapsed until there is something to show; a run or "Open in results" opens it. */

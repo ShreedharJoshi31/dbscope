@@ -58,6 +58,27 @@ test.describe("query editor and results", () => {
     await expect(grid.locator('[data-cell="0:1"]')).toBeFocused();
   });
 
+  test("switching connections clears the previous connection's results, messages and canvas overlay", async ({
+    page,
+  }) => {
+    await stubAgent(page, {
+      profiles: [stubProfile(), stubProfile({ id: "01JB00000000000000000000BB", name: "reports" })],
+    });
+    await openApp(page);
+    await waitForCanvas(page);
+    await newSqlTab(page, "SELECT * FROM shop.orders LIMIT 20");
+    await page.getByRole("tabpanel").locator(".cm-content").click();
+    await page.keyboard.press("ControlOrMeta+Enter");
+    await expect(dock(page).getByTestId("result-grid")).toBeVisible();
+
+    await page.getByRole("button", { name: /^Connection: orders-dev/ }).click();
+    await page.getByRole("menuitemradio", { name: /reports/ }).click();
+    await expect(page.getByRole("button", { name: /^Connection: reports/ })).toBeVisible();
+    await expect(dock(page).getByTestId("result-grid")).toHaveCount(0);
+    await expect(page.getByTestId("last-run")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Clear overlay" })).toHaveCount(0);
+  });
+
   test("CSV export escapes formulas, quotes fields and keeps NULL distinct from empty", async ({ page }) => {
     await stubAgent(page, { profiles: [stubProfile()] });
     await openApp(page);

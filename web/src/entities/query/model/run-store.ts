@@ -64,6 +64,8 @@ interface RunState {
   show: (output: RunOutput) => void;
   setDockTab: (tab: DockTab) => void;
   clearMessages: () => void;
+  /** Forgets every run, as when the workspace switches to another connection; a run still in flight is ignored when it ends. */
+  reset: () => void;
 }
 
 let messageId = 0;
@@ -142,4 +144,5 @@ export const useRunStore = create<RunState>((set, get) => ({
 
   setDockTab: (dockTab) => set({ dockTab }),
   clearMessages: () => set({ messages: [] }),
+  reset: () => set({ running: null, output: null, lastError: null, messages: [], dockTab: "results", last: null }),
 }));
