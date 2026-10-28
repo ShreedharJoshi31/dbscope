@@ -51,6 +51,7 @@ const LISTEN_SETTING: Partial<Record<NonNullable<ServerEngine>, string>> = {
   neo4j: "Neo4j listens beyond localhost (server.default_listen_address)",
   elasticsearch: "Elasticsearch listens beyond localhost (network.host)",
   opensearch: "OpenSearch listens beyond localhost (network.host)",
+  clickhouse: "ClickHouse listens beyond localhost (listen_host) on its native port",
 };
 
 /**

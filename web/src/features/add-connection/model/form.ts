@@ -118,7 +118,7 @@ export function validateConnectionForm(values: ConnectionFormValues): Connection
       // A Redis database is a number, default 0, and the user is optional (the default user).
       if (values.database.trim() && !isWholeNumber(values.database))
         errors.database = "A Redis database is a number, such as 0.";
-    } else if (values.engine === "neo4j" || values.engine === "elasticsearch") {
+    } else if (values.engine === "neo4j" || values.engine === "elasticsearch" || values.engine === "clickhouse") {
       // The database defaults (neo4j, or every index), and a server may run without
       // authentication; an Elasticsearch API key goes in the password with no user.
     } else if (values.engine === "cassandra") {

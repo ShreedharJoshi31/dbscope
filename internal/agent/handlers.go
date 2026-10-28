@@ -7,6 +7,7 @@ import (
 	"runtime"
 
 	"github.com/dbscope/dbscope/internal/cassandra"
+	"github.com/dbscope/dbscope/internal/clickhouse"
 	"github.com/dbscope/dbscope/internal/conn"
 	"github.com/dbscope/dbscope/internal/dynamo"
 	"github.com/dbscope/dbscope/internal/elastic"
@@ -227,6 +228,8 @@ func testProfile(ctx context.Context, p conn.Profile, password string) conn.Test
 		return neo4j.Test(ctx, p, password)
 	case conn.EngineElasticsearch:
 		return elastic.Test(ctx, p, password)
+	case conn.EngineClickHouse:
+		return clickhouse.Test(ctx, p, password)
 	}
 	return conn.Test(ctx, p, password)
 }

@@ -55,6 +55,7 @@ models of their own rather than being forced into tables and columns.
 | Cassandra / ScyllaDB | keyspace tables | CQL SELECT | not yet | not yet | not yet |
 | Neo4j | labels and relationship types | read-only Cypher | not yet | not yet | not yet |
 | Elasticsearch / OpenSearch | indices, aliases, data streams | search JSON and SQL | not yet | n/a | not yet |
+| ClickHouse | tables, keys, parts | SQL under readonly | not yet | not yet | not yet |
 
 ### SQLite
 
@@ -541,7 +542,79 @@ Elasticsearch would send (`_sql/translate`) or OpenSearch's plan
 Not yet: AWS SigV4, PPL (it needs another cluster permission), cluster
 health and shard allocation, and risks of mapping changes.
 
+### ClickHouse
+
+Research with sources: [research-clickhouse.md](research-clickhouse.md).
+Tested against ClickHouse 26.8 and 25.8 (the previous LTS) in containers,
+as users at readonly 0, 1 and 2 and as one with INSERT. The driver is
+clickhouse-go v2 over the native protocol.
+
+A profile is a host, port (9000; 9440 with TLS), database (default
+`default`) and user (default `default`). sslMode `disable` and `prefer`
+are plaintext, since the native protocol has no "TLS if offered".
+
+**Reading safely.** The server enforces `readonly`, by the user's own
+level (all verified on 26.8):
+
+| User's readonly | What dbscope sends with each query |
+|---|---|
+| 0 | `readonly = 1`, `max_execution_time`, `max_result_rows` with `break`; a query's own `SETTINGS readonly = 0` is then refused |
+| 1 | nothing: such a user may change no setting, so the limit is dbscope's own deadline and row cap |
+| 2 | the limits only: `readonly` itself may not change. Level 2 still allows SET, RESTORE and temporary tables, which dbscope's check refuses |
+
+clickhouse-go turns any context deadline over a second into a
+`max_execution_time` setting, which a readonly-1 user may not send, so
+dbscope passes the driver a context without the deadline and cancels it
+itself. `max_result_rows` is checked per block (a 100-row block came back
+under a limit of 11), so dbscope caps the rows too. Before sending, only
+`SELECT`, `WITH`, `SHOW`, `DESCRIBE` and `EXISTS` are accepted, never a
+second statement, `INTO OUTFILE`, or a table function that reaches outside
+the database (`url`, `s3`, `file`, `remote`, `mysql`, `postgresql` and the
+like). The connection test reads `SHOW GRANTS` and reports `INSERT`,
+`ALTER`, `CREATE`, `DROP` and similar grants.
+
+```sql
+CREATE USER dbscope IDENTIFIED BY '...' SETTINGS readonly = 1;
+GRANT SELECT ON app.* TO dbscope;
+-- optional, for part and partition counts, pending mutations and skip indexes:
+GRANT SELECT ON system.parts TO dbscope;
+GRANT SELECT ON system.mutations TO dbscope;
+GRANT SELECT ON system.data_skipping_indices TO dbscope;
+```
+
+**Table map.** `system.tables` and `system.columns` (readable by every
+user) give each table's engine, `ORDER BY`, primary key (in key order),
+partition key, rows, compressed size, active parts and TTL, and each
+column's role in the keys, codec and DEFAULT, MATERIALIZED or ALIAS
+expression. A materialized view points at its `TO` table (read from its
+CREATE statement; `system.tables.target_table` is new in 26.x). Risks:
+
+| Risk | When |
+|---|---|
+| no primary index | a MergeTree with `ORDER BY tuple()`: every query reads the whole table |
+| Nullable sorting key | a Nullable column in `ORDER BY` |
+| too many parts | a partition above 1,000 active parts (inserts slowed) or 3,000 (inserts fail) |
+| too many partitions | above 1,000: parts never merge across partitions |
+| mutations | pending, with the oldest start, and any failing with its reason |
+
+Part, partition and mutation figures need the grants above; without them
+the map says so rather than guessing.
+
+**Plans.** Explain runs `EXPLAIN PLAN indexes = 1, json = 1` and `EXPLAIN
+ESTIMATE`, neither of which executes the query (`EXPLAIN ANALYZE` does,
+and is refused). Each read shows its table, estimated rows and parts, and
+how many granules the primary key selects out of how many; a read that
+keeps 90% or more of at least 8 granules is flagged as not using the
+sorting key. A filter on the second key column is not flagged when the
+first has few values, since the server's generic exclusion search prunes
+it. Skip indexes that skip nothing and `FINAL` are flagged too. From 25.9
+the index figures need the query condition cache off, which dbscope sets
+except for readonly-1 users, who may not.
+
+Not yet: migration risk of ALTER (which ALTERs rewrite parts), replication
+lag and queues, and cardinality order of key columns, which needs reading
+data.
+
 ## Next engines
 
-The remaining candidates from the October 2026 list: ClickHouse, SQL Server
-and Oracle. Each gets research first, then a build tested against a real server.
+The remaining candidates from the October 2026 list: SQL Server and Oracle. Each gets research first, then a build tested against a real server.

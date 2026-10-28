@@ -9,7 +9,8 @@ export type Engine =
   | "dynamodb"
   | "cassandra"
   | "neo4j"
-  | "elasticsearch";
+  | "elasticsearch"
+  | "clickhouse";
 export type Env = "local" | "staging" | "prod-replica";
 export type SummaryMode = "off" | "profile" | "rows";
 export type SSLMode = "disable" | "prefer" | "require" | "verify-ca" | "verify-full";

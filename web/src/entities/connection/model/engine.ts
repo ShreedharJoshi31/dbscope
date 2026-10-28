@@ -10,6 +10,7 @@ export const ENGINE_ORDER: readonly Engine[] = [
   "cassandra",
   "neo4j",
   "elasticsearch",
+  "clickhouse",
 ];
 
 export const ENGINE_META: Record<
@@ -67,6 +68,13 @@ export const ENGINE_META: Record<
     description:
       "Elasticsearch or OpenSearch: indices with their mapped fields, shards and mapping risks, fields an alias maps differently, and read-only searches and SQL.",
     defaultPort: 9200,
+  },
+  clickhouse: {
+    queryLanguage: "SQL",
+    label: "ClickHouse",
+    description:
+      "Tables with their engines, sorting and partition keys, parts and design risks, and read-only SQL whose plan shows how much the sorting key prunes.",
+    defaultPort: 9000,
   },
   sqlite: {
     queryLanguage: "SQL",

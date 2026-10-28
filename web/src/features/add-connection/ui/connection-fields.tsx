@@ -28,6 +28,7 @@ const DATABASE_PLACEHOLDER: Partial<Record<Engine, string>> = {
   neo4j: "neo4j",
   redis: "0",
   elasticsearch: "* or logs-*",
+  clickhouse: "default",
 };
 
 const USER_PLACEHOLDER: Partial<Record<Engine, string>> = {
@@ -36,6 +37,7 @@ const USER_PLACEHOLDER: Partial<Record<Engine, string>> = {
   cassandra: "dbscope_ro",
   neo4j: "neo4j",
   elasticsearch: "dbscope_ro",
+  clickhouse: "default",
 };
 
 /** Name, environment and the libpq connection parameters, or the file of a SQLite database. */

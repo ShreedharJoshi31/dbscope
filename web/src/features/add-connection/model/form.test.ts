@@ -152,6 +152,23 @@ describe("Elasticsearch", () => {
   });
 });
 
+describe("ClickHouse", () => {
+  it("defaults the database and user on the server", () => {
+    const ok = {
+      ...EMPTY_CONNECTION_FORM,
+      engine: "clickhouse" as const,
+      name: "events",
+      env: "local" as const,
+      host: "h",
+      port: "9000",
+      database: "",
+      user: "",
+    };
+    expect(validateConnectionForm(ok)).toEqual({});
+    expect(toProfileInput(ok)).toMatchObject({ engine: "clickhouse", port: 9000 });
+  });
+});
+
 describe("toProfileInput", () => {
   it("trims, converts numbers, splits schemas and omits an empty password", () => {
     expect(

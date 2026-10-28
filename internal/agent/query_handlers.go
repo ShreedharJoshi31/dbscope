@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	chdrv "github.com/ClickHouse/clickhouse-go/v2"
 	gocql "github.com/apache/cassandra-gocql-driver/v2"
 	"github.com/aws/smithy-go"
 	mysqldrv "github.com/go-sql-driver/mysql"
@@ -20,6 +21,7 @@ import (
 	sqlite3 "modernc.org/sqlite/lib"
 
 	"github.com/dbscope/dbscope/internal/cassandra"
+	"github.com/dbscope/dbscope/internal/clickhouse"
 	"github.com/dbscope/dbscope/internal/conn"
 	"github.com/dbscope/dbscope/internal/dynamo"
 	"github.com/dbscope/dbscope/internal/elastic"
@@ -177,6 +179,20 @@ func (s *server) execute(ctx context.Context, p conn.Profile, password string, b
 		}
 		return res, nil
 	}
+	if p.Engine == conn.EngineClickHouse {
+		if err := clickhouse.Check(body.SQL); err != nil {
+			return nil, mapRunError(ctx, err)
+		}
+		src, _ := s.source.(engineSource)[conn.EngineClickHouse].(*clickhouseSource)
+		if src == nil {
+			return nil, mapRunError(ctx, errUnsupported)
+		}
+		res, err := src.Run(ctx, p, password, body.SQL, maxRows, explainOnly)
+		if err != nil {
+			return nil, mapRunError(ctx, err)
+		}
+		return res, nil
+	}
 	if p.Engine == conn.EngineElasticsearch {
 		req, err := elastic.Parse(body.SQL, p.Database)
 		if err != nil {
@@ -302,6 +318,7 @@ func mapRunError(ctx context.Context, err error) *runError {
 	var cqlErr gocql.RequestError
 	var neoErr *neo4jdrv.Neo4jError
 	var esErr *elastic.Error
+	var chErr *chdrv.Exception
 	switch {
 	case errors.As(err, &ge):
 		return &runError{status: http.StatusUnprocessableEntity, code: "rejected", message: ge.Message, detail: string(ge.Reason),
@@ -339,6 +356,16 @@ func mapRunError(ctx context.Context, err error) *runError {
 		case "ProvisionedThroughputExceededException", "ThrottlingException", "RequestLimitExceeded":
 			r.status, r.code = http.StatusServiceUnavailable, "upstream"
 			r.message = "DynamoDB throttled the read; try again or read less (" + awsErr.ErrorMessage() + ")"
+		}
+		return r
+	case errors.As(err, &chErr):
+		r := &runError{status: http.StatusBadRequest, code: "database", message: chErr.Message,
+			histStatus: store.HistoryError, histCode: "ch_" + strconv.Itoa(int(chErr.Code))}
+		switch chErr.Code {
+		case 164, 497: // READONLY, ACCESS_DENIED
+			r.message = "Blocked: " + chErr.Message
+		case 159: // TIMEOUT_EXCEEDED
+			r.status, r.code, r.histCode = http.StatusGatewayTimeout, "timeout", "timeout"
 		}
 		return r
 	case errors.As(err, &esErr):
