@@ -156,3 +156,21 @@ with a write transaction left open past the threshold.
 | Servers | | any not Available and Enabled | Enterprise; Community is one server and has no `SHOW SERVERS` |
 | Long-running transactions | 1 over a minute | 5 | `SHOW TRANSACTIONS` |
 | Indexes not online | populating | failed | `SHOW INDEXES` |
+
+## Cassandra and ScyllaDB
+
+Checked on Cassandra 5.0 and ScyllaDB 2025.1 (`internal/cassandra/health_test.go`);
+on Cassandra the test reads a partition through 1,500 deleted rows.
+Cassandra 5 exposes these as `system_views` virtual tables; ScyllaDB has none
+of them, so it gets the checks its own system tables allow.
+
+| Check | Warn | Danger | Notes |
+|---|---|---|---|
+| Nodes | Cassandra: a node not NORMAL in gossip | ScyllaDB: a node down or not NORMAL | gossip does not say whether a Cassandra node is up |
+| Thread pools | 100 pending, or any blocked | 1,000 pending | Cassandra only |
+| Pending hints | any | | Cassandra only: writes held for replicas that were down |
+| Largest partitions | 100 MiB | 1 GiB | `max_partition_size` on Cassandra, `large_partitions` on ScyllaDB (which records only partitions above its warning threshold) |
+| Tombstones per read | 1,000 | 100,000 | Cassandra only; at 100,000 reads fail |
+
+Redis and Valkey have no Health tab: their server risks (memory policy,
+persistence, eviction) are findings in the keyspace report.

@@ -44,6 +44,11 @@ func TestCassandraProfile(t *testing.T) {
 	if !p.Capabilities.Query || !p.Capabilities.Migrations {
 		t.Fatalf("created %s", w.Body.String())
 	}
+	w = e.do("GET", "/api/profiles/"+p.ID+"/health", "")
+	expect(t, w, 200, "")
+	if !strings.Contains(w.Body.String(), `"id":"cql.nodes"`) {
+		t.Errorf("health %s", w.Body.String())
+	}
 	w = e.do("POST", "/api/profiles/"+p.ID+"/test", "")
 	if !strings.Contains(w.Body.String(), `"ok":true`) || !strings.Contains(w.Body.String(), `"engine":"scylladb"`) {
 		t.Fatalf("test %s", w.Body.String())

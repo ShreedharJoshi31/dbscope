@@ -8,6 +8,7 @@ import (
 
 	"github.com/dbscope/dbscope/internal/cassandra"
 	"github.com/dbscope/dbscope/internal/conn"
+	"github.com/dbscope/dbscope/internal/health"
 	"github.com/dbscope/dbscope/internal/introspect"
 	"github.com/dbscope/dbscope/internal/migrate"
 	"github.com/dbscope/dbscope/internal/migrate/ingest"
@@ -93,6 +94,17 @@ func (cs *cassandraSource) Analyze(ctx context.Context, p conn.Profile, password
 		return nil, err
 	}
 	return cassandra.Analyze(base, files), nil
+}
+
+// Health reads the node's health checks (internal/cassandra.Health).
+func (cs *cassandraSource) Health(ctx context.Context, p conn.Profile, password string) (*health.Report, error) {
+	ctx, cancel := context.WithTimeout(ctx, statementTimeout(p)+connectSlack)
+	defer cancel()
+	s, err := cs.get(p, password)
+	if err != nil {
+		return nil, err
+	}
+	return cassandra.Health(ctx, s)
 }
 
 func (cs *cassandraSource) Query(context.Context, conn.Profile, string, exec.Request) (*exec.Result, error) {

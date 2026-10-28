@@ -72,7 +72,7 @@ func (e Engine) Capabilities() Capabilities {
 	case EngineClickHouse:
 		return Capabilities{Query: true, Migrations: true, Health: true}
 	case EngineCassandra:
-		return Capabilities{Query: true, Migrations: true}
+		return Capabilities{Query: true, Migrations: true, Health: true}
 	case EngineMongoDB:
 		return Capabilities{Query: true, Migrations: true, Health: true}
 	case EngineRedis:
