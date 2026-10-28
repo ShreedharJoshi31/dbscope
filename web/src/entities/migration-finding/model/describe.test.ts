@@ -6,6 +6,7 @@ import {
   lockSentence,
   lockTimeoutCopy,
   sizeWords,
+  workWords,
 } from "@/entities/migration-finding/model/describe";
 import {
   mysqlVersionLabel,
@@ -76,5 +77,18 @@ describe("ratings", () => {
   it("describes SQLite's database-wide write lock", () => {
     expect(lockModeWords("DATABASE WRITE")).toMatch(/^blocks every other writer/);
     expect(lockModeTone("DATABASE WRITE")).toBe("warn");
+  });
+});
+
+describe("work in plain words", () => {
+  it("describes ClickHouse work as part mutations and keeps the PostgreSQL words elsewhere", () => {
+    expect(workWords("rewrite")).toBe("Rewrites the table and its indexes");
+    expect(workWords("rewrite", "clickhouse")).toMatch(/mutation rewrites parts/);
+    expect(workWords("none", "clickhouse")).toMatch(/^Metadata only/);
+    expect(workWords("scan", "clickhouse")).toBe(workWords("scan"));
+  });
+
+  it("labels a ClickHouse version", () => {
+    expect(mysqlVersionLabel(260836, "clickhouse")).toBe("ClickHouse 26.8.36");
   });
 });

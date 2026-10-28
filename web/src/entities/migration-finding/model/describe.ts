@@ -61,8 +61,14 @@ const WORK: Record<StatementWork, string> = {
   rewrite: "Rewrites the table and its indexes",
 };
 
-export function workWords(work: StatementWork): string {
-  return WORK[work] ?? work;
+/** ClickHouse ALTERs take no table lock; their work is a mutation over the table's parts. */
+const CLICKHOUSE_WORK: Partial<Record<StatementWork, string>> = {
+  none: "Metadata only: existing parts are not rewritten",
+  rewrite: "A mutation rewrites parts in the background; reads and inserts continue",
+};
+
+export function workWords(work: StatementWork, engine?: string): string {
+  return (engine === "clickhouse" ? CLICKHOUSE_WORK[work] : undefined) ?? WORK[work] ?? work;
 }
 
 const TX: Record<StatementTx, string> = {

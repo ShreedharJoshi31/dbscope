@@ -94,7 +94,7 @@ export const ENGINE_META: Record<Engine, EngineMeta> = {
     queryLanguage: "SQL",
     label: "ClickHouse",
     description:
-      "Tables with their engines, sorting and partition keys, parts and design risks, and read-only SQL whose plan shows how much the sorting key prunes.",
+      "Tables with their engines, sorting and partition keys, parts and design risks, read-only SQL whose plan shows how much the sorting key prunes, and which ALTERs rewrite parts.",
     defaultPort: 9000,
     urlExample: "clickhouse://user:password@host:9440/database?secure=true",
   },

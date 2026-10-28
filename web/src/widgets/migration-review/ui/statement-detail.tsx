@@ -116,9 +116,10 @@ interface StatementDetailProps {
 /** The selected statement: what it locks and does, its transaction and lock_timeout context, findings and fixes. */
 export function StatementDetail({ review, statement: s, total, unanalyzable, headingRef }: StatementDetailProps) {
   const timeout = lockTimeoutCopy(s.lockTimeout, s.locks.length);
-  // The score and lock_timeout are PostgreSQL's; SQLite findings carry the sizes, and MySQL has lock_wait_timeout.
+  // The score and lock_timeout are PostgreSQL's; SQLite and ClickHouse findings carry the sizes and take no
+  // lock to time out, and MySQL has lock_wait_timeout.
   const engine = review.model?.report.engine;
-  const sqlite = engine === "sqlite";
+  const noLocks = engine === "sqlite" || engine === "clickhouse";
   const timeoutName = engine ? "lock_wait_timeout" : "lock_timeout";
   const diff = review.model?.diff;
   const changed = diff ? diff.added.length + diff.altered.length + diff.dropped.length : 0;
@@ -178,10 +179,10 @@ export function StatementDetail({ review, statement: s, total, unanalyzable, hea
         <Fact term="Locks">
           <Locks statement={s} />
         </Fact>
-        <Fact term="Work">{workWords(s.work)}</Fact>
-        {!sqlite && <Fact term="Size">{sizeWords(s.sizeBytes, s.locks.length)}</Fact>}
+        <Fact term="Work">{workWords(s.work, engine)}</Fact>
+        {!noLocks && <Fact term="Size">{sizeWords(s.sizeBytes, s.locks.length)}</Fact>}
         <Fact term="Transaction">{txWords(s.tx)}</Fact>
-        {!sqlite && (
+        {!noLocks && (
           <Fact term={timeoutName}>
             <span className="flex items-start gap-1.5">
               {timeout.tone === "success" ? (

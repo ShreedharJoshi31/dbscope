@@ -81,7 +81,7 @@ experimental materialized views and SASI indexes).
 | Cassandra / ScyllaDB | keyspace tables | CQL SELECT | not yet | not yet | not yet |
 | Neo4j | labels and relationship types | read-only Cypher | not yet | not yet | not yet |
 | Elasticsearch / OpenSearch | indices, aliases, data streams | search JSON and SQL | not yet | n/a | not yet |
-| ClickHouse | tables, keys, parts | SQL under readonly | not yet | not yet | not yet |
+| ClickHouse | tables, keys, parts | SQL under readonly | not yet | ALTER mutations | not yet |
 | SQL Server / Azure SQL | tables, views, keys, indexes | SELECT behind a plan gate | not yet | not yet | not yet |
 | Oracle | tables, views, materialized views, keys, indexes | SELECT in a READ ONLY transaction | not yet | not yet | not yet |
 
@@ -639,9 +639,33 @@ it. Skip indexes that skip nothing and `FINAL` are flagged too. From 25.9
 the index figures need the query condition cache off, which dbscope sets
 except for readonly-1 users, who may not.
 
-Not yet: migration risk of ALTER (which ALTERs rewrite parts), replication
-lag and queues, and cardinality order of key columns, which needs reading
-data.
+**Migration risk.** MergeTree ALTERs take no lock that stops reads or
+inserts, so the questions are which ones start a mutation, how much it
+rewrites, what data goes, and what the server refuses. Measured on 26.8 and
+25.8 (system.mutations, part names, and `read_bytes` in system.part_log):
+
+| ALTER | Mutation | Work |
+|---|---|---|
+| ADD COLUMN, ADD INDEX, ADD PROJECTION, MODIFY COLUMN default, comment or codec, MODIFY SETTING, MODIFY ORDER BY with new columns | no | metadata; new indexes and projections cover only new parts until MATERIALIZE |
+| DROP COLUMN, RENAME COLUMN, CLEAR COLUMN | yes | every part replaced, no data read |
+| MODIFY COLUMN to another type, UPDATE, MATERIALIZE INDEX/PROJECTION/COLUMN, lightweight DELETE FROM | yes | rewrites the columns involved |
+| ALTER DELETE, MODIFY TTL | yes | rewrites whole parts |
+| DROP or DETACH PARTITION | no | the data is gone at once |
+
+Dropping, renaming or changing the type of a sorting, primary or partition
+key column fails. `TestMigratePredictions` checks dbscope's prediction
+(mutation or not, fails or not) for 22 ALTERs against both servers.
+Rewrites are rated by the compressed bytes involved (a column's for a type
+change, the table's for whole-part rewrites): low under 1 GiB, medium
+under 50 GiB, high above. Also flagged: dropped data, mutations already
+queued on the table (a new one waits behind them), an ALTER without
+`mutations_sync` (the migration tool reports success while parts are still
+being rewritten), replicated tables, `OPTIMIZE ... FINAL`, and
+`CREATE MATERIALIZED VIEW ... POPULATE`, which misses rows inserted while
+it runs.
+
+Not yet: replication lag and queues, distributed DDL (`ON CLUSTER`) queue
+state, and cardinality order of key columns, which needs reading data.
 
 ### SQL Server and Azure SQL
 
