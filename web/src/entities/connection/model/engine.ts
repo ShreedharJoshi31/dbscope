@@ -9,6 +9,7 @@ export const ENGINE_ORDER: readonly Engine[] = [
   "dynamodb",
   "cassandra",
   "neo4j",
+  "elasticsearch",
 ];
 
 export const ENGINE_META: Record<
@@ -60,6 +61,13 @@ export const ENGINE_META: Record<
       "A map of node labels and the relationships between them, and read-only Cypher whose plan flags full scans, cartesian products and unbounded paths.",
     defaultPort: 7687,
   },
+  elasticsearch: {
+    queryLanguage: "a search request as JSON, or SQL",
+    label: "Elasticsearch",
+    description:
+      "Elasticsearch or OpenSearch: indices with their mapped fields, shards and mapping risks, fields an alias maps differently, and read-only searches and SQL.",
+    defaultPort: 9200,
+  },
   sqlite: {
     queryLanguage: "SQL",
     label: "SQLite",
@@ -80,6 +88,8 @@ export function engineLabel(engine: TestResult["engine"]): string {
       return "Valkey";
     case "scylladb":
       return "ScyllaDB";
+    case "opensearch":
+      return "OpenSearch";
     case undefined:
       return "PostgreSQL";
   }

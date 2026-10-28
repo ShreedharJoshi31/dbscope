@@ -22,6 +22,7 @@ import (
 	"github.com/dbscope/dbscope/internal/cassandra"
 	"github.com/dbscope/dbscope/internal/conn"
 	"github.com/dbscope/dbscope/internal/dynamo"
+	"github.com/dbscope/dbscope/internal/elastic"
 	"github.com/dbscope/dbscope/internal/mongo"
 	"github.com/dbscope/dbscope/internal/mysql"
 	"github.com/dbscope/dbscope/internal/neo4j"
@@ -169,6 +170,21 @@ func (s *server) execute(ctx context.Context, p conn.Profile, password string, b
 		}
 		return res, nil
 	}
+	if p.Engine == conn.EngineElasticsearch {
+		req, err := elastic.Parse(body.SQL, p.Database)
+		if err != nil {
+			return nil, mapRunError(ctx, err)
+		}
+		src, _ := s.source.(engineSource)[conn.EngineElasticsearch].(*elasticSource)
+		if src == nil {
+			return nil, mapRunError(ctx, errUnsupported)
+		}
+		res, err := src.Run(ctx, p, password, req, maxRows, explainOnly)
+		if err != nil {
+			return nil, mapRunError(ctx, err)
+		}
+		return res, nil
+	}
 	if p.Engine == conn.EngineNeo4j {
 		if err := neo4j.Check(body.SQL); err != nil {
 			return nil, mapRunError(ctx, err)
@@ -278,6 +294,7 @@ func mapRunError(ctx context.Context, err error) *runError {
 	var awsErr smithy.APIError
 	var cqlErr gocql.RequestError
 	var neoErr *neo4jdrv.Neo4jError
+	var esErr *elastic.Error
 	switch {
 	case errors.As(err, &ge):
 		return &runError{status: http.StatusUnprocessableEntity, code: "rejected", message: ge.Message, detail: string(ge.Reason),
@@ -315,6 +332,16 @@ func mapRunError(ctx context.Context, err error) *runError {
 		case "ProvisionedThroughputExceededException", "ThrottlingException", "RequestLimitExceeded":
 			r.status, r.code = http.StatusServiceUnavailable, "upstream"
 			r.message = "DynamoDB throttled the read; try again or read less (" + awsErr.ErrorMessage() + ")"
+		}
+		return r
+	case errors.As(err, &esErr):
+		r := &runError{status: http.StatusBadRequest, code: "database", message: esErr.Error(),
+			histStatus: store.HistoryError, histCode: "es_" + strconv.Itoa(esErr.Status)}
+		switch {
+		case esErr.Status == http.StatusUnauthorized || esErr.Status == http.StatusForbidden:
+			r.message = "Blocked: this user may not do that (" + esErr.Error() + ")"
+		case esErr.Status == http.StatusTooManyRequests || esErr.Status >= 500:
+			r.status, r.code = http.StatusServiceUnavailable, "upstream"
 		}
 		return r
 	case errors.As(err, &neoErr):

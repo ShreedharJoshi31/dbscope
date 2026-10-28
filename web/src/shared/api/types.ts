@@ -1,6 +1,15 @@
 /** Wire types for the Phase 0 agent API (docs/API.md). */
 
-export type Engine = "postgres" | "mysql" | "sqlite" | "mongodb" | "redis" | "dynamodb" | "cassandra" | "neo4j";
+export type Engine =
+  | "postgres"
+  | "mysql"
+  | "sqlite"
+  | "mongodb"
+  | "redis"
+  | "dynamodb"
+  | "cassandra"
+  | "neo4j"
+  | "elasticsearch";
 export type Env = "local" | "staging" | "prod-replica";
 export type SummaryMode = "off" | "profile" | "rows";
 export type SSLMode = "disable" | "prefer" | "require" | "verify-ca" | "verify-full";
@@ -64,7 +73,7 @@ export type TestErrorKind = "auth" | "network" | "tls" | "timeout" | "database" 
 export interface TestResult {
   ok: boolean;
   /** The server reached; omitted for PostgreSQL. */
-  engine?: Engine | "mariadb" | "valkey" | "scylladb";
+  engine?: Engine | "mariadb" | "valkey" | "scylladb" | "opensearch";
   latencyMs?: number;
   serverVersion?: string;
   serverVersionNum?: number;

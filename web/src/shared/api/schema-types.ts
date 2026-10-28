@@ -12,7 +12,8 @@ export type RelKind =
   | "foreign_table"
   | "collection"
   | "key_pattern"
-  | "node_label";
+  | "node_label"
+  | "search_index";
 
 export interface QualifiedName {
   schema: string;

@@ -134,6 +134,24 @@ describe("Neo4j", () => {
   });
 });
 
+describe("Elasticsearch", () => {
+  it("needs neither indices nor a user", () => {
+    const ok = {
+      ...EMPTY_CONNECTION_FORM,
+      engine: "elasticsearch" as const,
+      name: "search",
+      env: "local" as const,
+      host: "h",
+      port: "9200",
+      database: "",
+      user: "",
+      password: "api-key",
+    };
+    expect(validateConnectionForm(ok)).toEqual({});
+    expect(toProfileInput(ok)).toMatchObject({ engine: "elasticsearch", database: "", user: "", password: "api-key" });
+  });
+});
+
 describe("toProfileInput", () => {
   it("trims, converts numbers, splits schemas and omits an empty password", () => {
     expect(

@@ -23,6 +23,8 @@ const (
 	KindKeyPattern RelKind = "key_pattern"
 	// KindNodeLabel is a Neo4j node label; its columns are the properties nodes with it carry.
 	KindNodeLabel RelKind = "node_label"
+	// KindSearchIndex is an Elasticsearch or OpenSearch index or data stream; its columns are its mapping's fields.
+	KindSearchIndex RelKind = "search_index"
 )
 
 type Model struct {

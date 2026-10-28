@@ -9,6 +9,7 @@ import (
 	"github.com/dbscope/dbscope/internal/cassandra"
 	"github.com/dbscope/dbscope/internal/conn"
 	"github.com/dbscope/dbscope/internal/dynamo"
+	"github.com/dbscope/dbscope/internal/elastic"
 	"github.com/dbscope/dbscope/internal/mongo"
 	"github.com/dbscope/dbscope/internal/mysql"
 	"github.com/dbscope/dbscope/internal/neo4j"
@@ -224,6 +225,8 @@ func testProfile(ctx context.Context, p conn.Profile, password string) conn.Test
 		return cassandra.Test(ctx, p, password)
 	case conn.EngineNeo4j:
 		return neo4j.Test(ctx, p, password)
+	case conn.EngineElasticsearch:
+		return elastic.Test(ctx, p, password)
 	}
 	return conn.Test(ctx, p, password)
 }

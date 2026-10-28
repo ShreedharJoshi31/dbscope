@@ -1,7 +1,7 @@
 import type { ChangeEvent } from "react";
 import type { ConnectionField, ConnectionFormValues } from "@/features/add-connection/model/form";
 import { EnvField } from "@/features/add-connection/ui/env-field";
-import type { SSLMode } from "@/shared/api";
+import type { Engine, SSLMode } from "@/shared/api";
 import { FormField } from "@/shared/ui/form-field";
 import { Input } from "@/shared/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/ui/select";
@@ -22,6 +22,21 @@ interface ConnectionFieldsProps {
   register: (field: ConnectionField) => (el: HTMLElement | null) => void;
   hasSavedPassword: boolean;
 }
+
+const DATABASE_PLACEHOLDER: Partial<Record<Engine, string>> = {
+  postgres: "postgres",
+  neo4j: "neo4j",
+  redis: "0",
+  elasticsearch: "* or logs-*",
+};
+
+const USER_PLACEHOLDER: Partial<Record<Engine, string>> = {
+  postgres: "postgres",
+  redis: "default",
+  cassandra: "dbscope_ro",
+  neo4j: "neo4j",
+  elasticsearch: "dbscope_ro",
+};
 
 /** Name, environment and the libpq connection parameters, or the file of a SQLite database. */
 export function ConnectionFields({
@@ -131,7 +146,7 @@ function NetworkFields({
       </FormField>
 
       <FormField
-        label={values.engine === "cassandra" ? "Keyspace" : "Database"}
+        label={values.engine === "cassandra" ? "Keyspace" : values.engine === "elasticsearch" ? "Indices" : "Database"}
         error={errorFor("database")}
         className="col-span-3"
       >
@@ -139,13 +154,7 @@ function NetworkFields({
           <Input
             {...control}
             {...text("database")}
-            placeholder={
-              values.engine === "postgres" || values.engine === "neo4j"
-                ? values.engine
-                : values.engine === "redis"
-                  ? "0"
-                  : "app"
-            }
+            placeholder={DATABASE_PLACEHOLDER[values.engine] ?? "app"}
             autoComplete="off"
             spellCheck={false}
             className="font-mono"
@@ -157,17 +166,7 @@ function NetworkFields({
           <Input
             {...control}
             {...text("user")}
-            placeholder={
-              values.engine === "postgres"
-                ? "postgres"
-                : values.engine === "redis"
-                  ? "default"
-                  : values.engine === "cassandra"
-                    ? "dbscope_ro"
-                    : values.engine === "neo4j"
-                      ? "neo4j"
-                      : "root"
-            }
+            placeholder={USER_PLACEHOLDER[values.engine] ?? "root"}
             autoComplete="off"
             spellCheck={false}
             className="font-mono"
@@ -182,7 +181,9 @@ function NetworkFields({
         description={
           hasSavedPassword
             ? "Leave empty to keep the saved password."
-            : "Stored in the encrypted vault on this machine."
+            : values.engine === "elasticsearch"
+              ? "With no user, an API key (its encoded value). Stored in the encrypted vault on this machine."
+              : "Stored in the encrypted vault on this machine."
         }
       >
         {(control) => (

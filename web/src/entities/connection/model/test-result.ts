@@ -49,6 +49,8 @@ const LISTEN_SETTING: Partial<Record<NonNullable<ServerEngine>, string>> = {
   cassandra: "Cassandra serves CQL on this address (rpc_address)",
   scylladb: "ScyllaDB serves CQL on this address (rpc_address)",
   neo4j: "Neo4j listens beyond localhost (server.default_listen_address)",
+  elasticsearch: "Elasticsearch listens beyond localhost (network.host)",
+  opensearch: "OpenSearch listens beyond localhost (network.host)",
 };
 
 /**

@@ -54,6 +54,7 @@ models of their own rather than being forced into tables and columns.
 | DynamoDB | key schemas + sampled attributes | PartiQL SELECT | not yet | n/a | not yet |
 | Cassandra / ScyllaDB | keyspace tables | CQL SELECT | not yet | not yet | not yet |
 | Neo4j | labels and relationship types | read-only Cypher | not yet | not yet | not yet |
+| Elasticsearch / OpenSearch | indices, aliases, data streams | search JSON and SQL | not yet | n/a | not yet |
 
 ### SQLite
 
@@ -460,7 +461,87 @@ Not yet: risks of schema-changing Cypher (constraint creation on existing
 duplicates, index population), and relationship types between labels the
 count store does not connect.
 
+### Elasticsearch and OpenSearch
+
+Research with sources: [research-elasticsearch.md](research-elasticsearch.md).
+Tested against Elasticsearch 9.5 and 8.19 and OpenSearch 3.9 and 2.19 in
+containers, all with security on, as a user with only read access. One
+`elasticsearch` engine covers both; `GET /` tells them apart. dbscope speaks
+plain HTTP rather than a client library: Elastic's Go client refuses
+OpenSearch servers, and dbscope needs only a dozen read endpoints.
+
+A profile is a host, port (9200) and an index pattern in the database field
+(default `*`). The user is optional: with a user the password is basic
+auth; with none, the password is an API key's `encoded` value. sslMode
+`disable` and `prefer` use http, `require` https without checking the
+certificate (OpenSearch's demo certificate), `verify-ca` and `verify-full`
+https with it. AWS SigV4 signing for Amazon OpenSearch Service is not yet
+supported.
+
+**Reading safely.** HTTP has no read-only mode; the user's privileges are
+the guard, and dbscope only ever calls read endpoints. The connection test
+reports write access: on Elasticsearch with `_has_privileges` (`all` and
+`manage` on the cluster, `write`, `delete`, `create_index`, `manage` on the
+pattern), on OpenSearch from the roles in `authinfo`. OpenSearch 2.x's demo
+security configuration gives every user `own_index`, which writes to an
+index named after the user, and the test says so. A cluster with security
+off is warned about.
+
+```
+# Elasticsearch
+POST _security/role/dbscope_ro
+{"cluster": ["monitor"],
+ "indices": [{"names": ["*"], "privileges": ["read", "view_index_metadata", "monitor"]}]}
+
+# OpenSearch: readall_and_monitor is not enough; it lacks indices:admin/mappings/get,
+# which mappings and SQL need (seen on 3.9)
+PUT _plugins/_security/api/roles/dbscope_ro
+{"cluster_permissions": ["cluster_monitor"],
+ "index_permissions": [{"index_patterns": ["*"], "allowed_actions": ["read", "indices_monitor",
+   "indices:admin/mappings/get", "indices:admin/get", "indices:admin/resolve/index",
+   "indices:admin/data_stream/get", "indices:admin/validate/query"]}]}
+```
+
+**Index map.** `_resolve/index` lists the indices, aliases and data streams
+the pattern matches; dot-prefixed system and backing indices are left out
+unless the pattern starts with a dot. Each index is a card whose columns are
+its mapped fields: objects flattened to dotted paths, `nested` fields marked
+(each object is a hidden document), multi-fields under their parent
+(`title.keyword`) and runtime fields. Document counts come from a `size: 0`
+search on `_index`, because index stats count nested objects as documents.
+The comment gives shards, replicas, size, the field count against
+`index.mapping.total_fields.limit` (counted as Elasticsearch does: every
+object level, leaf, multi-field and runtime field), the `dynamic` setting
+and aliases, then risks: within 80% of the field limit, no replicas, any
+`index.blocks.*` (`read_only_allow_delete` usually means the disk
+flood-stage watermark), shards above 50 GB or 200M documents. A data stream
+is one card with its write index's fields. An alias is a view over its
+indices whose columns come from `_field_caps`; a field with more than one
+type across them is a **type conflict**, named per index, since it breaks
+sorting and aggregations across the alias.
+
+**Queries.** The query tab takes a search request as JSON, with an optional
+`"index"` (default: the profile's pattern), or SQL (`SELECT`, `SHOW`,
+`DESCRIBE`; Elasticsearch `_sql`, OpenSearch `_plugins/_sql`). Before
+sending: `from + size` above 10,000 (`index.max_result_window`) is refused,
+as are `scroll` and point-in-time requests, which hold search contexts
+open. Searches always send a `timeout` and `allow_partial_search_results=false`,
+and `size` is capped at the row limit. Results show `_index`, `_id`,
+`_score` and the top-level `_source` fields; aggregations show one row each.
+Elasticsearch SQL cursors are closed at once when more rows remain.
+
+**Explain** checks a search without running it: `_validate/query` with
+`explain` shows the rewritten Lucene query, and flags mark searches of every
+index and expensive queries (script, wildcard, regexp, fuzzy, prefix,
+percolate, joins, `query_string`, `more_like_this`) and terms aggregations
+asking for more than 10,000 buckets. For SQL it shows the search request
+Elasticsearch would send (`_sql/translate`) or OpenSearch's plan
+(`_plugins/_sql/_explain`), checked the same way.
+
+Not yet: AWS SigV4, PPL (it needs another cluster permission), cluster
+health and shard allocation, and risks of mapping changes.
+
 ## Next engines
 
-The remaining candidates from the October 2026 list: Elasticsearch and
-OpenSearch, ClickHouse, SQL Server and Oracle. Each gets research first, then a build tested against a real server.
+The remaining candidates from the October 2026 list: ClickHouse, SQL Server
+and Oracle. Each gets research first, then a build tested against a real server.

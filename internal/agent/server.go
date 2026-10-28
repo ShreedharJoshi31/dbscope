@@ -84,7 +84,7 @@ func New(cfg Config) (*Agent, error) {
 	if s.source == nil {
 		s.source = newPools()
 	}
-	s.source = engineSource{conn.EnginePostgres: s.source, conn.EngineSQLite: sqliteSource{}, conn.EngineMySQL: newMySQLSource(), conn.EngineMongoDB: newMongoSource(), conn.EngineRedis: newRedisSource(), conn.EngineDynamoDB: newDynamoSource(), conn.EngineCassandra: newCassandraSource(), conn.EngineNeo4j: newNeo4jSource()}
+	s.source = engineSource{conn.EnginePostgres: s.source, conn.EngineSQLite: sqliteSource{}, conn.EngineMySQL: newMySQLSource(), conn.EngineMongoDB: newMongoSource(), conn.EngineRedis: newRedisSource(), conn.EngineDynamoDB: newDynamoSource(), conn.EngineCassandra: newCassandraSource(), conn.EngineNeo4j: newNeo4jSource(), conn.EngineElasticsearch: newElasticSource()}
 	qguard.Warm() // the first parse loads a WebAssembly module (~600 ms)
 
 	mux := http.NewServeMux()

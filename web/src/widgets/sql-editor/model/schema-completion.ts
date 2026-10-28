@@ -17,6 +17,7 @@ const KIND_LABEL: Record<string, string> = {
   collection: "collection",
   key_pattern: "key pattern",
   node_label: "node label",
+  search_index: "search index",
 };
 
 /**
