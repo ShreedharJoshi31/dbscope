@@ -6,6 +6,7 @@ import (
 
 	"github.com/dbscope/dbscope/internal/clickhouse"
 	"github.com/dbscope/dbscope/internal/conn"
+	"github.com/dbscope/dbscope/internal/health"
 	"github.com/dbscope/dbscope/internal/introspect"
 	"github.com/dbscope/dbscope/internal/migrate"
 	"github.com/dbscope/dbscope/internal/migrate/ingest"
@@ -91,6 +92,17 @@ func (cs *clickhouseSource) Analyze(ctx context.Context, p conn.Profile, passwor
 		return nil, err
 	}
 	return clickhouse.Analyze(base, files), nil
+}
+
+// Health reads the server's health checks (internal/clickhouse.Health).
+func (cs *clickhouseSource) Health(ctx context.Context, p conn.Profile, password string) (*health.Report, error) {
+	ctx, cancel := context.WithTimeout(ctx, statementTimeout(p)+connectSlack)
+	defer cancel()
+	c, err := cs.get(p, password)
+	if err != nil {
+		return nil, err
+	}
+	return clickhouse.Health(ctx, c)
 }
 
 func (cs *clickhouseSource) Query(context.Context, conn.Profile, string, exec.Request) (*exec.Result, error) {

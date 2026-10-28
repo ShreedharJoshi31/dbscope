@@ -126,3 +126,33 @@ column, and a user with only `CREATE SESSION` and `READ`.
 
 The V$ and DBA_ views need `SELECT_CATALOG_ROLE`; invalid objects are read
 from `ALL_OBJECTS`, which every user can query.
+
+## ClickHouse
+
+Checked on ClickHouse 26.8 (`internal/clickhouse/health_test.go`) with 350
+single-row inserts into a table whose merges were stopped, a mutation that
+fails on purpose, and a user without grants on system tables.
+
+| Check | Warn | Danger | Notes |
+|---|---|---|---|
+| Parts per partition | 300 | 1,000 | inserts are delayed at 1,000 and fail at 3,000 |
+| Unfinished mutations | oldest 30 min | 4 h, or any failing | a failing mutation blocks the ones after it |
+| Replication | 30 s behind | 5 min, or a read-only replica | from `system.replicas` |
+| Disk use | 80% | 90% | merges need room for their output |
+| Memory | 80% of the machine | 90% | resident memory |
+| Detached parts | 1 | 100 | broken or unexpected parts only, not ones detached on purpose |
+
+Each check reads one system table; without `GRANT SELECT ON system.<table>`
+it says which grant to add.
+
+## Neo4j
+
+Checked on Neo4j 2026.10 Community and Enterprise (`internal/neo4j/health_test.go`)
+with a write transaction left open past the threshold.
+
+| Check | Warn | Danger | Notes |
+|---|---|---|---|
+| Databases | | any not in its requested status | `SHOW DATABASES` |
+| Servers | | any not Available and Enabled | Enterprise; Community is one server and has no `SHOW SERVERS` |
+| Long-running transactions | 1 over a minute | 5 | `SHOW TRANSACTIONS` |
+| Indexes not online | populating | failed | `SHOW INDEXES` |

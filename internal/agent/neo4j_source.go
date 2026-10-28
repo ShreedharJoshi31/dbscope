@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/dbscope/dbscope/internal/conn"
+	"github.com/dbscope/dbscope/internal/health"
 	"github.com/dbscope/dbscope/internal/introspect"
 	"github.com/dbscope/dbscope/internal/migrate"
 	"github.com/dbscope/dbscope/internal/neo4j"
@@ -75,6 +76,17 @@ func (ns *neo4jSource) Run(ctx context.Context, p conn.Profile, password, stmt s
 		return nil, err
 	}
 	return neo4j.Run(ctx, c, stmt, maxRows, explainOnly, statementTimeout(p))
+}
+
+// Health reads the server's health checks (internal/neo4j.Health).
+func (ns *neo4jSource) Health(ctx context.Context, p conn.Profile, password string) (*health.Report, error) {
+	ctx, cancel := context.WithTimeout(ctx, statementTimeout(p)+connectSlack)
+	defer cancel()
+	c, err := ns.get(p, password)
+	if err != nil {
+		return nil, err
+	}
+	return neo4j.Health(ctx, c)
 }
 
 func (ns *neo4jSource) Query(context.Context, conn.Profile, string, exec.Request) (*exec.Result, error) {
