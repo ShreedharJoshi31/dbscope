@@ -86,6 +86,13 @@ const SEARCH_WORK: Partial<Record<StatementWork, string>> = {
 ENGINE_WORK.elasticsearch = SEARCH_WORK;
 ENGINE_WORK.opensearch = SEARCH_WORK;
 
+// MongoDB: index builds lock the collection only at their start and end; bulk updates go through the oplog.
+ENGINE_WORK.mongodb = {
+  none: "Catalog only: no documents are read",
+  index_build: "Builds the index reading every document; reads and writes continue except at its start and end",
+  rewrite: "Rewrites documents one by one; each write is replicated through the oplog",
+};
+
 export function workWords(work: StatementWork, engine?: string): string {
   return (engine ? ENGINE_WORK[engine]?.[work] : undefined) ?? WORK[work] ?? work;
 }

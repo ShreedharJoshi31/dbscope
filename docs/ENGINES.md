@@ -75,7 +75,7 @@ experimental materialized views and SASI indexes).
 | PostgreSQL | yes | yes | yes | yes | yes |
 | SQLite | yes | yes | not yet | yes | n/a |
 | MySQL / MariaDB | yes | yes | not yet | yes | not yet |
-| MongoDB | inferred | yes | not yet | not yet | n/a |
+| MongoDB | inferred | yes | not yet | JavaScript migrations | n/a |
 | Redis / Valkey | key patterns | n/a | n/a | n/a | keyspace report |
 | DynamoDB | key schemas + sampled attributes | PartiQL SELECT | not yet | n/a | not yet |
 | Cassandra / ScyllaDB | keyspace tables | CQL SELECT | not yet | CQL schema changes | not yet |
@@ -252,6 +252,28 @@ executes the query, and a `COLLSCAN` is flagged. The statement timeout is the
 call's context deadline, which the v2 driver also sends as `maxTimeMS` (adding
 it by hand is a duplicate field); whichever side gives up first, the server
 leaves no dbscope operation running, which the tests check with `$currentOp`.
+
+**Migration risk.** MongoDB migrations are JavaScript: mongosh scripts and
+migrate-mongo's `up(db)` functions. dbscope does not run them; it finds the
+database calls in them (`db.<collection>.<method>(...)`,
+`<db>.collection("name").<method>(...)`, `getCollection`, and `runCommand`
+or `adminCommand` documents) and reads their literal arguments, so index keys
+and options are known; values computed at run time are not. They are
+checked against each collection's indexes, estimated count and `$collStats`
+storage size. What the server refuses was checked on 8.0
+(`TestMigratePredictions`, 14 cases): an index whose keys exist under
+another name, a name that exists with other keys or options (`unique`,
+`sparse`), dropping `_id_` or a missing index, and renaming onto an existing
+collection without `dropTarget`. An identical index and creating an existing
+collection succeed.
+
+Rated besides: index builds by collection size (since 4.2 they lock only at
+start and end), unique indexes on existing data (fail on any duplicate), TTL
+indexes and lowered TTLs (they delete every document already past the limit
+within a minute), validators added with `collMod` (existing documents that
+break them fail on their next update), `updateMany` by size, renames, capped
+conversions, sharding, and drops and deletes. Other engines' analyses skip
+`.js` files and say how many.
 
 ### Redis and Valkey
 

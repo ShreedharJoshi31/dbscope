@@ -14,11 +14,15 @@ export function isMigrationFile(name: string): boolean {
   return isSqlFile(base) || base.endsWith(".sql.conf") || base === "atlas.sum";
 }
 
-/** A statement file: .sql, .cql for Cassandra and ScyllaDB tools, or .http for elasticsearch-evolution. */
+/**
+ * A statement file: .sql, .cql for Cassandra and ScyllaDB tools, .http for elasticsearch-evolution, or .js for
+ * MongoDB (mongosh scripts, migrate-mongo); the agent skips .js files for other engines and says so.
+ */
 export function isSqlFile(name: string): boolean {
-  const lower = name.toLowerCase();
-  return lower.endsWith(".sql") || lower.endsWith(".cql") || lower.endsWith(".http");
+  return STATEMENT_FILE.test(name);
 }
+
+const STATEMENT_FILE = /\.(sql|cql|http|js)$/i;
 
 /** A file and the relative path it was found under. */
 export interface PickedFile {

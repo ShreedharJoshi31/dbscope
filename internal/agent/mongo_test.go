@@ -41,7 +41,7 @@ func TestMongoProfile(t *testing.T) {
 	expect(t, w, 201, "")
 	var p conn.Profile
 	json.Unmarshal(w.Body.Bytes(), &p)
-	if p.Options != srv.Options || !p.Capabilities.Query || p.Capabilities.Migrations {
+	if p.Options != srv.Options || !p.Capabilities.Query || !p.Capabilities.Migrations {
 		t.Fatalf("created %s", w.Body.String())
 	}
 	w = e.do("GET", "/api/profiles/"+p.ID+"/schema", "")

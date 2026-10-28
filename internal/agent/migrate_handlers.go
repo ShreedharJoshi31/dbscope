@@ -70,6 +70,47 @@ func (s *server) analyzeMigrations(w http.ResponseWriter, r *http.Request) {
 	// Introspection, sizes and impact queries can each take a statement timeout.
 	ctx, cancel := context.WithTimeout(r.Context(), 3*statementTimeout(p)+connectSlack)
 	defer cancel()
+	// Only MongoDB migrations are JavaScript; another engine's folder may hold .js build or tool files.
+	skipped := 0
+	if p.Engine != conn.EngineMongoDB {
+		kept := req.Files[:0]
+		for _, f := range req.Files {
+			if strings.HasSuffix(strings.ToLower(f.Name), ".js") {
+				skipped++
+				continue
+			}
+			kept = append(kept, f)
+		}
+		req.Files = kept
+	}
+	if len(req.Files) == 0 {
+		writeError(w, http.StatusBadRequest, "validation", "no migration files: .js files are read only for MongoDB connections")
+		return
+	}
+	respond := func(rep *migrate.Report) {
+		if skipped > 0 {
+			files := "files were"
+			if skipped == 1 {
+				files = "file was"
+			}
+			rep.Warnings = append(rep.Warnings, fmt.Sprintf("%d JavaScript %s skipped: only MongoDB connections read .js migrations", skipped, files))
+		}
+		writeJSON(w, http.StatusOK, rep)
+	}
+	if p.Engine == conn.EngineMongoDB {
+		src, _ := s.source.(engineSource)[conn.EngineMongoDB].(*mongoSource)
+		if src == nil {
+			s.upstreamError(w, r, errUnsupported)
+			return
+		}
+		rep, err := src.Analyze(ctx, p, password, req.Files)
+		if err != nil {
+			s.upstreamError(w, r, err)
+			return
+		}
+		respond(rep)
+		return
+	}
 	if p.Engine == conn.EngineMySQL {
 		src, _ := s.source.(engineSource)[conn.EngineMySQL].(*mysqlSource)
 		if src == nil {
@@ -81,7 +122,7 @@ func (s *server) analyzeMigrations(w http.ResponseWriter, r *http.Request) {
 			s.upstreamError(w, r, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, rep)
+		respond(rep)
 		return
 	}
 	if p.Engine == conn.EngineElasticsearch {
@@ -95,7 +136,7 @@ func (s *server) analyzeMigrations(w http.ResponseWriter, r *http.Request) {
 			s.upstreamError(w, r, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, rep)
+		respond(rep)
 		return
 	}
 	if p.Engine == conn.EngineCassandra {
@@ -109,7 +150,7 @@ func (s *server) analyzeMigrations(w http.ResponseWriter, r *http.Request) {
 			s.upstreamError(w, r, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, rep)
+		respond(rep)
 		return
 	}
 	if p.Engine == conn.EngineClickHouse {
@@ -123,7 +164,7 @@ func (s *server) analyzeMigrations(w http.ResponseWriter, r *http.Request) {
 			s.upstreamError(w, r, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, rep)
+		respond(rep)
 		return
 	}
 	if p.Engine == conn.EngineSQLite {
@@ -132,7 +173,7 @@ func (s *server) analyzeMigrations(w http.ResponseWriter, r *http.Request) {
 			s.upstreamError(w, r, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, rep)
+		respond(rep)
 		return
 	}
 	base, err := s.source.MigrationBase(ctx, p, password)
@@ -145,7 +186,7 @@ func (s *server) analyzeMigrations(w http.ResponseWriter, r *http.Request) {
 		s.upstreamError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, rep)
+	respond(rep)
 }
 
 func (s *server) analyzeSampleMigrations(w http.ResponseWriter, r *http.Request) {

@@ -9,6 +9,7 @@ import (
 	"github.com/dbscope/dbscope/internal/conn"
 	"github.com/dbscope/dbscope/internal/introspect"
 	"github.com/dbscope/dbscope/internal/migrate"
+	"github.com/dbscope/dbscope/internal/migrate/ingest"
 	"github.com/dbscope/dbscope/internal/mongo"
 	"github.com/dbscope/dbscope/internal/query/exec"
 	"github.com/dbscope/dbscope/internal/schema"
@@ -87,6 +88,19 @@ func (ms *mongoSource) Run(ctx context.Context, p conn.Profile, password, text s
 
 func (ms *mongoSource) Query(context.Context, conn.Profile, string, exec.Request) (*exec.Result, error) {
 	return nil, errUnsupported
+}
+
+// Analyze checks JavaScript migrations against the profile's database (internal/mongo.Analyze).
+func (ms *mongoSource) Analyze(ctx context.Context, p conn.Profile, password string, files []ingest.Input) (*migrate.Report, error) {
+	c, err := ms.get(p, password)
+	if err != nil {
+		return nil, err
+	}
+	base, err := mongo.ReadBase(ctx, c, p.Database)
+	if err != nil {
+		return nil, err
+	}
+	return mongo.Analyze(base, files), nil
 }
 
 func (ms *mongoSource) MigrationBase(context.Context, conn.Profile, string) (*migrate.Base, error) {

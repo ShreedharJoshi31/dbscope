@@ -82,6 +82,13 @@ func TestSQLiteProfile(t *testing.T) {
 	if !strings.Contains(w.Body.String(), `"engine":"sqlite"`) || !strings.Contains(w.Body.String(), "DBS-SQLITE-NOT-NULL-NO-DEFAULT") {
 		t.Errorf("analyze %s", w.Body.String())
 	}
+	// .js migrations are MongoDB's; another engine skips them and says so.
+	w = e.do("POST", "/api/profiles/"+p.ID+"/migrations/analyze", `{"files":[{"name":"1.sql","sql":"SELECT 1;"},{"name":"knexfile.js","sql":"module.exports = {}"}]}`)
+	expect(t, w, 200, "")
+	if !strings.Contains(w.Body.String(), "1 JavaScript file was skipped") {
+		t.Errorf("js skipped %s", w.Body.String())
+	}
+	expect(t, e.do("POST", "/api/profiles/"+p.ID+"/migrations/analyze", `{"files":[{"name":"up.js","sql":"db.x.drop()"}]}`), 400, "validation")
 
 	// The statement timeout answers 504, not SQLite's "interrupted".
 	slow, _ := json.Marshal(map[string]any{"name": "Shop", "engine": "sqlite", "path": path, "env": "local", "statementTimeoutMs": 200})

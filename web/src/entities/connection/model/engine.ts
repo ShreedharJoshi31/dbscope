@@ -47,7 +47,7 @@ export const ENGINE_META: Record<Engine, EngineMeta> = {
     queryLanguage: "a JSON command",
     label: "MongoDB",
     description:
-      "A schema inferred from sampled documents, with likely references, and read-only queries as JSON commands.",
+      "A schema inferred from sampled documents, with likely references, read-only queries as JSON commands, and the risk of index and validator migrations.",
     defaultPort: 27017,
     urlExample: "mongodb://user:password@host:27017/database?authSource=admin",
   },

@@ -69,8 +69,9 @@ export function normalizeSql(text: string): string {
   return text.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
 }
 
+/** Statement files as analyze-migration reads them: .sql, .cql, .http and .js. */
 function isSqlFile(name: string): boolean {
-  return name.toLowerCase().endsWith(".sql");
+  return /\.(sql|cql|http|js)$/i.test(name);
 }
 
 /** Places each statement at its reported line when the original file text is missing. */
