@@ -261,7 +261,8 @@ ALTER ROLE %[1]s IN DATABASE %[3]s SET lock_timeout = '3s';`, reader, pw, d.Name
 	json.Unmarshal([]byte(out), &raw)
 	for k := range raw {
 		switch k {
-		case "format", "serverVersion", "blockSize", "schemas", "relations", "indexes", "settings", "currentRole", "catalog", "exportedAt":
+		case "format", "serverVersion", "blockSize", "schemas", "relations", "indexes", "settings", "currentRole", "catalog", "exportedAt",
+			"activitySince", "inRecovery", "totalScans", "totalRowsWritten":
 		default:
 			t.Errorf("unexpected key %q in stats export", k)
 		}
