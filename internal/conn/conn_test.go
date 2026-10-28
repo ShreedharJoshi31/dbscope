@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"syscall"
 	"testing"
@@ -126,24 +127,40 @@ func TestProfileValidation(t *testing.T) {
 }
 
 func TestParseURL(t *testing.T) {
+	pg := func(host string, port int, db, user, pass string, mode SSLMode) ParsedURL {
+		return ParsedURL{Engine: EnginePostgres, Host: host, Port: port, Database: db, User: user, Password: pass, SSLMode: mode}
+	}
 	for _, c := range []struct {
 		in   string
 		want ParsedURL
 	}{
-		{"postgres://u:p@h:5433/db?sslmode=require", ParsedURL{"h", 5433, "db", "u", "p", SSLRequire}},
-		{"postgresql://h/db", ParsedURL{"h", 5432, "db", "", "", SSLPrefer}},
-		{"postgres://us%40er:p%3Ass%2Fw%25rd@h/my%20db", ParsedURL{"h", 5432, "my db", "us@er", "p:ss/w%rd", SSLPrefer}},
-		{"postgres://u@[::1]:6000/db?sslmode=verify-full&application_name=x", ParsedURL{"::1", 6000, "db", "u", "", SSLVerifyFull}},
-		{"  postgres://h  ", ParsedURL{"h", 5432, "", "", "", SSLPrefer}},
+		{"postgres://u:p@h:5433/db?sslmode=require", pg("h", 5433, "db", "u", "p", SSLRequire)},
+		{"postgresql://h/db", pg("h", 5432, "db", "", "", SSLPrefer)},
+		{"postgres://us%40er:p%3Ass%2Fw%25rd@h/my%20db", pg("h", 5432, "my db", "us@er", "p:ss/w%rd", SSLPrefer)},
+		{"postgres://u@[::1]:6000/db?sslmode=verify-full&application_name=x", pg("::1", 6000, "db", "u", "", SSLVerifyFull)},
+		{"  postgres://h  ", pg("h", 5432, "", "", "", SSLPrefer)},
+		{"mysql://root:pw@db:3307/shop?ssl-mode=REQUIRED", ParsedURL{Engine: EngineMySQL, Host: "db", Port: 3307, Database: "shop", User: "root", Password: "pw", SSLMode: SSLRequire}},
+		{"mariadb://u@db/shop", ParsedURL{Engine: EngineMySQL, Host: "db", Port: 3306, Database: "shop", User: "u", SSLMode: SSLPrefer}},
+		{"mongodb://u:p@m1:27018,m2:27019/shop?replicaSet=rs0&authSource=admin&password=x", ParsedURL{Engine: EngineMongoDB, Host: "m1", Port: 27018,
+			Database: "shop", User: "u", Password: "p", SSLMode: SSLPrefer, Options: "authSource=admin&replicaSet=rs0",
+			Notes: []string{"the URL lists several hosts; the profile keeps the first, and the driver finds the replica set's other members from it",
+				"the option password is not kept: credentials go in the user and password fields"}}},
+		{"mongodb+srv://u@cluster0.example.net/app", ParsedURL{Engine: EngineMongoDB, Host: "cluster0.example.net", Port: 27017, Database: "app", User: "u", SSLMode: SSLVerifyFull, Options: "srv=true"}},
+		{"rediss://default:pw@cache:6380/2", ParsedURL{Engine: EngineRedis, Host: "cache", Port: 6380, Database: "2", User: "default", Password: "pw", SSLMode: SSLVerifyFull}},
+		{"redis://cache", ParsedURL{Engine: EngineRedis, Host: "cache", Port: 6379, Database: "0", SSLMode: SSLPrefer}},
+		{"neo4j+s://neo4j:pw@graph.example", ParsedURL{Engine: EngineNeo4j, Host: "graph.example", Port: 7687, User: "neo4j", Password: "pw", SSLMode: SSLVerifyFull, Options: "routing=true"}},
+		{"bolt://graph:7688", ParsedURL{Engine: EngineNeo4j, Host: "graph", Port: 7688, SSLMode: SSLDisable}},
+		{"clickhouse://u:p@ch/analytics?secure=true", ParsedURL{Engine: EngineClickHouse, Host: "ch", Port: 9440, Database: "analytics", User: "u", Password: "p", SSLMode: SSLVerifyFull}},
+		{"https://elastic:pw@search.example:9243/logs-*", ParsedURL{Engine: EngineElasticsearch, Host: "search.example", Port: 9243, Database: "logs-*", User: "elastic", Password: "pw", SSLMode: SSLVerifyFull}},
 	} {
 		got, err := ParseURL(c.in)
-		if err != nil || got != c.want {
+		if err != nil || !reflect.DeepEqual(got, c.want) {
 			t.Errorf("ParseURL(%q) = %+v, %v; want %+v", c.in, got, err, c.want)
 		}
 	}
 	for _, bad := range []string{
-		"mysql://u@h/db", "h:5432/db", "postgres://h:0/db", "postgres://h:70000/db", "postgres://h:x/db",
-		"postgres://h1,h2/db", "postgres://h/db?sslmode=allow", "postgres://u:se cret@h:bad/db",
+		"cassandra://u@h/db", "h:5432/db", "postgres://h:0/db", "postgres://h:70000/db", "postgres://h:x/db",
+		"postgres://h1,h2/db", "postgres://h/db?sslmode=allow", "postgres://u:se cret@h:bad/db", "redis://h1,h2",
 	} {
 		_, err := ParseURL(bad)
 		var ve *ValidationError

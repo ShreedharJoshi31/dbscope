@@ -21,6 +21,8 @@ export interface EngineMeta {
   queryLanguage?: string;
   /** Query tabs' file extension; sql when unset. */
   fileExtension?: string;
+  /** A connection URL of this engine, shown when the form can read one. */
+  urlExample?: string;
 }
 
 export const ENGINE_META: Record<Engine, EngineMeta> = {
@@ -29,12 +31,14 @@ export const ENGINE_META: Record<Engine, EngineMeta> = {
     label: "PostgreSQL",
     description: "ERD, queries, questions in plain English, migration risk and workload.",
     defaultPort: 5432,
+    urlExample: "postgres://user:password@host:5432/database",
   },
   mysql: {
     queryLanguage: "SQL",
     label: "MySQL",
     description: "MySQL or MariaDB: ERD, read-only queries and online DDL migration risk.",
     defaultPort: 3306,
+    urlExample: "mysql://user:password@host:3306/database",
   },
   mongodb: {
     fileExtension: "json",
@@ -43,12 +47,14 @@ export const ENGINE_META: Record<Engine, EngineMeta> = {
     description:
       "A schema inferred from sampled documents, with likely references, and read-only queries as JSON commands.",
     defaultPort: 27017,
+    urlExample: "mongodb://user:password@host:27017/database?authSource=admin",
   },
   redis: {
     label: "Redis",
     description:
       "Redis or Valkey: a map of key patterns with memory and expiry, big keys and server risks, read without touching values.",
     defaultPort: 6379,
+    urlExample: "redis://user:password@host:6379/0",
   },
   dynamodb: {
     queryLanguage: "PartiQL",
@@ -71,6 +77,7 @@ export const ENGINE_META: Record<Engine, EngineMeta> = {
     description:
       "A map of node labels and the relationships between them, and read-only Cypher whose plan flags full scans, cartesian products and unbounded paths.",
     defaultPort: 7687,
+    urlExample: "neo4j+s://user:password@host:7687",
   },
   elasticsearch: {
     fileExtension: "json",
@@ -79,6 +86,7 @@ export const ENGINE_META: Record<Engine, EngineMeta> = {
     description:
       "Elasticsearch or OpenSearch: indices with their mapped fields, shards and mapping risks, fields an alias maps differently, and read-only searches and SQL.",
     defaultPort: 9200,
+    urlExample: "https://user:password@host:9200/index-pattern",
   },
   clickhouse: {
     queryLanguage: "SQL",
@@ -86,6 +94,7 @@ export const ENGINE_META: Record<Engine, EngineMeta> = {
     description:
       "Tables with their engines, sorting and partition keys, parts and design risks, and read-only SQL whose plan shows how much the sorting key prunes.",
     defaultPort: 9000,
+    urlExample: "clickhouse://user:password@host:9440/database?secure=true",
   },
   sqlite: {
     queryLanguage: "SQL",

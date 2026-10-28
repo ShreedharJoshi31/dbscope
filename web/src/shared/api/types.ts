@@ -61,12 +61,16 @@ export type ProfileInput = Omit<Profile, "id" | "hasPassword" | "capabilities" |
 };
 
 export interface ParsedConnectionUrl {
+  engine: Engine;
   host: string;
   port: number;
   database: string;
   user: string;
   password?: string;
   sslMode: SSLMode;
+  options?: string;
+  /** What the URL held that a profile cannot keep, such as extra hosts. */
+  notes?: string[];
 }
 
 export type TestErrorKind = "auth" | "network" | "tls" | "timeout" | "database" | "other";

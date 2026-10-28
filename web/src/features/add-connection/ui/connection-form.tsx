@@ -141,7 +141,7 @@ export function ConnectionForm({ profile, submitLabel, onSaved, onCancel, autoFo
     const { values: next, filled } = applyParsedUrl(values, parsed);
     setValues(next);
     setTestResult(null);
-    announce(`Filled ${filled.join(", ")} from the URL.`);
+    announce([`Filled ${filled.join(", ")} from the URL.`, ...(parsed.notes ?? [])].join(" "));
     if (!next.env) requestAnimationFrame(() => fieldRefs.current.env?.focus());
   }
 
@@ -212,9 +212,13 @@ export function ConnectionForm({ profile, submitLabel, onSaved, onCancel, autoFo
         </p>
       </div>
 
-      {values.engine === "postgres" && (
+      {ENGINE_META[values.engine].urlExample && (
         <>
-          <ConnectionUrlField onParsed={onParsed} inputRef={urlRef} />
+          <ConnectionUrlField
+            onParsed={onParsed}
+            placeholder={ENGINE_META[values.engine].urlExample ?? ""}
+            inputRef={urlRef}
+          />
           <div className="flex items-center gap-3 text-2xs font-medium tracking-wide text-text-muted uppercase">
             <span className="h-px flex-1 bg-border-default" />
             or enter the details

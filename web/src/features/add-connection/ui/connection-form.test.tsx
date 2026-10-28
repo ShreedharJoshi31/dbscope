@@ -24,7 +24,7 @@ describe("ConnectionForm", () => {
     const { user, onSaved } = renderForm();
     await user.click(screen.getByRole("radio", { name: "MySQL" }));
     expect(screen.getByLabelText("Port")).toHaveValue("3306");
-    expect(screen.queryByLabelText("Paste a connection URL")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Paste a connection URL")).toHaveAttribute("placeholder", expect.stringMatching(/^mysql:\/\//));
     await user.type(screen.getByLabelText("Name"), "shop");
     await user.click(screen.getByRole("radio", { name: /local/ }));
     await user.type(screen.getByLabelText("Host"), "127.0.0.1");
@@ -93,6 +93,7 @@ describe("ConnectionForm", () => {
       http.post("/api/connection-url/parse", async ({ request }) => {
         sent = await request.json();
         return HttpResponse.json({
+          engine: "postgres",
           host: "127.0.0.1",
           port: 6432,
           database: "orders",
@@ -128,12 +129,12 @@ describe("ConnectionForm", () => {
   it("shows the parser's error inline when the URL is invalid", async () => {
     server.use(
       http.post("/api/connection-url/parse", () =>
-        HttpResponse.json({ error: { code: "validation", message: 'unsupported scheme "mysql"' } }, { status: 400 }),
+        HttpResponse.json({ error: { code: "validation", message: 'unsupported scheme "ftp"' } }, { status: 400 }),
       ),
     );
     const { user } = renderForm();
-    await user.type(screen.getByLabelText("Paste a connection URL"), "mysql://x{Enter}");
-    expect(await screen.findByText('unsupported scheme "mysql"')).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Paste a connection URL"), "ftp://x{Enter}");
+    expect(await screen.findByText('unsupported scheme "ftp"')).toBeInTheDocument();
     expect(screen.getByLabelText("Paste a connection URL")).toHaveAttribute("aria-invalid", "true");
   });
 

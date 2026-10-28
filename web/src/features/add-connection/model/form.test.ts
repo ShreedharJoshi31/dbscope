@@ -198,6 +198,7 @@ describe("toProfileInput", () => {
 describe("applyParsedUrl", () => {
   it("fills connection fields and suggests a name when none is set", () => {
     const { values, filled } = applyParsedUrl(EMPTY_CONNECTION_FORM, {
+      engine: "postgres",
       host: "db.internal",
       port: 6543,
       database: "billing",
@@ -220,10 +221,40 @@ describe("applyParsedUrl", () => {
   it("keeps a name the user already typed", () => {
     const { values } = applyParsedUrl(
       { ...EMPTY_CONNECTION_FORM, name: "mine" },
-      { host: "h", port: 5432, database: "d", user: "u", sslMode: "prefer" },
+      { engine: "postgres", host: "h", port: 5432, database: "d", user: "u", sslMode: "prefer" },
     );
     expect(values.name).toBe("mine");
     expect(values.password).toBe("");
+  });
+
+  it("switches the engine and replaces the options with the URL's", () => {
+    const { values, filled } = applyParsedUrl(
+      { ...EMPTY_CONNECTION_FORM, options: "region=eu-west-1" },
+      {
+        engine: "mongodb",
+        host: "m1",
+        port: 27018,
+        database: "shop",
+        user: "u",
+        sslMode: "prefer",
+        options: "authSource=admin",
+      },
+    );
+    expect(values).toMatchObject({ engine: "mongodb", port: "27018", options: "authSource=admin", name: "shop@m1" });
+    expect(filled).toEqual(["name", "engine", "host", "port", "database", "user", "SSL mode", "options"]);
+  });
+
+  it("names a Redis or database-less connection after its host", () => {
+    const redis = applyParsedUrl(EMPTY_CONNECTION_FORM, {
+      engine: "redis",
+      host: "cache",
+      port: 6379,
+      database: "2",
+      user: "",
+      sslMode: "verify-full",
+    });
+    expect(redis.values.name).toBe("cache");
+    expect(redis.values.options).toBe("");
   });
 });
 

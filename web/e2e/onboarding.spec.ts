@@ -39,6 +39,26 @@ test.describe("first run", () => {
     await expect(page).toHaveTitle("orders@127.0.0.1 · dbscope");
   });
 
+  test("a pasted MongoDB URL switches the engine and shows what was not kept", async ({ page }) => {
+    await stubAgent(page);
+    await openApp(page);
+
+    const url = page.getByLabel("Paste a connection URL");
+    await expect(url).toHaveAttribute("placeholder", /^postgres:\/\//);
+    await url.fill("mongodb://app:pw@m1:27018/shop?authSource=admin&password=x");
+    await page.getByRole("button", { name: "Fill fields" }).click();
+
+    await expect(page.getByRole("radio", { name: "MongoDB" })).toBeChecked();
+    await expect(page.getByLabel("Port")).toHaveValue("27018");
+    await expect(page.getByLabel("Name")).toHaveValue("shop@m1");
+    await expect(page.getByRole("listitem").filter({ hasText: "the option password is not kept" })).toBeVisible();
+    await expect(url).toHaveAttribute("placeholder", /^mongodb:\/\//);
+
+    // Engines without a URL form hide the box.
+    await page.getByRole("radio", { name: "DynamoDB" }).click();
+    await expect(url).toBeHidden();
+  });
+
   test("shows inline validation when saving an empty form", async ({ page }) => {
     await stubAgent(page);
     await openApp(page);

@@ -120,13 +120,16 @@ export async function stubAgent(page: Page, options: StubOptions = {}) {
     if (pathname === "/api/connection-url/parse" && method === "POST") {
       const { url } = request.postDataJSON() as { url: string };
       const parsed = new URL(url);
+      const engine = parsed.protocol === "mongodb:" ? "mongodb" : "postgres";
       return json(route, 200, {
+        engine,
         host: parsed.hostname,
-        port: Number(parsed.port || 5432),
+        port: Number(parsed.port || (engine === "mongodb" ? 27017 : 5432)),
         database: parsed.pathname.slice(1),
         user: decodeURIComponent(parsed.username),
         ...(parsed.password ? { password: decodeURIComponent(parsed.password) } : {}),
         sslMode: parsed.searchParams.get("sslmode") ?? "prefer",
+        ...(engine === "mongodb" ? { options: "authSource=admin", notes: ["the option password is not kept"] } : {}),
       });
     }
     if (pathname === "/api/profiles/test" && method === "POST") return json(route, 200, HEALTHY_TEST);

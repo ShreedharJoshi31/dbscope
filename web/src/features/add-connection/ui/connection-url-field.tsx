@@ -7,6 +7,8 @@ import { Label } from "@/shared/ui/label";
 
 interface ConnectionUrlFieldProps {
   onParsed: (parsed: ParsedConnectionUrl) => void;
+  /** An example URL of the selected engine. */
+  placeholder: string;
   inputRef?: Ref<HTMLInputElement>;
 }
 
@@ -14,9 +16,10 @@ interface ConnectionUrlFieldProps {
  * Pasting (or Enter / "Fill fields") sends the URL to the agent's parser and
  * fills the form. The URL is cleared afterwards because it may hold a password.
  */
-export function ConnectionUrlField({ onParsed, inputRef }: ConnectionUrlFieldProps) {
+export function ConnectionUrlField({ onParsed, placeholder, inputRef }: ConnectionUrlFieldProps) {
   const id = useId();
   const [url, setUrl] = useState("");
+  const [notes, setNotes] = useState<string[]>([]);
   const parse = useParseConnectionUrl();
 
   function submit(raw: string) {
@@ -25,6 +28,7 @@ export function ConnectionUrlField({ onParsed, inputRef }: ConnectionUrlFieldPro
     parse.mutate(trimmed, {
       onSuccess: (parsed) => {
         setUrl("");
+        setNotes(parsed.notes ?? []);
         onParsed(parsed);
       },
     });
@@ -64,7 +68,7 @@ export function ConnectionUrlField({ onParsed, inputRef }: ConnectionUrlFieldPro
               submit(pasted);
             }}
             onKeyDown={onKeyDown}
-            placeholder="postgres://user:password@host:5432/database"
+            placeholder={placeholder}
             autoComplete="off"
             spellCheck={false}
             className="pl-8 font-mono text-xs"
@@ -82,8 +86,19 @@ export function ConnectionUrlField({ onParsed, inputRef }: ConnectionUrlFieldPro
           {parse.error.message}
         </p>
       )}
+      {notes.length > 0 && !parse.isError && (
+        <ul className="flex flex-col gap-0.5 text-xs text-status-warn-fg">
+          {notes.map((note) => (
+            <li key={note} className="flex items-start gap-1">
+              <CircleAlert aria-hidden className="mt-0.5 size-3 shrink-0" />
+              {note}
+            </li>
+          ))}
+        </ul>
+      )}
       <p id={hintId} className="text-xs text-text-muted">
-        postgres:// and postgresql:// URLs work. The URL is parsed on this machine and not kept.
+        PostgreSQL, MySQL, MongoDB, Redis, Neo4j, ClickHouse and Elasticsearch (http or https) URLs work, and the
+        engine follows the URL. It is parsed on this machine and not kept.
       </p>
     </div>
   );

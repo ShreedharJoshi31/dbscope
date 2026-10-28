@@ -318,7 +318,7 @@ func TestParseURL(t *testing.T) {
 	w := e.do("POST", "/api/connection-url/parse", `{"url":"postgres://u:p%40ss@h:6543/db?sslmode=require"}`)
 	expect(t, w, 200, "")
 	got := decodeBody[map[string]any](t, w)
-	want := map[string]any{"host": "h", "port": 6543.0, "database": "db", "user": "u", "password": "p@ss", "sslMode": "require"}
+	want := map[string]any{"engine": "postgres", "host": "h", "port": 6543.0, "database": "db", "user": "u", "password": "p@ss", "sslMode": "require"}
 	if len(got) != len(want) {
 		t.Fatalf("got %v", got)
 	}
@@ -327,7 +327,7 @@ func TestParseURL(t *testing.T) {
 			t.Errorf("%s = %v, want %v", k, got[k], v)
 		}
 	}
-	expect(t, e.do("POST", "/api/connection-url/parse", `{"url":"mysql://u@h/db"}`), 400, "validation")
+	expect(t, e.do("POST", "/api/connection-url/parse", `{"url":"ftp://u@h/db"}`), 400, "validation")
 	expect(t, e.do("POST", "/api/connection-url/parse", `{"url":""}`), 400, "validation")
 	expect(t, e.do("POST", "/api/connection-url/parse", `{"uri":"postgres://h/db"}`), 400, "validation")
 }

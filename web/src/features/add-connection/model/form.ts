@@ -231,6 +231,8 @@ export function applyParsedUrl(
 ): { values: ConnectionFormValues; filled: string[] } {
   const next: ConnectionFormValues = {
     ...values,
+    engine: parsed.engine,
+    options: parsed.options ?? "",
     host: parsed.host,
     port: String(parsed.port),
     database: parsed.database,
@@ -238,12 +240,16 @@ export function applyParsedUrl(
     sslMode: parsed.sslMode,
   };
   const filled = ["host", "port", "database", "user", "SSL mode"];
+  if (parsed.engine !== values.engine) filled.unshift("engine");
+  if (parsed.options) filled.push("options");
   if (parsed.password !== undefined) {
     next.password = parsed.password;
     filled.push("password");
   }
-  if (!values.name.trim() && parsed.database && parsed.host) {
-    next.name = `${parsed.database}@${parsed.host}`.slice(0, NAME_MAX);
+  // A Redis database is a number, which says nothing as a name.
+  const named = parsed.database && parsed.engine !== "redis" ? `${parsed.database}@${parsed.host}` : parsed.host;
+  if (!values.name.trim() && named) {
+    next.name = named.slice(0, NAME_MAX);
     filled.unshift("name");
   }
   return { values: next, filled };
