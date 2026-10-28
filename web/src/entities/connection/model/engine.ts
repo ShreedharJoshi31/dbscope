@@ -69,7 +69,7 @@ export const ENGINE_META: Record<Engine, EngineMeta> = {
     queryLanguage: "CQL",
     label: "Cassandra",
     description:
-      "Cassandra or ScyllaDB: tables with partition and clustering keys, indexes by kind, and read-only CQL whose plan says when a query scans the cluster.",
+      "Cassandra or ScyllaDB: tables with partition and clustering keys, indexes by kind, read-only CQL whose plan says when a query scans the cluster, and which schema changes fail or rebuild.",
     defaultPort: 9042,
   },
   neo4j: {

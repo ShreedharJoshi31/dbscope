@@ -41,7 +41,7 @@ func TestCassandraProfile(t *testing.T) {
 	expect(t, w, 201, "")
 	var p conn.Profile
 	json.Unmarshal(w.Body.Bytes(), &p)
-	if !p.Capabilities.Query || p.Capabilities.Migrations {
+	if !p.Capabilities.Query || !p.Capabilities.Migrations {
 		t.Fatalf("created %s", w.Body.String())
 	}
 	w = e.do("POST", "/api/profiles/"+p.ID+"/test", "")

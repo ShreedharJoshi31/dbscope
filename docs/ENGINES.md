@@ -78,7 +78,7 @@ experimental materialized views and SASI indexes).
 | MongoDB | inferred | yes | not yet | not yet | n/a |
 | Redis / Valkey | key patterns | n/a | n/a | n/a | keyspace report |
 | DynamoDB | key schemas + sampled attributes | PartiQL SELECT | not yet | n/a | not yet |
-| Cassandra / ScyllaDB | keyspace tables | CQL SELECT | not yet | not yet | not yet |
+| Cassandra / ScyllaDB | keyspace tables | CQL SELECT | not yet | CQL schema changes | not yet |
 | Neo4j | labels and relationship types | read-only Cypher | not yet | not yet | not yet |
 | Elasticsearch / OpenSearch | indices, aliases, data streams | search JSON and SQL | not yet | n/a | not yet |
 | ClickHouse | tables, keys, parts | SQL under readonly | not yet | ALTER mutations | not yet |
@@ -420,9 +420,30 @@ at prepare time whether ALLOW FILTERING is required, so the server's own
 refusal is added to the plan. Values render as JSON; varint, decimal, UUIDs,
 blobs and times as text, and collections as JSON text.
 
+**Migration risk.** CQL schema changes take no table lock, so the risks are
+statements the server refuses, background builds that read a whole table
+on every node, lost data, and replication changes. What each server refuses
+was checked on Cassandra 5.0 and ScyllaDB 2025.1, with and without tablets
+(`TestMigratePredictions`, 42 cases):
+
+| Statement | Cassandra 5.0 | ScyllaDB 2025.1 |
+|---|---|---|
+| change a column's type | refused | refused unless the types are compatible |
+| rename a regular column, drop a key column | refused | refused |
+| re-add a dropped column with another type | refused (read from `system_schema.dropped_columns`) | allowed |
+| `CREATE CUSTOM INDEX ... 'StorageAttachedIndex'` | built in the background | refused (no custom index classes) |
+| `CREATE INDEX` | built in the background | refused in tablets keyspaces |
+| `CREATE MATERIALIZED VIEW` | refused (disabled by default) | built; refused in tablets keyspaces |
+
+Rated besides: index and view builds by the table's size (from this node's
+`system.size_estimates`), compaction changes (every SSTable is rewritten),
+`gc_grace_seconds = 0` (deleted data can come back), replication changes
+(no data moves until a full repair), and dropped tables, keyspaces,
+columns and truncates.
+
 Not yet: per-node health signals (`system_views` tombstones per read and
-partition sizes on Cassandra, `system.large_partitions` on ScyllaDB),
-schema-change risk for CQL DDL, and schema agreement across nodes.
+partition sizes on Cassandra, `system.large_partitions` on ScyllaDB), and
+schema agreement across nodes.
 
 ### Neo4j
 

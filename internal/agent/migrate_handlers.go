@@ -84,6 +84,20 @@ func (s *server) analyzeMigrations(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, rep)
 		return
 	}
+	if p.Engine == conn.EngineCassandra {
+		src, _ := s.source.(engineSource)[conn.EngineCassandra].(*cassandraSource)
+		if src == nil {
+			s.upstreamError(w, r, errUnsupported)
+			return
+		}
+		rep, err := src.Analyze(ctx, p, password, req.Files)
+		if err != nil {
+			s.upstreamError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, rep)
+		return
+	}
 	if p.Engine == conn.EngineClickHouse {
 		src, _ := s.source.(engineSource)[conn.EngineClickHouse].(*clickhouseSource)
 		if src == nil {

@@ -210,7 +210,7 @@ function PasteMode({
 
 function withSqlExtension(name: string): string {
   const trimmed = name.trim() || "pasted.sql";
-  return trimmed.toLowerCase().endsWith(".sql") ? trimmed : `${trimmed}.sql`;
+  return isSqlFile(trimmed) ? trimmed : `${trimmed}.sql`;
 }
 
 function AnalyzeForm({ onDone }: { onDone: () => void }) {

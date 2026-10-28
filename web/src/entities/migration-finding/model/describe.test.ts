@@ -86,9 +86,11 @@ describe("work in plain words", () => {
     expect(workWords("rewrite", "clickhouse")).toMatch(/mutation rewrites parts/);
     expect(workWords("none", "clickhouse")).toMatch(/^Metadata only/);
     expect(workWords("scan", "clickhouse")).toBe(workWords("scan"));
+    expect(workWords("index_build", "scylla")).toMatch(/background on every node/);
   });
 
   it("labels a ClickHouse version", () => {
     expect(mysqlVersionLabel(260836, "clickhouse")).toBe("ClickHouse 26.8.36");
+    expect(mysqlVersionLabel(50006, "cassandra")).toBe("Cassandra 5.0.6");
   });
 });

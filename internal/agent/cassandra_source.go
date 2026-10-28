@@ -10,6 +10,7 @@ import (
 	"github.com/dbscope/dbscope/internal/conn"
 	"github.com/dbscope/dbscope/internal/introspect"
 	"github.com/dbscope/dbscope/internal/migrate"
+	"github.com/dbscope/dbscope/internal/migrate/ingest"
 	"github.com/dbscope/dbscope/internal/query/exec"
 	"github.com/dbscope/dbscope/internal/schema"
 	"github.com/dbscope/dbscope/internal/workload"
@@ -79,6 +80,19 @@ func (cs *cassandraSource) Run(ctx context.Context, p conn.Profile, password, st
 		return nil, err
 	}
 	return cassandra.Run(ctx, s, p.Database, stmt, maxRows, explainOnly, statementTimeout(p))
+}
+
+// Analyze checks CQL schema changes against the profile's keyspace (internal/cassandra.Analyze).
+func (cs *cassandraSource) Analyze(ctx context.Context, p conn.Profile, password string, files []ingest.Input) (*migrate.Report, error) {
+	s, err := cs.get(p, password)
+	if err != nil {
+		return nil, err
+	}
+	base, err := cassandra.ReadBase(ctx, s, p.Database)
+	if err != nil {
+		return nil, err
+	}
+	return cassandra.Analyze(base, files), nil
 }
 
 func (cs *cassandraSource) Query(context.Context, conn.Profile, string, exec.Request) (*exec.Result, error) {

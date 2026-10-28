@@ -61,14 +61,25 @@ const WORK: Record<StatementWork, string> = {
   rewrite: "Rewrites the table and its indexes",
 };
 
-/** ClickHouse ALTERs take no table lock; their work is a mutation over the table's parts. */
-const CLICKHOUSE_WORK: Partial<Record<StatementWork, string>> = {
-  none: "Metadata only: existing parts are not rewritten",
-  rewrite: "A mutation rewrites parts in the background; reads and inserts continue",
+// Cassandra and ScyllaDB: schema changes propagate to every node; builds run in the background.
+const CQL_WORK: Partial<Record<StatementWork, string>> = {
+  none: "Schema only: propagates to every node, no data is read",
+  index_build: "Builds in the background on every node, reading the whole table; reads and writes continue",
+};
+
+/** Engines whose schema changes take no table lock describe their work in their own terms. */
+const ENGINE_WORK: Record<string, Partial<Record<StatementWork, string>>> = {
+  // ClickHouse: a mutation over the table's parts.
+  clickhouse: {
+    none: "Metadata only: existing parts are not rewritten",
+    rewrite: "A mutation rewrites parts in the background; reads and inserts continue",
+  },
+  cassandra: CQL_WORK,
+  scylla: CQL_WORK,
 };
 
 export function workWords(work: StatementWork, engine?: string): string {
-  return (engine === "clickhouse" ? CLICKHOUSE_WORK[work] : undefined) ?? WORK[work] ?? work;
+  return (engine ? ENGINE_WORK[engine]?.[work] : undefined) ?? WORK[work] ?? work;
 }
 
 const TX: Record<StatementTx, string> = {

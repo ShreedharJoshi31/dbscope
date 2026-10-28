@@ -8,14 +8,16 @@ import { MIGRATION_LIMITS } from "@/shared/api";
  * and top-level items keep the order they were dropped in.
  */
 
-/** What the agent reads: SQL files, Flyway `<file>.sql.conf` and Atlas `atlas.sum`. */
+/** What the agent reads: SQL and CQL files, Flyway `<file>.sql.conf` and Atlas `atlas.sum`. */
 export function isMigrationFile(name: string): boolean {
   const base = name.slice(name.lastIndexOf("/") + 1).toLowerCase();
-  return base.endsWith(".sql") || base.endsWith(".sql.conf") || base === "atlas.sum";
+  return isSqlFile(base) || base.endsWith(".sql.conf") || base === "atlas.sum";
 }
 
+/** A statement file: .sql, or .cql for Cassandra and ScyllaDB migration tools. */
 export function isSqlFile(name: string): boolean {
-  return name.toLowerCase().endsWith(".sql");
+  const lower = name.toLowerCase();
+  return lower.endsWith(".sql") || lower.endsWith(".cql");
 }
 
 /** A file and the relative path it was found under. */

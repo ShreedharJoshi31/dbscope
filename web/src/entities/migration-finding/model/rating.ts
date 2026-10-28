@@ -59,9 +59,18 @@ export function sqliteVersionLabel(versionNum: number): string {
   return `SQLite ${Math.floor(versionNum / 1_000_000)}.${Math.floor(versionNum / 1000) % 1000}.${versionNum % 1000}`;
 }
 
-/** "MySQL 8.4.13" for 80413, "MariaDB 11.8.9" or "ClickHouse 26.8.10". */
-export function mysqlVersionLabel(versionNum: number, flavor: "mysql" | "mariadb" | "clickhouse"): string {
-  const name = { mysql: "MySQL", mariadb: "MariaDB", clickhouse: "ClickHouse" }[flavor];
+/** "MySQL 8.4.13" for 80413, "MariaDB 11.8.9", "ClickHouse 26.8.10" or "ScyllaDB 2025.1.3". */
+export function mysqlVersionLabel(
+  versionNum: number,
+  flavor: "mysql" | "mariadb" | "clickhouse" | "cassandra" | "scylla",
+): string {
+  const name = {
+    mysql: "MySQL",
+    mariadb: "MariaDB",
+    clickhouse: "ClickHouse",
+    cassandra: "Cassandra",
+    scylla: "ScyllaDB",
+  }[flavor];
   if (!Number.isFinite(versionNum) || versionNum <= 0) return `${name} (unknown version)`;
   return `${name} ${Math.floor(versionNum / 10000)}.${Math.floor(versionNum / 100) % 100}.${versionNum % 100}`;
 }
