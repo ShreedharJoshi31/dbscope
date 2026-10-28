@@ -9,11 +9,13 @@ import (
 	"strings"
 	"time"
 
+	mysqldrv "github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v5/pgconn"
 	sqlitedrv "modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
 
 	"github.com/dbscope/dbscope/internal/conn"
+	"github.com/dbscope/dbscope/internal/mysql"
 	"github.com/dbscope/dbscope/internal/query/exec"
 	qguard "github.com/dbscope/dbscope/internal/query/guard"
 	"github.com/dbscope/dbscope/internal/sqlite"
@@ -144,6 +146,20 @@ func (s *server) execute(ctx context.Context, p conn.Profile, password string, b
 		}
 		return res, nil
 	}
+	if p.Engine == conn.EngineMySQL {
+		if err := mysql.Check(body.SQL); err != nil {
+			return nil, mapRunError(ctx, err)
+		}
+		src, _ := s.source.(engineSource)[conn.EngineMySQL].(*mysqlSource)
+		if src == nil {
+			return nil, mapRunError(ctx, errUnsupported)
+		}
+		res, err := src.Run(ctx, p, password, body.SQL, maxRows, explainOnly)
+		if err != nil {
+			return nil, mapRunError(ctx, err)
+		}
+		return res, nil
+	}
 	parsed, err := qguard.Check(body.SQL)
 	if err != nil {
 		return nil, mapRunError(ctx, err)
@@ -188,6 +204,7 @@ func mapRunError(ctx context.Context, err error) *runError {
 	var de *exec.DBError
 	var pgErr *pgconn.PgError
 	var liteErr *sqlitedrv.Error
+	var myErr *mysqldrv.MySQLError
 	switch {
 	case errors.As(err, &ge):
 		return &runError{status: http.StatusUnprocessableEntity, code: "rejected", message: ge.Message, detail: string(ge.Reason),
@@ -205,12 +222,14 @@ func mapRunError(ctx context.Context, err error) *runError {
 			e.position = de.Position
 		}
 		return e
-	case !errors.Is(err, exec.ErrConnect) && errors.As(err, &liteErr):
-		return sqliteError(ctx, liteErr)
 	case !errors.Is(err, exec.ErrConnect) && errors.Is(err, context.DeadlineExceeded):
 		return &runError{status: http.StatusGatewayTimeout, code: "timeout",
 			message:    "the query did not finish within the profile's statement timeout",
 			histStatus: store.HistoryError, histCode: "timeout"}
+	case !errors.Is(err, exec.ErrConnect) && errors.As(err, &liteErr):
+		return sqliteError(liteErr)
+	case !errors.Is(err, exec.ErrConnect) && errors.As(err, &myErr):
+		return mysqlError(myErr)
 	}
 	te := conn.Classify(err)
 	if te.Kind == "other" && !errors.Is(err, exec.ErrConnect) {
@@ -221,16 +240,13 @@ func mapRunError(ctx context.Context, err error) *runError {
 		sqlstate: te.SQLState, histStatus: store.HistoryError, histCode: "upstream"}
 }
 
-// sqliteError maps a SQLite error: the statement's own fault is a 400, an
-// interrupt at the deadline a timeout, and the authorizer's refusal a block.
-func sqliteError(ctx context.Context, e *sqlitedrv.Error) *runError {
+// sqliteError maps a SQLite error: the statement's own fault is a 400 and the
+// authorizer's refusal a block. A statement timeout arrives as DeadlineExceeded.
+func sqliteError(e *sqlitedrv.Error) *runError {
 	code := e.Code() & 0xff // the primary result code
 	r := &runError{status: http.StatusBadRequest, code: "database", message: e.Error(),
 		histStatus: store.HistoryError, histCode: "sqlite_" + strconv.Itoa(code)}
 	switch {
-	case code == sqlite3.SQLITE_INTERRUPT && errors.Is(ctx.Err(), context.DeadlineExceeded):
-		r.status, r.code, r.histCode = http.StatusGatewayTimeout, "timeout", "timeout"
-		r.message = "Stopped after the profile's statement timeout"
 	case code == sqlite3.SQLITE_AUTH, code == sqlite3.SQLITE_READONLY:
 		r.message = "Blocked: this would modify data or reach outside the database file (" + e.Error() + ")"
 	case code == sqlite3.SQLITE_BUSY, code == sqlite3.SQLITE_LOCKED:
@@ -238,6 +254,21 @@ func sqliteError(ctx context.Context, e *sqlitedrv.Error) *runError {
 		r.message = "Another process is writing to the database file; try again (" + e.Error() + ")"
 	case code == sqlite3.SQLITE_CANTOPEN, code == sqlite3.SQLITE_NOTADB, code == sqlite3.SQLITE_CORRUPT:
 		r.status, r.code, r.detail = http.StatusBadGateway, "upstream", "database"
+	}
+	return r
+}
+
+// mysqlError maps a MySQL or MariaDB error: the statement's own fault is a
+// 400, the server's statement limit a timeout, a refused write a block.
+func mysqlError(e *mysqldrv.MySQLError) *runError {
+	r := &runError{status: http.StatusBadRequest, code: "database", message: e.Message, sqlstate: string(e.SQLState[:]),
+		histStatus: store.HistoryError, histCode: "mysql_" + strconv.Itoa(int(e.Number))}
+	switch e.Number {
+	case 3024, 1969: // MySQL max_execution_time, MariaDB max_statement_time
+		r.status, r.code, r.histCode = http.StatusGatewayTimeout, "timeout", "timeout"
+		r.message = "Stopped after the profile's statement timeout"
+	case 1792: // ER_CANT_EXECUTE_IN_READ_ONLY_TRANSACTION
+		r.message = "Blocked: this would modify data (" + e.Message + ")"
 	}
 	return r
 }

@@ -74,6 +74,7 @@ VACUUM;`},
 		"2_drop.sql:PRAGMA:2":    {"DBS-SQLITE-FK-PRAGMA-IN-TX/high"},
 		"2_drop.sql:DROP:3":      {"DBS-SQLITE-DROP-CASCADE/high"},
 		"3_rebuild.sql:CREATE:2": {"DBS-SQLITE-RENAME-FIRST/high"},
+		"3_rebuild.sql:INSERT:3": {"DBS-SQLITE-TABLE-WORK/low"}, // the copy reads the renamed 50,000-row orders
 		"4_risky.sql:PRAGMA:1":   {"DBS-SQLITE-UNSAFE-PRAGMA/high"},
 		"4_risky.sql:VACUUM:2":   {"DBS-SQLITE-NOT-RUN/medium", "DBS-SQLITE-VACUUM/high"},
 		"4_risky.sql:ATTACH:3":   {"DBS-SQLITE-NOT-RUN/medium"},
@@ -153,5 +154,82 @@ func TestBaseFromLiveFile(t *testing.T) {
 	}
 	if !slices.Equal(got["1.sql:ALTER:2"], []string{"DBS-SQLITE-VERSION/medium", "DBS-SQLITE-TABLE-WORK/low"}) {
 		t.Errorf("plain column: %v", got["1.sql:ALTER:2"])
+	}
+}
+
+// Cases from review: names in another case, foreign keys turned back on,
+// unsized index builds, CTE-led DML, savepoint transactions, and defaults
+// SQLite only refuses on tables with rows.
+func TestAnalyzeReviewedCases(t *testing.T) {
+	cases := map[string]struct {
+		sql  string
+		want map[string][]string
+	}{
+		"case-insensitive names": {"ALTER TABLE USERS ADD COLUMN status TEXT NOT NULL;\nCREATE INDEX i ON Users (email);", map[string][]string{
+			"1.sql:ALTER:1":  {"DBS-SQLITE-NOT-NULL-NO-DEFAULT/high"},
+			"1.sql:CREATE:2": {"DBS-SQLITE-TABLE-WORK/high"},
+		}},
+		"foreign keys back on": {"PRAGMA foreign_keys = OFF;\nPRAGMA foreign_keys = ON;\nDROP TABLE users;", map[string][]string{
+			"1.sql:PRAGMA:1": {"DBS-SQLITE-FK-PRAGMA-IN-TX/medium"},
+			"1.sql:DROP:3":   {"DBS-SQLITE-DROP-CASCADE/high"},
+		}},
+		"cte-led update": {"WITH s AS (SELECT id FROM orders WHERE total > 1) UPDATE users SET name = (SELECT 'x' WHERE 1);", map[string][]string{
+			"1.sql:WITH:1": {"DBS-SQLITE-TABLE-WORK/high"},
+		}},
+		"savepoint released": {"SAVEPOINT a;\nRELEASE a;\nPRAGMA foreign_keys = OFF;", map[string][]string{
+			"1.sql:PRAGMA:3": {"DBS-SQLITE-FK-PRAGMA-IN-TX/medium"},
+		}},
+		"defaults checked against rows": {"ALTER TABLE users ADD COLUMN created TEXT DEFAULT CURRENT_TIMESTAMP;\nALTER TABLE users ADD COLUMN n INTEGER DEFAULT (1 + 1);\nALTER TABLE orders ADD COLUMN uid INTEGER REFERENCES users DEFAULT 1;\nALTER TABLE orders ADD COLUMN ok INTEGER REFERENCES users DEFAULT NULL;", map[string][]string{
+			"1.sql:ALTER:1": {"DBS-SQLITE-NONCONSTANT-DEFAULT/high"},
+			"1.sql:ALTER:2": {"DBS-SQLITE-NONCONSTANT-DEFAULT/high"},
+			"1.sql:ALTER:3": {"DBS-SQLITE-REFERENCES-DEFAULT/high"},
+		}},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			rep, err := Analyze(context.Background(), analyzeBase(), []ingest.Input{{Name: "1.sql", SQL: c.sql}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := findings(rep)
+			for k, v := range c.want {
+				if !slices.Equal(got[k], v) {
+					t.Errorf("%s: %v, want %v", k, got[k], v)
+				}
+			}
+			for k := range got {
+				if _, ok := c.want[k]; !ok {
+					t.Errorf("unexpected %s: %v", k, got[k])
+				}
+			}
+			if name == "savepoint released" && len(rep.Warnings) != 1 {
+				t.Errorf("warnings %v", rep.Warnings)
+			}
+		})
+	}
+
+	// A schema dump has no sizes: an index build is still work of unknown size.
+	dump := BaseFromDump("CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT);\nINSERT INTO users VALUES (1, 'a');\nPRAGMA temp_store_directory = '/tmp';")
+	rep, err := Analyze(context.Background(), dump, []ingest.Input{{Name: "1.sql", SQL: "CREATE INDEX i ON users (email);"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := findings(rep)["1.sql:CREATE:1"]; !slices.Equal(got, []string{"DBS-SQLITE-TABLE-WORK/medium"}) {
+		t.Errorf("unsized index: %v", got)
+	}
+	if !slices.ContainsFunc(rep.Warnings, func(w string) bool { return strings.HasPrefix(w, "2 statements of the base schema") }) {
+		t.Errorf("warnings %v", rep.Warnings)
+	}
+
+	// A rename in one file and a CREATE in the next is still rename-first.
+	rep, err = Analyze(context.Background(), analyzeBase(), []ingest.Input{
+		{Name: "1.sql", SQL: "ALTER TABLE orders RENAME TO orders_old;"},
+		{Name: "2.sql", SQL: "CREATE TABLE orders (id INTEGER PRIMARY KEY);"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := findings(rep)["2.sql:CREATE:1"]; !slices.Equal(got, []string{"DBS-SQLITE-RENAME-FIRST/high"}) {
+		t.Errorf("rename across files: %v", got)
 	}
 }

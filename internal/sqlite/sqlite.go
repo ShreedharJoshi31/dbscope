@@ -95,6 +95,9 @@ func (r readOnly) Connect(ctx context.Context) (driver.Conn, error) {
 	return c, nil
 }
 
+var readPragmas = map[string]bool{"table_list": true, "table_info": true, "table_xinfo": true, "index_list": true,
+	"index_info": true, "index_xinfo": true, "foreign_key_list": true}
+
 // authorize lets statements read and nothing else. A read-only open still
 // allows ATTACH, which reaches other files, so SQLite itself refuses it here
 // along with every write, schema change and extension load.
@@ -108,15 +111,12 @@ func authorize(action sqlite.AuthorizerActionCode, arg1, arg2, _, _ string) sqli
 		}
 		return sqlite.AuthorizerOK
 	case sqlite.AuthPragma:
-		// Table-valued pragmas (pragma_table_xinfo) read the catalog; settings that
-		// would lift query_only or edit the schema text are refused.
-		switch strings.ToLower(arg1) {
-		case "query_only", "writable_schema", "trusted_schema":
-			if arg2 != "" {
-				return sqlite.AuthorizerDeny
-			}
+		// Only the catalog reads introspection uses. Other pragmas can change
+		// settings when merely prepared (EXPLAIN PRAGMA ...), some of them
+		// process-wide, so they are refused whatever their argument.
+		if readPragmas[strings.ToLower(arg1)] {
+			return sqlite.AuthorizerOK
 		}
-		return sqlite.AuthorizerOK
 	}
 	return sqlite.AuthorizerDeny
 }

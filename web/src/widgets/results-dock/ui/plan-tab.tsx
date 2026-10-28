@@ -1,6 +1,5 @@
 import { ChevronsDownUp, ChevronsUpDown, ListTree } from "lucide-react";
 import { useState } from "react";
-import { useActiveConnection } from "@/entities/connection";
 import {
   countPlanNodes,
   ExecutedSql,
@@ -25,8 +24,8 @@ function PlanSummary({ output, stepsOnly }: { output: RunOutput; stepsOnly: bool
     <section aria-label="Plan summary" className="flex flex-col gap-1.5 border-b border-border-default px-3 py-2">
       {stepsOnly ? (
         <p className="text-xs text-text-muted">
-          EXPLAIN QUERY PLAN: the steps SQLite will take, without cost or row estimates · {countPlanNodes(plan) - 1}{" "}
-          steps
+          The steps the database will take, without cost estimates · {countPlanNodes(plan) - 1} steps · dbscope does not
+          check plans of this engine for problems
         </p>
       ) : (
         <p className="text-xs text-text-muted">
@@ -37,7 +36,7 @@ function PlanSummary({ output, stepsOnly }: { output: RunOutput; stepsOnly: bool
           {countPlanNodes(plan)} nodes
         </p>
       )}
-      {flags.length === 0 ? (
+      {stepsOnly ? null : flags.length === 0 ? (
         <p className="flex items-center gap-1 text-xs">
           <StatusIcon tone="success" className="size-3.5" />
           No plan problems flagged.
@@ -69,7 +68,7 @@ function PlanView({ output }: { output: RunOutput }) {
       return next;
     });
   const all = planNodeIds(output.plan).filter((id) => id !== "0");
-  const stepsOnly = useActiveConnection().profile?.engine === "sqlite";
+  const stepsOnly = Boolean(output.plan.stepsOnly);
 
   return (
     <div className="flex h-full min-h-0 flex-col">

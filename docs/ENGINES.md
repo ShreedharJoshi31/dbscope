@@ -28,7 +28,10 @@ internal/conn      Profile.Engine, Profile.Path, Capabilities; Postgres connecti
 internal/agent     engineSource routes each SchemaSource call by profile engine
   pools.go         PostgreSQL (pgx pools)
   sqlite_source.go SQLite (one read-only open per call)
-internal/sqlite    SQLite: Open, Introspect, Check, Run, Test
+  mysql_source.go  MySQL and MariaDB (database/sql pool per profile)
+internal/sqlite    SQLite: Open, Introspect, Check, Run, Test, Split, Analyze
+internal/mysql     MySQL and MariaDB: Open, Introspect, Check, Run, Test
+internal/mytest    MySQL and MariaDB containers for integration tests
 internal/schema    the shared relational model; Model.Engine is empty for PostgreSQL
 ```
 
@@ -41,6 +44,7 @@ models of their own rather than being forced into tables and columns.
 |---|---|---|---|---|---|
 | PostgreSQL | yes | yes | yes | yes | yes |
 | SQLite | yes | yes | not yet | yes | n/a |
+| MySQL / MariaDB | yes | yes | not yet | not yet | not yet |
 
 ### SQLite
 
@@ -111,7 +115,37 @@ any named file. Rules are checked with dbscope's SQLite (3.54.1); the version
 an application links may accept fewer ALTER forms, which the version rule
 calls out.
 
+### MySQL and MariaDB
+
+One profile engine, `mysql`, covers both; the server's `VERSION()` tells them
+apart, and test results report `mysql` or `mariadb`. Network fields and
+`sslMode` mean what they mean for PostgreSQL (`prefer` uses the driver's
+preferred TLS; `verify-ca` and `verify-full` check the CA, the latter also the
+host). Research with sources: [research-mysql.md](research-mysql.md). Tested
+against MySQL 8.4 and MariaDB 11.8 containers (`internal/mytest`, images from
+`public.ecr.aws/docker/library`).
+
+**ERD.** From `information_schema` in one `START TRANSACTION READ ONLY`
+(REPEATABLE READ): TABLES (InnoDB's `TABLE_ROWS` is an estimate that can be
+off by 40-50%), COLUMNS (`auto_increment`, generated columns and their
+expressions), STATISTICS (expression indexes on MySQL 8.0.13+; MariaDB has
+none), KEY_COLUMN_USAGE with REFERENTIAL_CONSTRAINTS, and CHECK constraints
+(TABLE_CONSTRAINTS on MySQL 8.0.16+, CHECK_CONSTRAINTS.TABLE_NAME on
+MariaDB). MariaDB quotes literal defaults and spells DEFAULT NULL as `NULL`;
+both are normalized. A profile's schemas are databases; empty means its own.
+
+**Queries.** Every statement runs alone (`multiStatements` off) in a
+`START TRANSACTION READ ONLY`, which the server enforces, after a session
+limit: `max_execution_time` in milliseconds on MySQL (SELECT only) or
+`max_statement_time` in seconds on MariaDB. `mysql.Check` refuses what a
+read-only transaction still allows: `INTO OUTFILE`/`DUMPFILE`/`@var`, locking
+reads, `:=` assignments, and `SLEEP`, `BENCHMARK`, `GET_LOCK`, `LOAD_FILE` and
+similar. Its tokenizer treats `/*! ... */` and `/*M! ... */` as code, since the
+servers execute them. The connection test lists write privileges from
+`SHOW GRANTS`: a dedicated read-only user is the stronger guard. Plans are
+tabular `EXPLAIN`, shown as steps.
+
 ## Next engines
 
-MySQL and MariaDB next (research in [research-mysql.md](research-mysql.md)),
-then MongoDB or Redis.
+MySQL online-DDL migration risk (the matrix in research-mysql.md), then
+MongoDB or Redis.

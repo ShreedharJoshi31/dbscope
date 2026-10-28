@@ -28,14 +28,17 @@ func TestCheck(t *testing.T) {
 		}
 	}
 	bad := map[string]guard.Reason{
-		"SELECT 1; SELECT 2":                 guard.MultipleStatements,
-		"DELETE FROM users":                  guard.NotSelect,
-		"ATTACH '/etc/passwd' AS p":          guard.NotSelect,
-		"PRAGMA query_only = 0":              guard.NotSelect,
-		"VACUUM INTO '/tmp/copy.db'":         guard.NotSelect,
-		"SELECT load_extension('/tmp/evil')": guard.FunctionNotAllowed,
-		"   -- only a comment":               guard.Syntax,
-		"SELECT 'it''s'; DROP TABLE users":   guard.MultipleStatements,
+		"SELECT 1; SELECT 2":                         guard.MultipleStatements,
+		"DELETE FROM users":                          guard.NotSelect,
+		"ATTACH '/etc/passwd' AS p":                  guard.NotSelect,
+		"PRAGMA query_only = 0":                      guard.NotSelect,
+		"VACUUM INTO '/tmp/copy.db'":                 guard.NotSelect,
+		"SELECT load_extension('/tmp/evil')":         guard.FunctionNotAllowed,
+		"   -- only a comment":                       guard.Syntax,
+		"SELECT 'it''s'; DROP TABLE users":           guard.MultipleStatements,
+		"EXPLAIN PRAGMA temp_store_directory='/tmp'": guard.NotSelect,
+		"EXPLAIN QUERY PLAN DELETE FROM users":       guard.NotSelect,
+		"WITH x AS (SELECT 1) DELETE FROM users":     guard.NotSelect,
 	}
 	for q, want := range bad {
 		var ge *guard.Error
@@ -83,12 +86,15 @@ func TestRunCannotWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	// Check would refuse these; Run must still fail on its own.
+	// Check would refuse these; Run must still fail on its own: the authorizer
+	// refuses writes and ATTACH, and VACUUM INTO also cannot run in Run's transaction.
 	for _, q := range []string{
 		"DELETE FROM users",
 		"WITH x AS (SELECT 1) INSERT INTO users (email) SELECT 'c@x' FROM x",
 		"VACUUM INTO '" + filepath.Join(t.TempDir(), "copy.db") + "'",
 		"SELECT load_extension('nonexistent')",
+		"EXPLAIN PRAGMA temp_store_directory='/tmp'",
+		"SELECT * FROM pragma_compile_options",
 		"ATTACH '" + filepath.Join(t.TempDir(), "new.db") + "' AS n",
 	} {
 		if _, err := Run(context.Background(), db.DB, q, 10, false); err == nil {

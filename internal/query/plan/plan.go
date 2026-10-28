@@ -37,6 +37,9 @@ type Node struct {
 	TimeShare           *float64 `json:"timeShare,omitempty"`
 	Flags               []Flag   `json:"flags"`
 	Children            []*Node  `json:"children"`
+	// StepsOnly marks the root of a plan that names steps with no estimates
+	// (SQLite's EXPLAIN QUERY PLAN, MySQL's tabular EXPLAIN); dbscope checks none of it.
+	StepsOnly bool `json:"stepsOnly,omitempty"`
 
 	raw *rawNode
 }

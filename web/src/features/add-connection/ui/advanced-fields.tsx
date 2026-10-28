@@ -120,7 +120,8 @@ export function AdvancedFields({
           )}
         </FormField>
 
-        {values.engine !== "sqlite" && (
+        {/* The EXPLAIN cost gate is PostgreSQL's. */}
+        {values.engine === "postgres" && (
           <FormField
             label="Cost limit"
             optional

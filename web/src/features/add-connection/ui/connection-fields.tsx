@@ -62,7 +62,7 @@ export function ConnectionFields({
           label="Database file"
           error={errorFor("path")}
           className="col-span-6"
-          description="The full path on this machine. dbscope opens it read-only and never creates it."
+          description="The full path on this machine. dbscope opens it read-only and never writes it; like any SQLite reader, it may add -wal and -shm files next to a WAL database."
         >
           {(control) => (
             <Input
@@ -133,7 +133,7 @@ function NetworkFields({
           <Input
             {...control}
             {...text("database")}
-            placeholder="postgres"
+            placeholder={values.engine === "mysql" ? "app" : "postgres"}
             autoComplete="off"
             spellCheck={false}
             className="font-mono"
@@ -145,7 +145,7 @@ function NetworkFields({
           <Input
             {...control}
             {...text("user")}
-            placeholder="postgres"
+            placeholder={values.engine === "mysql" ? "root" : "postgres"}
             autoComplete="off"
             spellCheck={false}
             className="font-mono"

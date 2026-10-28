@@ -161,7 +161,7 @@ export function toProfileInput(values: ConnectionFormValues): ProfileInput {
     };
   }
   const input: ProfileInput = {
-    engine: "postgres",
+    engine: values.engine,
     name: values.name.trim(),
     host: values.host.trim(),
     port: Number(values.port),

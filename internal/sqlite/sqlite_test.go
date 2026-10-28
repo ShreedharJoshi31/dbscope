@@ -34,6 +34,7 @@ CREATE TABLE tags (order_id INTEGER, tag TEXT, PRIMARY KEY (order_id, tag),
 CREATE INDEX orders_open ON orders (user_id) WHERE status <> 'closed';
 CREATE INDEX users_name_lower ON users (lower(name));
 CREATE VIEW open_orders AS SELECT id, user_id FROM orders WHERE status = 'open';
+CREATE TABLE loose (code TEXT PRIMARY KEY);
 CREATE VIRTUAL TABLE notes USING fts5(body);
 INSERT INTO users (email) VALUES ('a@x'), ('b@x');
 INSERT INTO statuses VALUES ('open', 'Open');
@@ -72,7 +73,7 @@ func TestIntrospect(t *testing.T) {
 	for _, r := range m.Relations {
 		names = append(names, string(r.Kind)+":"+r.Name)
 	}
-	if want := []string{"table:events", "view:open_orders", "table:orders", "table:statuses", "table:tags", "table:users"}; !slices.Equal(names, want) {
+	if want := []string{"table:events", "table:loose", "view:open_orders", "table:orders", "table:statuses", "table:tags", "table:users"}; !slices.Equal(names, want) {
 		t.Fatalf("relations %v, want %v (the FTS table and its shadow tables are skipped)", names, want)
 	}
 
@@ -123,6 +124,9 @@ func TestIntrospect(t *testing.T) {
 	}
 	if c := m.Relation(schema.QualifiedName{Schema: "main", Name: "events"}).Column("id"); c.Identity != "" {
 		t.Errorf("INTEGER PRIMARY KEY DESC is not the rowid: %+v", c)
+	}
+	if c := m.Relation(schema.QualifiedName{Schema: "main", Name: "loose"}).Column("code"); !c.Nullable {
+		t.Errorf("a TEXT primary key of a rowid table accepts NULL: %+v", c)
 	}
 	tags := m.Relation(schema.QualifiedName{Schema: "main", Name: "tags"})
 	if !slices.Equal(tags.PrimaryKey, []string{"order_id", "tag"}) || tags.Column("order_id").Identity != "" {
@@ -175,7 +179,7 @@ func TestOpenPathWithSpacesAndQuery(t *testing.T) {
 	}
 	defer db.Close()
 	m, err := Introspect(context.Background(), db.DB)
-	if err != nil || len(m.Relations) != 6 {
+	if err != nil || len(m.Relations) != 7 {
 		t.Fatalf("%v %v", m, err)
 	}
 }
@@ -233,5 +237,27 @@ func TestOpenWALInReadOnlyFolder(t *testing.T) {
 	}
 	if tr := Test(context.Background(), path); !tr.OK || len(tr.Warnings) != 1 {
 		t.Fatalf("test result %+v", tr)
+	}
+}
+
+// SQLite keeps a view whose table was dropped; the diagram still loads.
+func TestIntrospectOrphanView(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "v.db")
+	w, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Exec(`CREATE TABLE gone (x); CREATE VIEW orphan AS SELECT x FROM gone; DROP TABLE gone; CREATE TABLE kept (y)`); err != nil {
+		t.Fatal(err)
+	}
+	w.Close()
+	db, err := Open(path, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	m, err := Introspect(context.Background(), db.DB)
+	if err != nil || len(m.Relations) != 2 || len(m.Relation(schema.QualifiedName{Schema: "main", Name: "orphan"}).Columns) != 0 {
+		t.Fatalf("%+v %v", m, err)
 	}
 }

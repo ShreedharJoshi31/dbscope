@@ -37,6 +37,8 @@ export interface PlanFlag {
 
 export interface PlanNode {
   nodeType: string;
+  /** On the root: the engine names steps without estimates (SQLite, MySQL), and dbscope checks none of them. */
+  stepsOnly?: boolean;
   relation?: string;
   alias?: string;
   index?: string;

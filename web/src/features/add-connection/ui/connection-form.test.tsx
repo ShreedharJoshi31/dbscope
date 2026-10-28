@@ -13,6 +13,28 @@ function renderForm() {
 }
 
 describe("ConnectionForm", () => {
+  it("switches to MySQL with its default port and saves the engine", async () => {
+    let sent: ProfileInput | undefined;
+    server.use(
+      http.post("/api/profiles", async ({ request }) => {
+        sent = (await request.json()) as ProfileInput;
+        return HttpResponse.json(makeProfile({ ...sent, id: "01JB0000000000000000000010" }), { status: 201 });
+      }),
+    );
+    const { user, onSaved } = renderForm();
+    await user.click(screen.getByRole("radio", { name: "MySQL / MariaDB" }));
+    expect(screen.getByLabelText("Port")).toHaveValue("3306");
+    expect(screen.queryByLabelText("Paste a connection URL")).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText("Name"), "shop");
+    await user.click(screen.getByRole("radio", { name: /local/ }));
+    await user.type(screen.getByLabelText("Host"), "127.0.0.1");
+    await user.type(screen.getByLabelText("Database", { exact: true }), "app");
+    await user.type(screen.getByLabelText("User"), "reader");
+    await user.click(screen.getByRole("button", { name: "Save and open" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(sent).toMatchObject({ engine: "mysql", port: 3306, host: "127.0.0.1", database: "app" });
+  });
+
   it("switches to a SQLite file and saves its path", async () => {
     let sent: ProfileInput | undefined;
     server.use(

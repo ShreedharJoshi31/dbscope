@@ -66,7 +66,12 @@ func (sqliteSource) Run(ctx context.Context, p conn.Profile, sqlText string, max
 		return nil, fmt.Errorf("%w: %w", exec.ErrConnect, err)
 	}
 	defer db.Close()
-	return sqlite.Run(ctx, db.DB, sqlText, maxRows, explainOnly)
+	res, err := sqlite.Run(ctx, db.DB, sqlText, maxRows, explainOnly)
+	if err != nil && ctx.Err() != nil {
+		// The statement timeout interrupted it; say so rather than SQLite's "interrupted".
+		return nil, fmt.Errorf("%w: %w", ctx.Err(), err)
+	}
+	return res, err
 }
 
 func (sqliteSource) MigrationBase(context.Context, conn.Profile, string) (*migrate.Base, error) {

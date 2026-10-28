@@ -97,7 +97,11 @@ type statement struct {
 	kind  string
 	words []string // lower-cased words outside strings and comments
 	table string   // the table it acts on, unquoted, without "main."
+	to    string   // the new name of ALTER TABLE ... RENAME TO
 	inTx  bool     // inside an explicit BEGIN or SAVEPOINT of the file
+	// filtered is a WHERE outside parentheses; exprDefault and nullDefault
+	// describe a column's DEFAULT (an expression or CURRENT_*, or NULL).
+	filtered, exprDefault, nullDefault bool
 }
 
 // Analyze checks migration files against base. Statements run, in order,
@@ -113,10 +117,19 @@ func Analyze(ctx context.Context, base *Base, files []ingest.Input) (*migrate.Re
 
 	rep := &migrate.Report{Engine: "sqlite", Rating: score.Low, Statements: []migrate.Statement{},
 		Impact: map[string][]impact.Item{}, Unanalyzable: []migrate.Unanalyzable{}, Warnings: []string{}, Base: base.Source}
+	skipped := 0
 	for _, ddl := range base.DDL {
+		// A schema script may hold data or settings; only its definitions are replayed.
+		if w, _ := scan(ddl); len(w) == 0 || w[0] != "create" {
+			skipped++
+			continue
+		}
 		if _, err := scratch.ExecContext(ctx, ddl); err != nil {
 			rep.Warnings = append(rep.Warnings, fmt.Sprintf("the base schema statement %q could not be replayed (%v); statements that depend on it may be reported as rejected", firstLine(ddl), err))
 		}
+	}
+	if skipped > 0 {
+		rep.Warnings = append(rep.Warnings, fmt.Sprintf("%d statements of the base schema that are not CREATE statements were skipped", skipped))
 	}
 	before, err := Introspect(ctx, scratch.conn)
 	if err != nil {
@@ -130,20 +143,24 @@ func Analyze(ctx context.Context, base *Base, files []ingest.Input) (*migrate.Re
 		rep.Warnings = append(rep.Warnings, "table sizes are unknown, so the cost of rewrites and index builds is not rated by size")
 	}
 
-	a := &analysis{base: base, before: before, scratch: scratch, ctx: ctx}
+	a := &analysis{base: base, before: before, scratch: scratch, ctx: ctx, origin: map[string]string{}, renamedAway: map[string]bool{}}
+	for _, r := range before.Relations {
+		if r.Kind == schema.KindTable {
+			a.origin[strings.ToLower(r.Name)] = r.Name
+		}
+	}
 	for _, f := range files {
-		renamedAway := map[string]bool{}
 		for _, p := range Split(f.SQL) {
 			st := classify(f.Name, p, a.inTx)
 			a.trackTx(st)
-			out := a.check(st, renamedAway)
+			out := a.check(st)
 			rep.Statements = append(rep.Statements, out)
 			rep.Rating = score.Max(rep.Rating, out.Rating)
 		}
 		if a.inTx {
 			rep.Warnings = append(rep.Warnings, f.Name+" ends inside a transaction; dbscope committed it before the next file")
 			scratch.exec(ctx, "COMMIT")
-			a.inTx = false
+			a.inTx, a.savepoints = false, 0
 		}
 	}
 	after, err := Introspect(ctx, scratch.conn)
@@ -160,21 +177,46 @@ type analysis struct {
 	before  *schema.Model
 	scratch *scratchDB
 	inTx    bool
-	fkOff   bool // the migration turned foreign keys off outside a transaction
+	// savepoints counts open savepoints of a transaction a SAVEPOINT started
+	// (outside BEGIN); releasing the last one commits it.
+	savepoints int
+	fkOff      bool // the migration turned foreign keys off outside a transaction
+	// origin maps a table's current name, lower-cased (SQLite names are
+	// case-insensitive), to its name in the base; tables the migration
+	// created are absent.
+	origin      map[string]string
+	renamedAway map[string]bool
 }
 
 func (a *analysis) trackTx(st *statement) {
 	switch st.kind {
-	case "BEGIN", "SAVEPOINT":
-		a.inTx = true
+	case "BEGIN":
+		a.inTx, a.savepoints = true, 0
+	case "SAVEPOINT":
+		if !a.inTx || a.savepoints > 0 {
+			a.inTx = true
+			a.savepoints++
+		}
+	case "RELEASE":
+		if a.savepoints > 0 {
+			if a.savepoints--; a.savepoints == 0 {
+				a.inTx = false
+			}
+		}
 	case "COMMIT", "END", "ROLLBACK":
 		if !(st.kind == "ROLLBACK" && slices.Contains(st.words, "to")) {
-			a.inTx = false
+			a.inTx, a.savepoints = false, 0
 		}
 	}
 }
 
-func (a *analysis) check(st *statement, renamedAway map[string]bool) migrate.Statement {
+// baseName is the base table a current table name came from.
+func (a *analysis) baseName(table string) (string, bool) {
+	b, ok := a.origin[strings.ToLower(table)]
+	return b, ok
+}
+
+func (a *analysis) check(st *statement) migrate.Statement {
 	out := migrate.Statement{File: st.file, Line: st.piece.Line, Column: st.piece.Column, EndLine: st.piece.EndLine,
 		SQL: st.piece.SQL, Kind: st.kind, Tx: "none", Locks: []migrate.Lock{}, Work: "none", Rating: score.Low, Findings: []migrate.Finding{}}
 	if st.inTx {
@@ -183,16 +225,20 @@ func (a *analysis) check(st *statement, renamedAway map[string]bool) migrate.Sta
 	add := func(id string, r score.Rating, msg, alt string) {
 		out.Findings = append(out.Findings, migrate.Finding{RuleID: id, Rating: r, Message: msg, SafeAlternative: alt})
 	}
-	rows, sized := a.base.Rows[st.table]
+	baseTable, existed := a.baseName(st.table)
+	rows, sized := a.base.Rows[baseTable]
+	if !existed {
+		sized = false
+	}
 
 	// Rules that need the statement before it runs: what it replaces or drops.
 	switch st.kind {
 	case "DROP TABLE":
 		a.dropTableRules(st, add)
 	case "CREATE TABLE":
-		if renamedAway[st.table] {
+		if a.renamedAway[strings.ToLower(st.table)] {
 			add("DBS-SQLITE-RENAME-FIRST", score.High,
-				fmt.Sprintf("%s was renamed away earlier in this file and is now created again: the rename-first order rewrites references in views, triggers and foreign keys to the old copy", st.table),
+				fmt.Sprintf("%s was renamed away earlier in this migration and is now created again: the rename-first order rewrites references in views, triggers and foreign keys to the old copy", st.table),
 				"Create the new table under a temporary name, copy the rows, drop the old table, then rename the new one (the 12-step procedure in sqlite.org/lang_altertable.html)")
 		}
 	}
@@ -205,20 +251,33 @@ func (a *analysis) check(st *statement, renamedAway map[string]bool) migrate.Sta
 		add("DBS-SQLITE-REJECTED", score.High, "SQLite rejects this statement: "+err.Error(), rejectedAlternative(st))
 	}
 
+	if !rejected {
+		a.track(st)
+	}
 	switch st.kind {
-	case "ALTER TABLE RENAME TO":
-		renamedAway[st.table] = true
 	case "ALTER TABLE RENAME COLUMN":
 		add("DBS-SQLITE-VERSION", score.Low, "RENAME COLUMN needs SQLite 3.25.0 or later", "")
 	case "ALTER TABLE ADD COLUMN":
 		if slices.Contains(st.words, "check") || (slices.Contains(st.words, "generated") && slices.Contains(st.words, "not")) {
 			out.Work = "scan"
 		}
-		// SQLite checks this against the rows, which the scratch copy does not have.
-		if notNullWithoutDefault(st.words) && (!sized || rows > 0) && a.before.Relation(schema.QualifiedName{Schema: Schema, Name: st.table}) != nil {
-			add("DBS-SQLITE-NOT-NULL-NO-DEFAULT", score.High,
-				"SQLite refuses to add a NOT NULL column without a non-NULL default to a table that has rows",
-				"Give the column a DEFAULT, or add it nullable, backfill it, and rebuild the table with NOT NULL")
+		// SQLite checks these against the rows, which the scratch copy does not have.
+		if mayHaveRows := existed && (!sized || rows > 0); mayHaveRows {
+			if notNullWithoutDefault(st.words) {
+				add("DBS-SQLITE-NOT-NULL-NO-DEFAULT", score.High,
+					"SQLite refuses to add a NOT NULL column without a non-NULL default to a table that has rows",
+					"Give the column a DEFAULT, or add it nullable, backfill it, and rebuild the table with NOT NULL")
+			}
+			if st.exprDefault {
+				add("DBS-SQLITE-NONCONSTANT-DEFAULT", score.High,
+					"SQLite refuses to add a column whose default is CURRENT_TIME, CURRENT_DATE, CURRENT_TIMESTAMP or an expression in parentheses to a table that has rows",
+					"Add the column without that default and fill it with an UPDATE, or rebuild the table")
+			}
+			if slices.Contains(st.words, "references") && slices.Contains(st.words, "default") && !st.nullDefault && !a.fkOff {
+				add("DBS-SQLITE-REFERENCES-DEFAULT", score.High,
+					"with foreign keys on, SQLite refuses to add a REFERENCES column with a non-NULL default to a table that has rows",
+					"Add the column with DEFAULT NULL and fill it with an UPDATE")
+			}
 		}
 	case "ALTER TABLE DROP COLUMN":
 		out.Work = "rewrite"
@@ -226,7 +285,7 @@ func (a *analysis) check(st *statement, renamedAway map[string]bool) migrate.Sta
 	case "ALTER TABLE ALTER COLUMN", "ALTER TABLE ADD CONSTRAINT", "ALTER TABLE DROP CONSTRAINT":
 		add("DBS-SQLITE-VERSION", score.High, "this ALTER form arrived in SQLite 3.53.0 (April 2026); older versions reject it", "Check the SQLite version your application links, or use the 12-step table rebuild")
 	case "CREATE INDEX", "CREATE UNIQUE INDEX":
-		if _, existed := a.base.Rows[st.table]; existed {
+		if existed {
 			out.Work = "index_build"
 		}
 		if st.kind == "CREATE UNIQUE INDEX" && sized && rows > 0 {
@@ -234,11 +293,13 @@ func (a *analysis) check(st *statement, renamedAway map[string]bool) migrate.Sta
 		}
 	case "INSERT", "REPLACE":
 		if src := selectSource(st); src != "" {
-			st.table, rows, sized = src, a.base.Rows[src], hasKey(a.base.Rows, src)
+			st.table = src
+			b, ok := a.baseName(src)
+			rows, sized, existed = a.base.Rows[b], ok && hasKey(a.base.Rows, b), ok
 			out.Work = "rewrite"
 		}
 	case "UPDATE", "DELETE":
-		if !slices.Contains(st.words, "where") {
+		if !st.filtered {
 			out.Work = "rewrite"
 		}
 	case "VACUUM":
@@ -253,7 +314,7 @@ func (a *analysis) check(st *statement, renamedAway map[string]bool) migrate.Sta
 	} else if out.Work != "none" || isWrite(st.kind) {
 		out.Locks = append(out.Locks, migrate.Lock{Relation: "main", Mode: "DATABASE WRITE"})
 	}
-	if out.Work != "none" && st.kind != "VACUUM" {
+	if out.Work != "none" && st.kind != "VACUUM" && existed {
 		a.sizeRule(st, &out, rows, sized, add)
 	}
 	for _, f := range out.Findings {
@@ -261,6 +322,21 @@ func (a *analysis) check(st *statement, renamedAway map[string]bool) migrate.Sta
 	}
 	out.Score = map[score.Rating]int{score.Low: 0, score.Medium: 4, score.High: 8, score.Critical: 12}[out.Rating]
 	return out
+}
+
+// track follows renames and drops so later statements find the base table.
+func (a *analysis) track(st *statement) {
+	key := strings.ToLower(st.table)
+	switch st.kind {
+	case "ALTER TABLE RENAME TO":
+		a.renamedAway[key] = true
+		if b, ok := a.origin[key]; ok {
+			delete(a.origin, key)
+			a.origin[strings.ToLower(st.to)] = b
+		}
+	case "DROP TABLE":
+		delete(a.origin, key)
+	}
 }
 
 // notNullWithoutDefault reports a column definition with NOT NULL and no
@@ -283,11 +359,11 @@ func hasKey(m map[string]int64, k string) bool { _, ok := m[k]; return ok }
 func (a *analysis) sizeRule(st *statement, out *migrate.Statement, rows int64, sized bool, add func(string, score.Rating, string, string)) {
 	verb := map[string]string{"scan": "checks every row of", "index_build": "builds an index over", "rewrite": "rewrites"}[out.Work]
 	if !sized {
-		if _, existed := a.base.Rows[st.table]; !existed && st.table != "" && a.before.Relation(schema.QualifiedName{Schema: Schema, Name: st.table}) == nil {
-			return // a table this migration created: empty when the statement runs
-		}
 		add("DBS-SQLITE-TABLE-WORK", score.Medium,
 			fmt.Sprintf("this %s %s, whose size is unknown, while holding the database write lock, so every other writer waits", verb, nameOr(st.table, "the table")), "")
+		return
+	}
+	if rows == 0 {
 		return
 	}
 	r := score.Low
@@ -296,9 +372,6 @@ func (a *analysis) sizeRule(st *statement, out *migrate.Statement, rows int64, s
 		r = score.High
 	case rows >= 100_000:
 		r = score.Medium
-	}
-	if rows == 0 {
-		return
 	}
 	add("DBS-SQLITE-TABLE-WORK", r,
 		fmt.Sprintf("this %s %s (%d rows) while holding the database write lock, so every other writer waits; in rollback-journal mode readers are blocked too once the change outgrows the page cache", verb, nameOr(st.table, "the table"), rows),
@@ -313,8 +386,14 @@ func nameOr(name, fallback string) string {
 }
 
 func (a *analysis) dropTableRules(st *statement, add func(string, score.Rating, string, string)) {
+	// The current state, not the base: earlier statements may have renamed
+	// children or added foreign keys, which SQLite rewrites to follow renames.
+	now, err := Introspect(a.ctx, a.scratch.conn)
+	if err != nil {
+		now = a.before
+	}
 	var cascades, refs []string
-	for _, r := range a.before.Relations {
+	for _, r := range now.Relations {
 		for _, fk := range r.ForeignKeys {
 			if !strings.EqualFold(fk.Ref.Name, st.table) || strings.EqualFold(r.Name, st.table) {
 				continue
@@ -354,6 +433,10 @@ func (a *analysis) pragmaRules(st *statement, add func(string, score.Rating, str
 	value := ""
 	if len(st.words) > 2 {
 		value = st.words[len(st.words)-1]
+	}
+	if name == "foreign_keys" && !st.inTx && slices.Contains([]string{"on", "1", "true", "yes"}, value) {
+		a.fkOff = false
+		return
 	}
 	if name == "foreign_keys" && slices.Contains([]string{"off", "0", "false", "no"}, value) {
 		if st.inTx {
@@ -431,29 +514,62 @@ func firstLine(s string) string {
 func classify(file string, p Piece, inTx bool) *statement {
 	st := &statement{file: file, piece: p, inTx: inTx}
 	var names []string // words with their original case, quotes removed
+	var depths []int   // parenthesis depth of each word
+	depth, afterDefault := 0, false
 	for i := 0; i < len(p.SQL); {
 		j, tok := nextToken(p.SQL, i)
 		text := p.SQL[i:j]
+		word := ""
 		switch {
 		case tok == tkWS || tok == tkSemi:
+			i = j
+			continue
+		case text == "(":
+			depth++
+		case text == ")":
+			depth = max(0, depth-1)
 		case isWord(rune(text[0])):
-			st.words = append(st.words, strings.ToLower(text))
-			names = append(names, text)
+			word = text
 		case text[0] == '"' || text[0] == '`' || text[0] == '[':
-			name := strings.ReplaceAll(text[1:len(text)-1], `""`, `"`)
-			st.words = append(st.words, strings.ToLower(name))
-			names = append(names, name)
+			word = strings.ReplaceAll(text[1:max(1, len(text)-1)], `""`, `"`)
 		case text == ".":
 			// "main"."t": drop the schema written before the dot
 			if n := len(names); n > 0 && strings.EqualFold(names[n-1], Schema) {
-				st.words, names = st.words[:n-1], names[:n-1]
+				st.words, names, depths = st.words[:n-1], names[:n-1], depths[:n-1]
 			}
+		}
+		if afterDefault {
+			lw := strings.ToLower(word)
+			st.exprDefault = text == "(" || lw == "current_time" || lw == "current_date" || lw == "current_timestamp"
+			st.nullDefault = lw == "null"
+			afterDefault = false
+		}
+		if word != "" {
+			st.words = append(st.words, strings.ToLower(word))
+			names = append(names, word)
+			depths = append(depths, depth)
+			afterDefault = strings.EqualFold(word, "default")
 		}
 		i = j
 	}
-	w := st.words
+	// WITH ... is classified by the statement after its common table expressions.
+	off := 0
+	if len(st.words) > 0 && st.words[0] == "with" {
+		for k := 1; k < len(st.words); k++ {
+			if depths[k] == 0 && slices.Contains([]string{"select", "insert", "replace", "update", "delete"}, st.words[k]) {
+				off = k
+				break
+			}
+		}
+	}
+	for k := off; k < len(st.words); k++ {
+		if depths[k] == 0 && st.words[k] == "where" {
+			st.filtered = true
+		}
+	}
+	w, n := st.words[off:], names[off:]
 	at := func(i int) string {
-		if i < len(w) {
+		if i >= 0 && i < len(w) {
 			return w[i]
 		}
 		return ""
@@ -462,8 +578,8 @@ func classify(file string, p Piece, inTx bool) *statement {
 		for at(i) == "if" || at(i) == "not" || at(i) == "exists" {
 			i++
 		}
-		if i < len(names) {
-			return names[i]
+		if i >= 0 && i < len(n) {
+			return n[i]
 		}
 		return ""
 	}
@@ -475,11 +591,9 @@ func classify(file string, p Piece, inTx bool) *statement {
 		}
 		switch {
 		case at(i) == "unique" && at(i+1) == "index":
-			st.kind = "CREATE UNIQUE INDEX"
-			st.table = name(slices.Index(w, "on") + 1)
+			st.kind, st.table = "CREATE UNIQUE INDEX", name(slices.Index(w, "on")+1)
 		case at(i) == "index":
-			st.kind = "CREATE INDEX"
-			st.table = name(slices.Index(w, "on") + 1)
+			st.kind, st.table = "CREATE INDEX", name(slices.Index(w, "on")+1)
 		case at(i) == "virtual":
 			st.kind, st.table = "CREATE VIRTUAL TABLE", name(i+2)
 		case at(i) == "table" && slices.Contains(w, "as") && slices.Contains(w, "select"):
@@ -498,6 +612,9 @@ func classify(file string, p Piece, inTx bool) *statement {
 		switch {
 		case len(rest) >= 2 && rest[0] == "rename" && rest[1] == "to":
 			st.kind = "ALTER TABLE RENAME TO"
+			if k := slices.Index(w, "to"); k+1 < len(n) {
+				st.to = n[k+1]
+			}
 		case len(rest) >= 1 && rest[0] == "rename":
 			st.kind = "ALTER TABLE RENAME COLUMN"
 		case len(rest) >= 2 && rest[0] == "add" && rest[1] == "constraint":
@@ -514,8 +631,7 @@ func classify(file string, p Piece, inTx bool) *statement {
 			st.kind = "ALTER TABLE"
 		}
 	case "insert", "replace":
-		st.kind = strings.ToUpper(at(0))
-		st.table = name(slices.Index(w, "into") + 1)
+		st.kind, st.table = strings.ToUpper(at(0)), name(slices.Index(w, "into")+1)
 	case "update":
 		i := 1
 		if at(i) == "or" {
@@ -524,8 +640,6 @@ func classify(file string, p Piece, inTx bool) *statement {
 		st.kind, st.table = "UPDATE", name(i)
 	case "delete":
 		st.kind, st.table = "DELETE", name(slices.Index(w, "from")+1)
-	case "begin", "commit", "end", "rollback", "savepoint", "release", "pragma", "vacuum", "reindex", "analyze", "attach", "detach", "select", "with", "values", "explain":
-		st.kind = strings.ToUpper(at(0))
 	default:
 		st.kind = strings.ToUpper(at(0))
 	}
@@ -625,6 +739,9 @@ func (s *scratchDB) Close() {
 	s.db.Close()
 }
 
+var processPragmas = map[string]bool{"hard_heap_limit": true, "soft_heap_limit": true, "temp_store_directory": true,
+	"data_store_directory": true, "threads": true}
+
 type scratchConnector struct{ driver.Connector }
 
 func (r scratchConnector) Connect(ctx context.Context) (driver.Conn, error) {
@@ -643,6 +760,9 @@ func (r scratchConnector) Connect(ctx context.Context) (driver.Conn, error) {
 		case action == sqlite.AuthAttach && arg1 != "" && arg1 != ":memory:":
 			return sqlite.AuthorizerDeny
 		case action == sqlite.AuthFunction && strings.EqualFold(arg2, "load_extension"):
+			return sqlite.AuthorizerDeny
+		// Settings of the whole process, which runs dbscope's own store too.
+		case action == sqlite.AuthPragma && processPragmas[strings.ToLower(arg1)]:
 			return sqlite.AuthorizerDeny
 		}
 		return sqlite.AuthorizerOK

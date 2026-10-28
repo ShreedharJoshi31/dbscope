@@ -83,10 +83,36 @@ func TestSQLiteProfile(t *testing.T) {
 		t.Errorf("analyze %s", w.Body.String())
 	}
 
+	// The statement timeout answers 504, not SQLite's "interrupted".
+	slow, _ := json.Marshal(map[string]any{"name": "Shop", "engine": "sqlite", "path": path, "env": "local", "statementTimeoutMs": 200})
+	expect(t, e.do("PUT", "/api/profiles/"+p.ID, string(slow)), 200, "")
+	expect(t, e.do("POST", "/api/profiles/"+p.ID+"/query",
+		`{"sql":"WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c) SELECT count(*) FROM c"}`), 504, "timeout")
+
 	missing, _ := json.Marshal(map[string]any{"name": "Gone", "engine": "sqlite", "path": filepath.Join(t.TempDir(), "gone.db"), "env": "local"})
 	w = e.do("POST", "/api/profiles/test", string(missing))
 	json.Unmarshal(w.Body.Bytes(), &tr)
 	if tr.OK || tr.Error == nil {
 		t.Fatalf("missing file tested ok: %s", w.Body.String())
+	}
+}
+
+// Switching a profile with a stored password to SQLite drops the secret.
+func TestSwitchToSQLiteDropsPassword(t *testing.T) {
+	e := keyringEnv(t)
+	w := e.do("POST", "/api/profiles", `{"name":"Orders","host":"db.example","database":"app","user":"reader","env":"staging","password":"`+testPass+`"}`)
+	expect(t, w, 201, "")
+	var p conn.Profile
+	json.Unmarshal(w.Body.Bytes(), &p)
+	path := filepath.Join(t.TempDir(), "x.db")
+	body, _ := json.Marshal(map[string]any{"name": "Orders", "engine": "sqlite", "path": path, "env": "staging"})
+	w = e.do("PUT", "/api/profiles/"+p.ID, string(body))
+	expect(t, w, 200, "")
+	json.Unmarshal(w.Body.Bytes(), &p)
+	if p.HasPassword {
+		t.Fatal("hasPassword kept")
+	}
+	if pw, ok, _ := e.vault.Get(p.ID); ok || pw != "" {
+		t.Fatal("secret kept in the vault")
 	}
 }

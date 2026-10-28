@@ -29,7 +29,21 @@ func Check(sqlText string) error {
 		return &guard.Error{Reason: guard.Syntax, Message: "The statement is empty"}
 	}
 	switch words[0] {
-	case "select", "with", "values", "explain":
+	case "select", "values":
+	case "with":
+		// The statement after the common table expressions decides.
+		if verb := classify("", Piece{SQL: sqlText}, false).kind; verb != "WITH" && verb != "SELECT" {
+			return &guard.Error{Reason: guard.NotSelect, Message: fmt.Sprintf("Only read-only queries run here; WITH ... %s is not one", strings.Fields(verb)[0])}
+		}
+	case "explain":
+		// EXPLAIN [QUERY PLAN] of a query; explaining anything else still prepares it.
+		rest := words[1:]
+		if len(rest) >= 2 && rest[0] == "query" && rest[1] == "plan" {
+			rest = rest[2:]
+		}
+		if len(rest) == 0 || (rest[0] != "select" && rest[0] != "with" && rest[0] != "values") {
+			return &guard.Error{Reason: guard.NotSelect, Message: "EXPLAIN runs here only in front of a query"}
+		}
 	default:
 		return &guard.Error{Reason: guard.NotSelect, Message: fmt.Sprintf("Only read-only queries run here; %s is not one", strings.ToUpper(words[0]))}
 	}
@@ -156,7 +170,7 @@ func queryPlan(ctx context.Context, tx *sql.Tx, sqlText string) (*plan.Node, err
 		return nil, err
 	}
 	defer rows.Close()
-	root := &plan.Node{NodeType: "Query", Flags: []plan.Flag{}, Children: []*plan.Node{}}
+	root := &plan.Node{NodeType: "Query", Flags: []plan.Flag{}, Children: []*plan.Node{}, StepsOnly: true}
 	byID := map[int64]*plan.Node{0: root}
 	for rows.Next() {
 		var id, parent, unused int64

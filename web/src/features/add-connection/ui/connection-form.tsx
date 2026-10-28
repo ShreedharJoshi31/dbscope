@@ -22,6 +22,7 @@ import { ConnectionFields } from "@/features/add-connection/ui/connection-fields
 import { ConnectionUrlField } from "@/features/add-connection/ui/connection-url-field";
 import {
   type ApiError,
+  type Engine,
   type Env,
   type ParsedConnectionUrl,
   type Profile,
@@ -104,6 +105,12 @@ export function ConnectionForm({ profile, submitLabel, onSaved, onCancel, autoFo
   function change<K extends ConnectionField>(field: K, value: ConnectionFormValues[K]) {
     setValues((prev) => {
       const next = { ...prev, [field]: value };
+      // Moving between engines moves an untouched default port with it.
+      if (field === "engine") {
+        const from = ENGINE_META[prev.engine].defaultPort;
+        const to = ENGINE_META[value as Engine].defaultPort;
+        if (to && (prev.port === "" || prev.port === String(from))) next.port = String(to);
+      }
       if (field === "env" && !timeoutEdited) {
         next.statementTimeoutMs = String(defaultStatementTimeoutMs(value as Env));
       }

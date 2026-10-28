@@ -57,7 +57,7 @@ export function SqlEditor({ tab }: { tab: SqlTab }) {
         profile,
         sql: tab.sql,
         kind,
-        analyze: analyze && profile.engine !== "sqlite",
+        analyze: analyze && profile.engine === "postgres",
         maxRows,
         tabId: tab.id,
       });
@@ -90,8 +90,8 @@ export function SqlEditor({ tab }: { tab: SqlTab }) {
           <ScanText aria-hidden />
           Explain
         </ToolbarButton>
-        {/* SQLite has no EXPLAIN ANALYZE. */}
-        {profile?.engine !== "sqlite" && (
+        {/* EXPLAIN ANALYZE is PostgreSQL's. */}
+        {profile?.engine === "postgres" && (
           <label htmlFor={analyzeId} className="flex items-center gap-1.5 text-xs text-text-muted">
             <Checkbox
               id={analyzeId}

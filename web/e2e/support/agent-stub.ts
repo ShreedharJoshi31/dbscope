@@ -9,7 +9,7 @@ export type Env = "local" | "staging" | "prod-replica";
 export interface StubProfile {
   id: string;
   name: string;
-  engine: "postgres" | "sqlite";
+  engine: "postgres" | "mysql" | "sqlite";
   path?: string;
   capabilities: { query: boolean; ask: boolean; migrations: boolean; workload: boolean };
   host: string;
@@ -33,8 +33,9 @@ export const E2E_TOKEN = "e2e-session-token";
 const NOW = "2026-10-26T10:00:00Z";
 
 function capabilitiesOf(engine: StubProfile["engine"] | undefined): StubProfile["capabilities"] {
-  const all = engine !== "sqlite";
-  return { query: all, ask: all, migrations: all, workload: all };
+  if (engine === "sqlite") return { query: true, ask: false, migrations: true, workload: false };
+  if (engine === "mysql") return { query: true, ask: false, migrations: false, workload: false };
+  return { query: true, ask: true, migrations: true, workload: true };
 }
 
 export function stubProfile(overrides: Partial<StubProfile> = {}): StubProfile {

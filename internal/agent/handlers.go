@@ -7,6 +7,7 @@ import (
 	"runtime"
 
 	"github.com/dbscope/dbscope/internal/conn"
+	"github.com/dbscope/dbscope/internal/mysql"
 	"github.com/dbscope/dbscope/internal/secrets"
 	"github.com/dbscope/dbscope/internal/sqlite"
 	"github.com/dbscope/dbscope/internal/store"
@@ -103,6 +104,14 @@ func (s *server) updateProfile(w http.ResponseWriter, r *http.Request) {
 	if in.Password != nil {
 		p.HasPassword = *in.Password != ""
 	}
+	// A file-based engine has no password: a switch to one drops the stored secret.
+	if p.Engine == conn.EngineSQLite && old.HasPassword {
+		if s.locked(w) {
+			return
+		}
+		empty := ""
+		in.Password, p.HasPassword = &empty, false
+	}
 	updated, err := s.store.UpdateProfile(r.Context(), p)
 	if err != nil {
 		s.storeError(w, r, err)
@@ -195,8 +204,11 @@ func (s *server) testSaved(w http.ResponseWriter, r *http.Request) {
 }
 
 func testProfile(ctx context.Context, p conn.Profile, password string) conn.TestResult {
-	if p.Engine == conn.EngineSQLite {
+	switch p.Engine {
+	case conn.EngineSQLite:
 		return sqlite.Test(ctx, p.Path)
+	case conn.EngineMySQL:
+		return mysql.Test(ctx, p, password)
 	}
 	return conn.Test(ctx, p, password)
 }

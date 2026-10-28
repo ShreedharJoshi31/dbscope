@@ -79,6 +79,10 @@ func configure(cc *pgx.ConnConfig, p Profile, password string) error {
 	return nil
 }
 
+// TLSConfigs is tlsConfigsFor for other engines' drivers, so a profile's
+// sslMode means the same thing whatever the engine.
+func TLSConfigs(p Profile) ([]*tls.Config, error) { return tlsConfigsFor(p) }
+
 // tlsConfigsFor mirrors libpq's sslmode semantics as implemented by pgconn:
 // the first config is tried first, later ones are fallbacks (nil = plaintext).
 func tlsConfigsFor(p Profile) ([]*tls.Config, error) {

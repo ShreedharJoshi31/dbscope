@@ -41,7 +41,7 @@ func Introspect(ctx context.Context, db Beginner) (*schema.Model, error) {
 	m.ServerVersion = major*1_000_000 + minor*1_000 + patch
 
 	// pragma_table_list (SQLite 3.37) types FTS and other virtual tables and their shadow tables, which are skipped.
-	rows, err := tx.QueryContext(ctx, `SELECT type, name, wr FROM pragma_table_list
+	rows, err := tx.QueryContext(ctx, `SELECT type, name, wr, strict FROM pragma_table_list
 		WHERE schema = 'main' AND type IN ('table', 'view') AND name NOT LIKE 'sqlite\_%' ESCAPE '\' ORDER BY name`)
 	if err != nil {
 		return nil, err
@@ -49,11 +49,12 @@ func Introspect(ctx context.Context, db Beginner) (*schema.Model, error) {
 	type object struct {
 		kind, name   string
 		withoutRowid bool
+		strict       bool
 	}
 	var objects []object
 	for rows.Next() {
 		var o object
-		if err := rows.Scan(&o.kind, &o.name, &o.withoutRowid); err != nil {
+		if err := rows.Scan(&o.kind, &o.name, &o.withoutRowid, &o.strict); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -74,7 +75,13 @@ func Introspect(ctx context.Context, db Beginner) (*schema.Model, error) {
 			r.Kind = schema.KindView
 		}
 		if err := columns(ctx, tx, &r); err != nil {
-			return nil, fmt.Errorf("columns of %s: %w", o.name, err)
+			// SQLite keeps a view whose table was dropped, or that calls a function
+			// only the application registers; it is shown without columns rather
+			// than failing the whole diagram.
+			if r.Kind != schema.KindView {
+				return nil, fmt.Errorf("columns of %s: %w", o.name, err)
+			}
+			r.Columns = nil
 		}
 		if r.Kind == schema.KindTable {
 			if n, ok := stats[o.name]; ok {
@@ -87,6 +94,13 @@ func Introspect(ctx context.Context, db Beginner) (*schema.Model, error) {
 				return nil, fmt.Errorf("indexes of %s: %w", o.name, err)
 			}
 			markRowidAlias(&r, o.withoutRowid)
+			// Primary keys of ordinary rowid tables accept NULL, a compatibility quirk;
+			// STRICT and WITHOUT ROWID tables and the rowid alias do not.
+			for _, name := range r.PrimaryKey {
+				if c := r.Column(name); c != nil && (o.strict || o.withoutRowid || c.Identity != "") {
+					c.Nullable = false
+				}
+			}
 		}
 		m.Relations = append(m.Relations, r)
 	}
@@ -118,7 +132,7 @@ func columns(ctx context.Context, tx *sql.Tx, r *schema.Relation) error {
 		if hidden == 1 {
 			continue // a virtual table's hidden column
 		}
-		c.Nullable = notNull == 0 && pkPos == 0
+		c.Nullable = notNull == 0
 		c.Default = dflt.String
 		switch hidden {
 		case 2:

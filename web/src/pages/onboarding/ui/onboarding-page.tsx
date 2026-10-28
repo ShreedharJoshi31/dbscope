@@ -22,7 +22,8 @@ export function OnboardingPage() {
           <div className="flex flex-col gap-1">
             <h1 className="text-xl font-semibold tracking-tight">Connect a database</h1>
             <p className="text-sm text-text-muted">
-              Choose PostgreSQL or a SQLite file, test the connection, then save it to open the workbench.
+              Choose PostgreSQL, MySQL or MariaDB, or a SQLite file, test the connection, then save it to open the
+              workbench.
             </p>
           </div>
           <div className="rounded-lg border border-border-default bg-surface-raised p-6 shadow-sm">

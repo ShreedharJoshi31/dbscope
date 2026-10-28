@@ -19,6 +19,10 @@ type Engine string
 const (
 	EnginePostgres Engine = "postgres"
 	EngineSQLite   Engine = "sqlite"
+	// EngineMySQL covers MySQL and MariaDB; EngineMariaDB appears only in test
+	// results, which report the server actually reached.
+	EngineMySQL   Engine = "mysql"
+	EngineMariaDB Engine = "mariadb"
 )
 
 // Capabilities are the modes an engine supports beyond the ERD, which every engine has.
@@ -35,6 +39,8 @@ func (e Engine) Capabilities() Capabilities {
 		return Capabilities{Query: true, Ask: true, Migrations: true, Workload: true}
 	case EngineSQLite:
 		return Capabilities{Query: true, Migrations: true}
+	case EngineMySQL:
+		return Capabilities{Query: true}
 	}
 	return Capabilities{}
 }
@@ -154,11 +160,14 @@ func (in ProfileInput) Profile() (Profile, error) {
 	switch p.Engine {
 	case "":
 		p.Engine = EnginePostgres
-	case EnginePostgres, EngineSQLite:
+	case EnginePostgres, EngineSQLite, EngineMySQL:
 	default:
-		return Profile{}, invalid("engine must be one of postgres, sqlite")
+		return Profile{}, invalid("engine must be one of postgres, sqlite, mysql")
 	}
 	p.Capabilities = p.Engine.Capabilities()
+	if p.Engine == EngineMySQL {
+		p.Port = 3306
+	}
 	if p.Engine == EngineSQLite {
 		if err := p.fileTarget(in); err != nil {
 			return Profile{}, err

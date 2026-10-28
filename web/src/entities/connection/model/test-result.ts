@@ -28,7 +28,7 @@ export const ERROR_KIND_COPY: Record<TestErrorKind, { title: string; hint: strin
   },
   database: {
     title: "Database not available",
-    hint: "Check that the database exists and that this user is allowed to connect to it.",
+    hint: "Check that the database exists and that you are allowed to open it.",
   },
   other: {
     title: "Connection failed",
@@ -50,7 +50,10 @@ export function buildChecklist(result: TestResult, env: Env | undefined): Checkl
     items.push({
       id: "version",
       tone: "info",
-      text: `Server version: ${engineLabel(result.engine)} ${result.serverVersion}`,
+      text:
+        result.engine === "sqlite"
+          ? `SQLite library: ${result.serverVersion} (dbscope's own; your application may link another version)`
+          : `Server version: ${engineLabel(result.engine)} ${result.serverVersion}`,
     });
   }
 
