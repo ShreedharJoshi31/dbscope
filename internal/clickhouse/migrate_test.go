@@ -49,7 +49,8 @@ DELETE FROM events WHERE id = 1;`}})
 	}
 	for i, w := range want {
 		st := rep.Statements[i]
-		if st.Kind != w.kind || st.Rating != w.rating || w.rule != "" && !hasRule(st, w.rule) {
+		if st.Kind != w.kind || st.Rating != w.rating || st.Score != map[score.Rating]int{score.Low: 0, score.Medium: 4, score.High: 8}[w.rating] ||
+			w.rule != "" && !hasRule(st, w.rule) {
 			t.Errorf("statement %d %s: %s %s %+v", i, st.SQL, st.Kind, st.Rating, st.Findings)
 		}
 	}

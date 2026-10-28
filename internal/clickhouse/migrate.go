@@ -217,8 +217,8 @@ func splitScript(s string) []piece {
 	return out
 }
 
-func (a *chAnalysis) statement(file string, p piece) migrate.Statement {
-	out := migrate.Statement{File: file, Line: p.Line, Column: p.Column, EndLine: p.EndLine, SQL: p.SQL,
+func (a *chAnalysis) statement(file string, p piece) (out migrate.Statement) {
+	out = migrate.Statement{File: file, Line: p.Line, Column: p.Column, EndLine: p.EndLine, SQL: p.SQL,
 		Tx: "none", Locks: []migrate.Lock{}, Work: "none", Rating: score.Low, Findings: []migrate.Finding{}}
 	add := func(id string, r score.Rating, msg, alt string) {
 		out.Findings = append(out.Findings, migrate.Finding{RuleID: id, Rating: r, Message: msg, SafeAlternative: alt})
