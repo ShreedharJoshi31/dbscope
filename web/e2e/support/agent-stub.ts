@@ -9,7 +9,17 @@ export type Env = "local" | "staging" | "prod-replica";
 export interface StubProfile {
   id: string;
   name: string;
-  engine: "postgres" | "mysql" | "sqlite";
+  engine:
+    | "postgres"
+    | "mysql"
+    | "sqlite"
+    | "mongodb"
+    | "redis"
+    | "dynamodb"
+    | "cassandra"
+    | "neo4j"
+    | "elasticsearch"
+    | "clickhouse";
   path?: string;
   capabilities: { query: boolean; ask: boolean; migrations: boolean; workload: boolean };
   host: string;
