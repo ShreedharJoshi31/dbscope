@@ -75,7 +75,9 @@ func (e Engine) Capabilities() Capabilities {
 		return Capabilities{Query: true, Migrations: true, Health: true}
 	case EngineRedis:
 		return Capabilities{Keyspace: true}
-	case EngineDynamoDB, EngineNeo4j, EngineSQLServer, EngineOracle:
+	case EngineSQLServer, EngineOracle:
+		return Capabilities{Query: true, Health: true}
+	case EngineDynamoDB, EngineNeo4j:
 		return Capabilities{Query: true}
 	}
 	return Capabilities{}

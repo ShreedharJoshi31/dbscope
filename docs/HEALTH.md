@@ -88,3 +88,41 @@ write block.
 Every check needs the `monitor` cluster privilege (`cluster_monitor` on
 OpenSearch). Without it the clusters refuse even `GET /`, so dbscope cannot
 connect as that user at all.
+
+## SQL Server
+
+Checked on SQL Server 2022 (`internal/mssql/health_test.go`) with a session
+blocked behind another's update and a `db_datareader` login.
+
+| Check | Warn | Danger | Notes |
+|---|---|---|---|
+| Sessions waiting on locks | 1 | 10 | |
+| Oldest open transaction | 5 min | 1 h | it keeps the log from being truncated |
+| Transaction log | 70% used | 90% | with `log_reuse_wait_desc` and what to do about it |
+| Last full backup | 7 days, or never | 30 days | from `msdb.dbo.backupset` |
+| Availability group | a partially healthy replica | a replica not healthy | "not in an availability group" otherwise |
+| Page life expectancy | under 300 s | under 60 s | not rated in the first hour after start |
+
+The DMV checks need `VIEW SERVER PERFORMANCE STATE` (`VIEW SERVER STATE`
+before 2022). Without it, `sys.dm_exec_requests` shows only the login's own
+requests rather than failing, so dbscope checks the permission and reports
+the check as not readable instead of a reassuring zero.
+
+## Oracle
+
+Checked on Oracle AI Database 26ai Free (`internal/oracle/health_test.go`) with
+a session waiting on another's row lock, a view left invalid by a dropped
+column, and a user with only `CREATE SESSION` and `READ`.
+
+| Check | Warn | Danger | Notes |
+|---|---|---|---|
+| Processes and sessions | 80% of the limit | 95% | `v$resource_limit` |
+| Sessions waiting on locks | 1 | 10 | |
+| Oldest open transaction | 5 min | 1 h | its undo is kept; long queries risk ORA-01555 |
+| Tablespace use | 85% | 95% | counting room to autoextend |
+| Fast Recovery Area | 80% | 90% | when full, archiving and so every write stops |
+| Invalid objects | any | | in user schemas the user can see |
+| Data Guard | 30 s apply lag | 5 min | on a standby; the role otherwise |
+
+The V$ and DBA_ views need `SELECT_CATALOG_ROLE`; invalid objects are read
+from `ALL_OBJECTS`, which every user can query.
