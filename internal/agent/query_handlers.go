@@ -28,6 +28,7 @@ import (
 	"github.com/dbscope/dbscope/internal/neo4j"
 	"github.com/dbscope/dbscope/internal/query/exec"
 	qguard "github.com/dbscope/dbscope/internal/query/guard"
+	"github.com/dbscope/dbscope/internal/query/plan"
 	"github.com/dbscope/dbscope/internal/sqlite"
 	"github.com/dbscope/dbscope/internal/store"
 )
@@ -135,6 +136,12 @@ func (s *server) run(w http.ResponseWriter, r *http.Request, body queryBody, max
 		}
 		rerr.write(w)
 		return
+	}
+	if res.Plan == nil {
+		// The API promises a plan; an engine that read none (a run without
+		// EXPLAIN, or a plan query that failed) sends an empty one, which the
+		// UI's Plan tab would otherwise fail to draw.
+		res.Plan = &plan.Node{NodeType: "Query", StepsOnly: true, Flags: []plan.Flag{}, Children: []*plan.Node{}}
 	}
 	if explainOnly {
 		writeJSON(w, http.StatusOK, map[string]any{
