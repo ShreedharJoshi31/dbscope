@@ -24,7 +24,10 @@ describe("ConnectionForm", () => {
     const { user, onSaved } = renderForm();
     await user.click(screen.getByRole("radio", { name: "MySQL" }));
     expect(screen.getByLabelText("Port")).toHaveValue("3306");
-    expect(screen.getByLabelText("Paste a connection URL")).toHaveAttribute("placeholder", expect.stringMatching(/^mysql:\/\//));
+    expect(screen.getByLabelText("Paste a connection URL")).toHaveAttribute(
+      "placeholder",
+      expect.stringMatching(/^mysql:\/\//),
+    );
     await user.type(screen.getByLabelText("Name"), "shop");
     await user.click(screen.getByRole("radio", { name: /local/ }));
     await user.type(screen.getByLabelText("Host"), "127.0.0.1");

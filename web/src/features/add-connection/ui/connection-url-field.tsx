@@ -97,8 +97,8 @@ export function ConnectionUrlField({ onParsed, placeholder, inputRef }: Connecti
         </ul>
       )}
       <p id={hintId} className="text-xs text-text-muted">
-        PostgreSQL, MySQL, MongoDB, Redis, Neo4j, ClickHouse and Elasticsearch (http or https) URLs work, and the
-        engine follows the URL. It is parsed on this machine and not kept.
+        PostgreSQL, MySQL, MongoDB, Redis, Neo4j, ClickHouse and Elasticsearch (http or https) URLs work, and the engine
+        follows the URL. It is parsed on this machine and not kept.
       </p>
     </div>
   );
