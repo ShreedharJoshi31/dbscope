@@ -66,6 +66,7 @@ const LISTEN_SETTING: Partial<Record<NonNullable<ServerEngine>, string>> = {
   opensearch: "OpenSearch listens beyond localhost (network.host)",
   clickhouse: "ClickHouse listens beyond localhost (listen_host) on its native port",
   sqlserver: "SQL Server has TCP/IP enabled and listens on this port (SQL Server Configuration Manager)",
+  oracle: "the Oracle listener runs on this port and serves this service name (lsnrctl status)",
 };
 
 /**

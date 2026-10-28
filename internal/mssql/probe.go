@@ -44,6 +44,7 @@ func Test(ctx context.Context, p conn.Profile, password string) conn.TestResult 
 	}
 	ms := time.Since(start).Milliseconds()
 	res.OK, res.LatencyMs, res.ServerVersion, res.ServerVersionNum = true, &ms, srv.Version, srv.Num
+	res.WritePrivileges = []string{} // checked: an empty list reads as "none"
 	var updateability string
 	if err := db.QueryRowContext(ctx, `SELECT CAST(DATABASEPROPERTYEX(DB_NAME(), 'Updateability') AS nvarchar(20))`).Scan(&updateability); err == nil {
 		v := updateability == "READ_ONLY"

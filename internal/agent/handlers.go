@@ -15,6 +15,7 @@ import (
 	"github.com/dbscope/dbscope/internal/mssql"
 	"github.com/dbscope/dbscope/internal/mysql"
 	"github.com/dbscope/dbscope/internal/neo4j"
+	"github.com/dbscope/dbscope/internal/oracle"
 	"github.com/dbscope/dbscope/internal/redis"
 	"github.com/dbscope/dbscope/internal/secrets"
 	"github.com/dbscope/dbscope/internal/sqlite"
@@ -233,6 +234,8 @@ func testProfile(ctx context.Context, p conn.Profile, password string) conn.Test
 		return clickhouse.Test(ctx, p, password)
 	case conn.EngineSQLServer:
 		return mssql.Test(ctx, p, password)
+	case conn.EngineOracle:
+		return oracle.Test(ctx, p, password)
 	}
 	return conn.Test(ctx, p, password)
 }

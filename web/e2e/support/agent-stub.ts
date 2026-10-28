@@ -20,7 +20,8 @@ export interface StubProfile {
     | "neo4j"
     | "elasticsearch"
     | "clickhouse"
-    | "sqlserver";
+    | "sqlserver"
+    | "oracle";
   path?: string;
   capabilities: { query: boolean; ask: boolean; migrations: boolean; workload: boolean };
   host: string;

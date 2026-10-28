@@ -227,3 +227,30 @@ func inclusiveTime(n *Node, div float64) float64 {
 }
 
 func round4(f float64) float64 { return math.Round(f*1e4) / 1e4 }
+
+// SetCostShares sets each node's share of the plan's own (exclusive) cost,
+// for engines whose plans carry a cumulative cost per node and no timing.
+// The root is a statement node whose cost repeats its child's, so it is skipped.
+func SetCostShares(root *Node) {
+	excl := map[*Node]float64{}
+	var sum float64
+	var visit func(n *Node)
+	visit = func(n *Node) {
+		c := n.TotalCost
+		for _, ch := range n.Children {
+			c -= ch.TotalCost
+			visit(ch)
+		}
+		excl[n] = math.Max(c, 0)
+		sum += excl[n]
+	}
+	for _, ch := range root.Children {
+		visit(ch)
+	}
+	if sum == 0 {
+		return
+	}
+	for n, c := range excl {
+		n.CostShare = round4(c / sum)
+	}
+}

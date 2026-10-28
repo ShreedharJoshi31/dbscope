@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -289,7 +288,7 @@ func queryPlan(stmt *xnode) *plan.Node {
 	for _, op := range relOps(qp) {
 		root.Children = append(root.Children, relOp(op))
 	}
-	shares(root)
+	plan.SetCostShares(root)
 	return root
 }
 
@@ -341,29 +340,4 @@ func relOp(r *xnode) *plan.Node {
 			Message: "Fetches each row from the table after an index seek; including the columns in the index avoids it"})
 	}
 	return n
-}
-
-// shares sets each node's share of the plan's own (exclusive) cost.
-func shares(root *plan.Node) {
-	excl := map[*plan.Node]float64{}
-	var sum float64
-	var visit func(n *plan.Node)
-	visit = func(n *plan.Node) {
-		c := n.TotalCost
-		for _, ch := range n.Children {
-			c -= ch.TotalCost
-			visit(ch)
-		}
-		excl[n] = math.Max(c, 0)
-		sum += excl[n]
-	}
-	for _, ch := range root.Children {
-		visit(ch)
-	}
-	if sum == 0 {
-		return
-	}
-	for n, c := range excl {
-		n.CostShare = math.Round(c/sum*1e4) / 1e4
-	}
 }

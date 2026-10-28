@@ -4,6 +4,7 @@ export const ENGINE_ORDER: readonly Engine[] = [
   "postgres",
   "mysql",
   "sqlserver",
+  "oracle",
   "sqlite",
   "mongodb",
   "redis",
@@ -104,6 +105,14 @@ export const ENGINE_META: Record<Engine, EngineMeta> = {
       "SQL Server or Azure SQL: ERD from the catalog with design risks, and SELECTs the server compiles before they run, so only reads get through.",
     defaultPort: 1433,
     urlExample: "sqlserver://user:password@host:1433?database=name",
+  },
+  oracle: {
+    queryLanguage: "SQL",
+    label: "Oracle",
+    description:
+      "Oracle Database: ERD from the dictionary with design risks, and SELECTs in a read-only transaction; queries that reach your own PL/SQL are refused.",
+    defaultPort: 1521,
+    urlExample: "oracle://user:password@host:1521/SERVICE",
   },
   sqlite: {
     queryLanguage: "SQL",

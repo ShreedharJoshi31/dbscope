@@ -11,7 +11,8 @@ export type Engine =
   | "neo4j"
   | "elasticsearch"
   | "clickhouse"
-  | "sqlserver";
+  | "sqlserver"
+  | "oracle";
 export type Env = "local" | "staging" | "prod-replica";
 export type SummaryMode = "off" | "profile" | "rows";
 export type SSLMode = "disable" | "prefer" | "require" | "verify-ca" | "verify-full";

@@ -7,6 +7,7 @@ export type EditorLanguage =
   | "sqlite"
   | "clickhouse"
   | "tsql"
+  | "plsql"
   | "partiql"
   | "cql"
   | "cypher"
@@ -19,6 +20,7 @@ const LANGUAGE: Record<Engine, EditorLanguage> = {
   sqlite: "sqlite",
   clickhouse: "clickhouse",
   sqlserver: "tsql",
+  oracle: "plsql",
   dynamodb: "partiql",
   cassandra: "cql",
   neo4j: "cypher",
@@ -72,6 +74,8 @@ export function exampleQuery(language: EditorLanguage, model: Model | undefined)
       return `SELECT * FROM ${name} WHERE ${first?.primaryKey?.[0] ?? "id"} = ? LIMIT 20`;
     case "partiql":
       return `SELECT * FROM "${name}" WHERE ${first?.primaryKey?.[0] ?? "pk"} = 'value'`;
+    case "plsql":
+      return `SELECT * FROM ${first ? `${first.schema}.${name}` : name} FETCH FIRST 20 ROWS ONLY`;
     case "tsql":
       return `SELECT TOP 20 * FROM ${first ? `${first.schema}.${name}` : name}`;
     default:

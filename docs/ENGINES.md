@@ -34,6 +34,7 @@ internal/agent     engineSource routes each SchemaSource call by profile engine
 internal/sqlite    SQLite: Open, Introspect, Check, Run, Test, Split, Analyze
 internal/mysql     MySQL and MariaDB: Open, Introspect, Check, Run, Test
 internal/mssql     SQL Server and Azure SQL: Open, Introspect, Check, Run, Test
+internal/oracle    Oracle: Open, Introspect, Check, Run, Test
 internal/mongo     MongoDB: Connect, Introspect (inferred), Parse, Check, Run, Test
 internal/redis     Redis and Valkey: Connect, Analyze (keyspace report), Model, Test
 internal/mytest    MySQL, MariaDB, MongoDB, Redis and Valkey containers for integration tests
@@ -82,6 +83,7 @@ experimental materialized views and SASI indexes).
 | Elasticsearch / OpenSearch | indices, aliases, data streams | search JSON and SQL | not yet | n/a | not yet |
 | ClickHouse | tables, keys, parts | SQL under readonly | not yet | not yet | not yet |
 | SQL Server / Azure SQL | tables, views, keys, indexes | SELECT behind a plan gate | not yet | not yet | not yet |
+| Oracle | tables, views, materialized views, keys, indexes | SELECT in a READ ONLY transaction | not yet | not yet | not yet |
 
 ### SQLite
 
@@ -712,6 +714,75 @@ Not yet: Windows and Entra ID authentication, migration risk of DDL
 (online index operations, which ALTERs are metadata-only), Query Store and
 wait statistics, and Always On replica routing.
 
+### Oracle
+
+Tested against Oracle AI Database 26ai Free (23.26.3, the lite image,
+native on arm64) as SYSTEM and as a user with only `CREATE SESSION` and
+`READ` grants. The driver is go-ora v2.9, pure Go. A profile is a host,
+port (1521), service name (`FREEPDB1`, `ORCLPDB1`) and user; `oracle://`
+URLs paste with the service as the path. Oracle's TLS listener (TCPS,
+usually 2484) has no "TLS if offered", so sslMode `disable` and `prefer`
+are plaintext and `require` and the verify modes use TCPS.
+
+**Reading safely.** Each query runs in `SET TRANSACTION READ ONLY`, which
+the server enforces (a write fails with ORA-01456), and is rolled back.
+Three things around it were verified on a real server:
+
+- `EXPLAIN PLAN` writes `PLAN_TABLE`, so it fails inside a READ ONLY
+  transaction. dbscope explains in an ordinary transaction and rolls it
+  back (nothing stays in `PLAN_TABLE`), and runs the query only when the
+  plan's root is `SELECT STATEMENT`: a `DELETE` that skips the text check
+  is refused by its plan.
+- A function declared `PRAGMA AUTONOMOUS_TRANSACTION` writes and commits
+  even when called from a READ ONLY transaction. A reader cannot see the
+  source of a function it reaches only through a view, so dbscope refuses
+  any query that reaches a PL/SQL function, procedure or package of a user
+  schema, directly, through a synonym or through views, following
+  `ALL_DEPENDENCIES`. This also refuses harmless functions; it is the rule a
+  read-only login can check. The connection test names autonomous PL/SQL
+  the user can execute.
+- DDL commits implicitly, so the text check accepts only `SELECT` and
+  `WITH`, never a second statement, PL/SQL, `FOR UPDATE`, `INTO`, or the
+  `dbms_` and `utl_` packages that reach files, the network, other sessions
+  or dynamic SQL (`dbms_lob`, `dbms_random` and `dbms_crypto` are allowed).
+
+```sql
+CREATE USER dbscope_ro IDENTIFIED BY "...";
+GRANT CREATE SESSION TO dbscope_ro;
+GRANT READ ON app.orders TO dbscope_ro;   -- READ, not SELECT: SELECT also allows FOR UPDATE locks
+```
+
+The connection test reports `ANY` system privileges other than reads,
+object privileges that write, and tables the user owns.
+
+**Table map.** The ALL_ dictionary views give tables (materialized view
+containers once, as the view), views, columns with their declared type
+(`VARCHAR2(100 CHAR)`, `NUMBER(10,2)`), identity and virtual columns,
+defaults, comments, row counts from optimizer statistics, indexes
+(function-based ones show their expression), primary, unique, foreign key
+and check constraints. NUMBER values arrive as exact text: integers within
+2^53 become JSON numbers, and a column with a declared scale stays text.
+Findings:
+
+| Rule | When |
+|---|---|
+| `DBS-ORA-FK-NO-INDEX` | no index leads with a foreign key's columns: deleting a parent row locks the whole child table |
+| `DBS-ORA-NOT-VALIDATED` | a constraint that is disabled or `NOVALIDATE` |
+| `DBS-ORA-UNUSABLE-INDEX` | an `UNUSABLE` index |
+| `DBS-ORA-NO-STATS` | a table without optimizer statistics |
+
+**Plans.** The `EXPLAIN PLAN` rows become the plan tree with cardinality,
+cost and access and filter predicates. Flagged: a full table scan that
+filters, and Cartesian merge joins.
+
+The dictionary views are slow: reading a 5-table schema took 1.5 to 3 s
+on the Free image.
+
+Not yet: wallets and Oracle native network encryption, `DBA_` views for
+users who have them, migration risk of DDL (online operations,
+`DDL_LOCK_TIMEOUT`), and AWR or ASH workload, which need the Diagnostics
+Pack licence.
+
 ## Next engines
 
-The remaining candidate from the October 2026 list: Oracle. It gets research first, then a build tested against a real server.
+Every candidate from the October 2026 list is built. Others would each get research first, then a build tested against a real server.

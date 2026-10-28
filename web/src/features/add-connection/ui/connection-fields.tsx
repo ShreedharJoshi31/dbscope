@@ -30,6 +30,7 @@ const DATABASE_PLACEHOLDER: Partial<Record<Engine, string>> = {
   elasticsearch: "* or logs-*",
   clickhouse: "default",
   sqlserver: "master",
+  oracle: "FREEPDB1",
 };
 
 const USER_PLACEHOLDER: Partial<Record<Engine, string>> = {
@@ -40,6 +41,7 @@ const USER_PLACEHOLDER: Partial<Record<Engine, string>> = {
   elasticsearch: "dbscope_ro",
   clickhouse: "default",
   sqlserver: "dbscope_ro",
+  oracle: "dbscope_ro",
 };
 
 /** Name, environment and the libpq connection parameters, or the file of a SQLite database. */
@@ -150,7 +152,15 @@ function NetworkFields({
       </FormField>
 
       <FormField
-        label={values.engine === "cassandra" ? "Keyspace" : values.engine === "elasticsearch" ? "Indices" : "Database"}
+        label={
+          values.engine === "cassandra"
+            ? "Keyspace"
+            : values.engine === "elasticsearch"
+              ? "Indices"
+              : values.engine === "oracle"
+                ? "Service name"
+                : "Database"
+        }
         error={errorFor("database")}
         className="col-span-3"
       >

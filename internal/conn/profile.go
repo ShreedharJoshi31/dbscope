@@ -43,6 +43,8 @@ const (
 	EngineClickHouse Engine = "clickhouse"
 	// EngineSQLServer covers SQL Server and Azure SQL with SQL authentication.
 	EngineSQLServer Engine = "sqlserver"
+	// EngineOracle reaches one Oracle service (Profile.Database is the service name).
+	EngineOracle Engine = "oracle"
 )
 
 // Capabilities are the modes an engine supports beyond the ERD, which every engine has.
@@ -67,7 +69,7 @@ func (e Engine) Capabilities() Capabilities {
 		return Capabilities{Query: true}
 	case EngineRedis:
 		return Capabilities{Keyspace: true}
-	case EngineDynamoDB, EngineCassandra, EngineNeo4j, EngineElasticsearch, EngineClickHouse, EngineSQLServer:
+	case EngineDynamoDB, EngineCassandra, EngineNeo4j, EngineElasticsearch, EngineClickHouse, EngineSQLServer, EngineOracle:
 		return Capabilities{Query: true}
 	}
 	return Capabilities{}
@@ -191,9 +193,9 @@ func (in ProfileInput) Profile() (Profile, error) {
 	switch p.Engine {
 	case "":
 		p.Engine = EnginePostgres
-	case EnginePostgres, EngineSQLite, EngineMySQL, EngineMongoDB, EngineRedis, EngineDynamoDB, EngineCassandra, EngineNeo4j, EngineElasticsearch, EngineClickHouse, EngineSQLServer:
+	case EnginePostgres, EngineSQLite, EngineMySQL, EngineMongoDB, EngineRedis, EngineDynamoDB, EngineCassandra, EngineNeo4j, EngineElasticsearch, EngineClickHouse, EngineSQLServer, EngineOracle:
 	default:
-		return Profile{}, invalid("engine must be one of postgres, sqlite, mysql, mongodb, redis, dynamodb, cassandra, neo4j, elasticsearch, clickhouse, sqlserver")
+		return Profile{}, invalid("engine must be one of postgres, sqlite, mysql, mongodb, redis, dynamodb, cassandra, neo4j, elasticsearch, clickhouse, sqlserver, oracle")
 	}
 	p.Capabilities = p.Engine.Capabilities()
 	switch p.Engine {
@@ -211,6 +213,8 @@ func (in ProfileInput) Profile() (Profile, error) {
 		}
 	case EngineSQLServer:
 		p.Port = 1433
+	case EngineOracle:
+		p.Port = 1521
 	case EngineClickHouse:
 		p.Port = 9000
 		if p.Database == "" {

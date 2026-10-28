@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	mssqldrv "github.com/microsoft/go-mssqldb"
 	neo4jdrv "github.com/neo4j/neo4j-go-driver/v6/neo4j"
+	oranet "github.com/sijms/go-ora/v2/network"
 	mongodrv "go.mongodb.org/mongo-driver/v2/mongo"
 	sqlitedrv "modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
@@ -30,6 +31,7 @@ import (
 	"github.com/dbscope/dbscope/internal/mssql"
 	"github.com/dbscope/dbscope/internal/mysql"
 	"github.com/dbscope/dbscope/internal/neo4j"
+	"github.com/dbscope/dbscope/internal/oracle"
 	"github.com/dbscope/dbscope/internal/query/exec"
 	qguard "github.com/dbscope/dbscope/internal/query/guard"
 	"github.com/dbscope/dbscope/internal/query/plan"
@@ -195,6 +197,20 @@ func (s *server) execute(ctx context.Context, p conn.Profile, password string, b
 		}
 		return res, nil
 	}
+	if p.Engine == conn.EngineOracle {
+		if err := oracle.Check(body.SQL); err != nil {
+			return nil, mapRunError(ctx, err)
+		}
+		src, _ := s.source.(engineSource)[conn.EngineOracle].(*oracleSource)
+		if src == nil {
+			return nil, mapRunError(ctx, errUnsupported)
+		}
+		res, err := src.Run(ctx, p, password, body.SQL, maxRows, explainOnly)
+		if err != nil {
+			return nil, mapRunError(ctx, err)
+		}
+		return res, nil
+	}
 	if p.Engine == conn.EngineSQLServer {
 		if err := mssql.Check(body.SQL); err != nil {
 			return nil, mapRunError(ctx, err)
@@ -336,6 +352,7 @@ func mapRunError(ctx context.Context, err error) *runError {
 	var esErr *elastic.Error
 	var chErr *chdrv.Exception
 	var msErr mssqldrv.Error
+	var oraErr *oranet.OracleError
 	switch {
 	case errors.As(err, &ge):
 		return &runError{status: http.StatusUnprocessableEntity, code: "rejected", message: ge.Message, detail: string(ge.Reason),
@@ -383,6 +400,17 @@ func mapRunError(ctx context.Context, err error) *runError {
 			r.message = "Blocked: " + chErr.Message
 		case 159: // TIMEOUT_EXCEEDED
 			r.status, r.code, r.histCode = http.StatusGatewayTimeout, "timeout", "timeout"
+		}
+		return r
+	case !errors.Is(err, exec.ErrConnect) && errors.As(err, &oraErr):
+		r := &runError{status: http.StatusBadRequest, code: "database", message: oraErr.ErrMsg,
+			histStatus: store.HistoryError, histCode: "ora_" + strconv.Itoa(oraErr.ErrCode)}
+		switch oraErr.ErrCode {
+		case 1031, 41900, 1456: // insufficient privileges, missing object privilege, write in a READ ONLY transaction
+			r.message = "Blocked: " + oraErr.ErrMsg
+		case 1013: // user requested cancel of current operation
+			r.status, r.code, r.histCode = http.StatusGatewayTimeout, "timeout", "timeout"
+			r.message = "the query did not finish within the profile's statement timeout"
 		}
 		return r
 	case !errors.Is(err, exec.ErrConnect) && errors.As(err, &msErr):

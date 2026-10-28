@@ -102,7 +102,7 @@ func TestProfileValidation(t *testing.T) {
 		"timeout 0":     func(in *ProfileInput) { in.StatementTimeoutMs = ptr(0) },
 		"negative port": func(in *ProfileInput) { in.Port = ptr(-1) },
 		"negative cost": func(in *ProfileInput) { in.MaxCost = ptr(-1.0) },
-		"bad engine":    func(in *ProfileInput) { in.Engine = "oracle" },
+		"bad engine":    func(in *ProfileInput) { in.Engine = "db2" },
 		"postgres path": func(in *ProfileInput) { in.Path = "/tmp/app.db" },
 		"sqlite relative path": func(in *ProfileInput) {
 			in.Engine, in.Path = EngineSQLite, "app.db"
@@ -154,6 +154,8 @@ func TestParseURL(t *testing.T) {
 		{"sqlserver://sa:pw@sql.example:14330?database=shop&encrypt=true&TrustServerCertificate=true", ParsedURL{Engine: EngineSQLServer, Host: "sql.example", Port: 14330, Database: "shop", User: "sa", Password: "pw", SSLMode: SSLRequire}},
 		{"mssql://u@sql/SQLEXPRESS?database=app", ParsedURL{Engine: EngineSQLServer, Host: "sql", Port: 1433, Database: "app", User: "u", SSLMode: SSLPrefer,
 			Notes: []string{"the URL names the instance SQLEXPRESS; dbscope connects by port, so set the port the instance listens on"}}},
+		{"oracle://app:pw@db.example:2484/ORCLPDB1?ssl=true&ssl%20verify=false", ParsedURL{Engine: EngineOracle, Host: "db.example", Port: 2484, Database: "ORCLPDB1", User: "app", Password: "pw", SSLMode: SSLRequire}},
+		{"oracle://app@db/FREEPDB1", ParsedURL{Engine: EngineOracle, Host: "db", Port: 1521, Database: "FREEPDB1", User: "app", SSLMode: SSLDisable}},
 		{"https://elastic:pw@search.example:9243/logs-*", ParsedURL{Engine: EngineElasticsearch, Host: "search.example", Port: 9243, Database: "logs-*", User: "elastic", Password: "pw", SSLMode: SSLVerifyFull}},
 	} {
 		got, err := ParseURL(c.in)
