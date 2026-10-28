@@ -1,13 +1,15 @@
 import "@/shared/ui/sql/sql-code.css";
 import {
   autocompletion,
+  type CompletionSource,
   closeBrackets,
   closeBracketsKeymap,
   closeCompletion,
   completionKeymap,
 } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import { PostgreSQL, sql } from "@codemirror/lang-sql";
+import { json } from "@codemirror/lang-json";
+import { Cassandra, MySQL, PostgreSQL, SQLDialect, SQLite, StandardSQL, sql } from "@codemirror/lang-sql";
 import { bracketMatching, indentOnInput, syntaxHighlighting } from "@codemirror/language";
 import { type Diagnostic, setDiagnostics } from "@codemirror/lint";
 import { Compartment, EditorSelection, EditorState, Prec } from "@codemirror/state";
@@ -25,13 +27,18 @@ import type { EditorDiagnostic, EditorReveal } from "@/entities/query";
 import { formatCombo, SHORTCUTS } from "@/shared/config/shortcuts";
 import { codeMirrorKey } from "@/shared/lib/hotkeys";
 import { sqlHighlighter } from "@/shared/ui/sql/highlighter";
+import { type EditorLanguage, looksLikeJson, type Names } from "@/widgets/sql-editor/model/languages";
 import type { SchemaCompletion } from "@/widgets/sql-editor/model/schema-completion";
 import { tokenTheme } from "@/widgets/sql-editor/ui/editor-theme";
 
 export interface CodeEditorProps {
   initialSql: string;
   label: string;
+  language: EditorLanguage;
   schema: SchemaCompletion;
+  names: Names;
+  /** An example query, shown while the tab is empty. */
+  example: string;
   diagnostic: EditorDiagnostic | null;
   reveal: EditorReveal | null;
   onChange: (sql: string) => void;
@@ -40,13 +47,82 @@ export interface CodeEditorProps {
   onCancel: () => void;
 }
 
-function sqlExtension(schema: SchemaCompletion) {
-  return sql({
-    dialect: PostgreSQL,
-    schema: schema.namespace,
-    ...(schema.defaultSchema ? { defaultSchema: schema.defaultSchema } : {}),
-    upperCaseKeywords: true,
-  });
+// ClickHouse: standard SQL plus its own clauses.
+const ClickHouse = SQLDialect.define({
+  ...StandardSQL.spec,
+  keywords: `${StandardSQL.spec.keywords ?? ""} final prewhere sample array settings format global any asof semi anti ilike`,
+  identifierQuotes: '`"',
+  hashComments: true,
+});
+
+// Cypher's read clauses only: dbscope runs no writing Cypher, so CREATE, MERGE, SET,
+// DELETE and FOREACH are left out of completion. Backquoted names, // comments.
+const Cypher = SQLDialect.define({
+  keywords:
+    "match optional where return with unwind order by skip limit call yield as distinct and or xor not in is null true false case when then else end exists count collect starts ends contains asc desc ascending descending union all shortestpath allshortestpaths",
+  builtin:
+    "id labels type keys properties size length nodes relationships coalesce tostring tointeger tofloat date datetime duration point",
+  types: "",
+  identifierQuotes: "`",
+  slashComments: true,
+  doubleQuotedStrings: true,
+});
+
+const SQL_DIALECTS = {
+  postgres: PostgreSQL,
+  mysql: MySQL,
+  sqlite: SQLite,
+  clickhouse: ClickHouse,
+  partiql: StandardSQL,
+  cql: Cassandra,
+} as const;
+
+/** Completes names while typing: after ":" in Cypher, inside a JSON string, or any word. */
+function nameCompletion(names: Names, mode: "cypher" | "json"): CompletionSource {
+  return (context) => {
+    if (mode === "json") {
+      const m = context.matchBefore(/"[\w.@*-]*/);
+      if (!m || (m.from === m.to && !context.explicit)) return null;
+      const options = [
+        ...names.relations.map((label) => ({ label, type: "type" })),
+        ...names.fields.map((label) => ({ label, type: "property" })),
+      ];
+      return { from: m.from + 1, options, validFor: /^[\w.@*-]*$/ };
+    }
+    const label = context.matchBefore(/:\s*`?[\w]*/);
+    if (label) {
+      return {
+        from: label.to - (label.text.match(/[\w]*$/)?.[0].length ?? 0),
+        options: names.relations.map((n) => ({ label: n, type: "type" })),
+      };
+    }
+    const prop = context.matchBefore(/\.[\w]*/);
+    if (prop) return { from: prop.from + 1, options: names.fields.map((n) => ({ label: n, type: "property" })) };
+    return null;
+  };
+}
+
+function languageExtension(props: Pick<CodeEditorProps, "language" | "schema" | "names" | "example">, doc: string) {
+  const hint = placeholder(`${props.example}    (${formatCombo(SHORTCUTS.runQuery.combo)} runs it)`);
+  const lang = props.language === "json-or-sql" ? (looksLikeJson(doc) ? "json" : "partiql") : props.language;
+  // Build each source once: completion tracks sources by identity.
+  if (lang === "json") {
+    const data = [{ autocomplete: nameCompletion(props.names, "json") }];
+    return [json(), EditorState.languageData.of(() => data), hint];
+  }
+  if (lang === "cypher") {
+    const data = [{ autocomplete: nameCompletion(props.names, "cypher") }];
+    return [sql({ dialect: Cypher, upperCaseKeywords: true }), EditorState.languageData.of(() => data), hint];
+  }
+  return [
+    sql({
+      dialect: SQL_DIALECTS[lang],
+      schema: props.schema.namespace,
+      ...(props.schema.defaultSchema ? { defaultSchema: props.schema.defaultSchema } : {}),
+      upperCaseKeywords: true,
+    }),
+    hint,
+  ];
 }
 
 function diagnostics(d: EditorDiagnostic | null, length: number): Diagnostic[] {
@@ -64,6 +140,7 @@ export default function CodeEditor(props: CodeEditorProps) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const language = useRef(new Compartment());
+  const jsonMode = useRef(looksLikeJson(props.initialSql));
   const latest = useRef(props);
   latest.current = props;
 
@@ -100,14 +177,20 @@ export default function CodeEditor(props: CodeEditorProps) {
           highlightActiveLine(),
           // Tab is left to the browser so keyboard users can leave the editor (UX rule 11).
           keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap, ...completionKeymap]),
-          language.current.of(sqlExtension(props.schema)),
+          language.current.of(languageExtension(props, props.initialSql)),
           syntaxHighlighting(sqlHighlighter),
           tokenTheme,
           EditorView.lineWrapping,
-          placeholder(`Write one SELECT, then run it with ${formatCombo(SHORTCUTS.runQuery.combo)}`),
           EditorView.contentAttributes.of({ "aria-label": props.label, "aria-multiline": "true" }),
           EditorView.updateListener.of((u) => {
-            if (u.docChanged) latest.current.onChange(u.state.doc.toString());
+            if (!u.docChanged) return;
+            const doc = u.state.doc.toString();
+            latest.current.onChange(doc);
+            // Elasticsearch takes a search request as JSON or SQL: follow the text.
+            if (latest.current.language === "json-or-sql" && looksLikeJson(doc) !== jsonMode.current) {
+              jsonMode.current = looksLikeJson(doc);
+              u.view.dispatch({ effects: language.current.reconfigure(languageExtension(latest.current, doc)) });
+            }
           }),
         ],
       }),
@@ -119,9 +202,13 @@ export default function CodeEditor(props: CodeEditorProps) {
     };
   }, []);
 
+  const { language: lang, schema, names, example } = props;
   useEffect(() => {
-    view.current?.dispatch({ effects: language.current.reconfigure(sqlExtension(props.schema)) });
-  }, [props.schema]);
+    const v = view.current;
+    if (!v) return;
+    const config = { language: lang, schema, names, example };
+    v.dispatch({ effects: language.current.reconfigure(languageExtension(config, v.state.doc.toString())) });
+  }, [lang, schema, names, example]);
 
   useEffect(() => {
     const v = view.current;

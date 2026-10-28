@@ -10,6 +10,7 @@ import { Checkbox } from "@/shared/ui/checkbox";
 import { NativeSelect } from "@/shared/ui/native-select";
 import { ShortcutKeys } from "@/shared/ui/shortcut-keys";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/shared/ui/tooltip";
+import { exampleQuery, languageFor, namesOf } from "@/widgets/sql-editor/model/languages";
 import { schemaCompletion } from "@/widgets/sql-editor/model/schema-completion";
 import { RunStatus } from "@/widgets/sql-editor/ui/run-status";
 
@@ -45,6 +46,9 @@ export function SqlEditor({ tab }: { tab: SqlTab }) {
   const { analyze, maxRows } = useTabRunOption(tab.id);
   const reveal = useSqlTabs((s) => (s.reveal?.tabId === tab.id ? s.reveal : null));
   const schema = useMemo(() => schemaCompletion(query.data), [query.data]);
+  const language = languageFor(source === "profile" ? profile?.engine : undefined);
+  const names = useMemo(() => namesOf(query.data), [query.data]);
+  const example = useMemo(() => exampleQuery(language, query.data), [language, query.data]);
   const diagnostic = useDiagnostic(tab);
   const analyzeId = useId();
   const rowsId = useId();
@@ -150,8 +154,11 @@ export function SqlEditor({ tab }: { tab: SqlTab }) {
         >
           <CodeEditor
             initialSql={tab.sql}
-            label={`SQL editor, ${tab.title}`}
+            label={`${language === "cypher" || language === "json" || language === "json-or-sql" ? "Query" : "SQL"} editor, ${tab.title}`}
+            language={language}
             schema={schema}
+            names={names}
+            example={example}
             diagnostic={diagnostic}
             reveal={reveal}
             onChange={(sql) => useSqlTabs.getState().setSql(tab.id, sql)}

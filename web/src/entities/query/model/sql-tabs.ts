@@ -47,7 +47,9 @@ interface SqlTabsState extends Persisted {
   docTabs: DocTab[];
   /** Opens (or re-titles) a doc tab in the current scope and makes it active. */
   openDocTab: (tab: Omit<DocTab, "scope">) => void;
-  setScope: (scope: string | null) => void;
+  /** The file extension new tabs get: the scope's query language. */
+  extension: string;
+  setScope: (scope: string | null, extension?: string) => void;
   /** Opens a new tab ("query-N.sql"), optionally with SQL, and makes it active. Returns its id. */
   openTab: (sql?: string) => string;
   closeTab: (id: string) => void;
@@ -98,6 +100,7 @@ export const useSqlTabs = create<SqlTabsState>((set, get) => {
   return {
     ...EMPTY,
     scope: null,
+    extension: "sql",
     docTabs: [],
     reveal: null,
     revealInEditor: (tabId, from = 0, to = from) => {
@@ -106,9 +109,9 @@ export const useSqlTabs = create<SqlTabsState>((set, get) => {
       commit({ active: tabId });
       set({ reveal: { tabId, from, to, nonce: revealNonce } });
     },
-    setScope: (scope) => {
-      if (get().scope === scope) return;
-      set({ scope, ...(scope ? readTabs(scope) : EMPTY) });
+    setScope: (scope, extension = "sql") => {
+      if (get().scope === scope) return set({ extension });
+      set({ scope, extension, ...(scope ? readTabs(scope) : EMPTY) });
     },
     openDocTab: (tab) => {
       const { docTabs, scope } = get();
@@ -123,7 +126,7 @@ export const useSqlTabs = create<SqlTabsState>((set, get) => {
     openTab: (sql = "") => {
       const { tabs, next } = get();
       const id = `q${next}`;
-      commit({ tabs: [...tabs, { id, title: `query-${next}.sql`, sql }], next: next + 1, active: id });
+      commit({ tabs: [...tabs, { id, title: `query-${next}.${get().extension}`, sql }], next: next + 1, active: id });
       return id;
     },
     closeTab: (id) => {
@@ -151,10 +154,11 @@ export const useSqlTabs = create<SqlTabsState>((set, get) => {
 });
 
 /** Switches the tab set when the workbench changes connection (or enters the sample). */
-export function useSqlTabsScope(scope: string | null): void {
+/** Scopes tabs to a connection; new tabs take the extension of its query language (sql, cql, cypher, json). */
+export function useSqlTabsScope(scope: string | null, extension = "sql"): void {
   useEffect(() => {
-    useSqlTabs.getState().setScope(scope);
-  }, [scope]);
+    useSqlTabs.getState().setScope(scope, extension);
+  }, [scope, extension]);
 }
 
 /** The current scope's doc tabs, for the centre strip. */

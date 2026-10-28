@@ -13,10 +13,17 @@ export const ENGINE_ORDER: readonly Engine[] = [
   "clickhouse",
 ];
 
-export const ENGINE_META: Record<
-  Engine,
-  { label: string; description: string; defaultPort?: number /** What a query tab takes. */; queryLanguage?: string }
-> = {
+export interface EngineMeta {
+  label: string;
+  description: string;
+  defaultPort?: number;
+  /** What a query tab takes, for copy such as "Write SQL in a query tab". */
+  queryLanguage?: string;
+  /** Query tabs' file extension; sql when unset. */
+  fileExtension?: string;
+}
+
+export const ENGINE_META: Record<Engine, EngineMeta> = {
   postgres: {
     queryLanguage: "SQL",
     label: "PostgreSQL",
@@ -30,6 +37,7 @@ export const ENGINE_META: Record<
     defaultPort: 3306,
   },
   mongodb: {
+    fileExtension: "json",
     queryLanguage: "a JSON command",
     label: "MongoDB",
     description:
@@ -49,6 +57,7 @@ export const ENGINE_META: Record<
       "Tables, keys and indexes with attributes from a small sample, and PartiQL SELECTs whose plan says when they scan. Uses your AWS credentials.",
   },
   cassandra: {
+    fileExtension: "cql",
     queryLanguage: "CQL",
     label: "Cassandra",
     description:
@@ -56,6 +65,7 @@ export const ENGINE_META: Record<
     defaultPort: 9042,
   },
   neo4j: {
+    fileExtension: "cypher",
     queryLanguage: "Cypher",
     label: "Neo4j",
     description:
@@ -63,6 +73,7 @@ export const ENGINE_META: Record<
     defaultPort: 7687,
   },
   elasticsearch: {
+    fileExtension: "json",
     queryLanguage: "a search request as JSON, or SQL",
     label: "Elasticsearch",
     description:

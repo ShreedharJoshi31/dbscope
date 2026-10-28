@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useActiveConnection, useActiveConnectionStore } from "@/entities/connection";
+import { ENGINE_META, useActiveConnection, useActiveConnectionStore } from "@/entities/connection";
 import { type DocTab, type SqlTab, useRunStore, useSqlTabsScope } from "@/entities/query";
 import { useCanvasStore, useWorkspaceStore } from "@/entities/schema";
 import { ConnectionFormDialog } from "@/features/add-connection";
@@ -33,7 +33,7 @@ function useTabScope() {
   const { profile } = useActiveConnection();
   const sample = useWorkspaceStore((s) => s.source === "sample");
   const scope = sample ? "sample" : (profile?.id ?? null);
-  useSqlTabsScope(scope);
+  useSqlTabsScope(scope, (profile && !sample && ENGINE_META[profile.engine].fileExtension) || "sql");
   const first = useRef(scope);
   useEffect(() => {
     if (scope !== first.current) {

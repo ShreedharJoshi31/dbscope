@@ -42,6 +42,18 @@ internal/schema    the shared relational model; Model.Engine is empty for Postgr
 Relational engines map onto `schema.Model`. Non-relational engines will get
 models of their own rather than being forced into tables and columns.
 
+### Query editor
+
+Query tabs follow the connection's language: their name ends `.sql`,
+`.cql` (Cassandra), `.cypher` (Neo4j) or `.json` (MongoDB, Elasticsearch);
+highlighting and keyword completion use CodeMirror's dialect for the engine
+(PostgreSQL, MySQL, SQLite, Cassandra; standard SQL for PartiQL and, with
+ClickHouse's clauses, ClickHouse). Cypher completion offers only read
+clauses, plus labels after `:` and properties after `.`; JSON completion
+offers collection, index and field names inside strings. An Elasticsearch
+tab switches between JSON and SQL as the text starts with `{` or not. An
+empty tab shows an example query naming a real table, label or index.
+
 ### Schema risks
 
 Design risks an engine's introspection finds are `findings` on the relation
