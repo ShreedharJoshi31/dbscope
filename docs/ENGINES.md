@@ -30,10 +30,12 @@ internal/agent     engineSource routes each SchemaSource call by profile engine
   sqlite_source.go SQLite (one read-only open per call)
   mysql_source.go  MySQL and MariaDB (database/sql pool per profile)
   mongo_source.go  MongoDB (a client per profile)
+  redis_source.go  Redis and Valkey (a client per profile; reports cached 30 s)
 internal/sqlite    SQLite: Open, Introspect, Check, Run, Test, Split, Analyze
 internal/mysql     MySQL and MariaDB: Open, Introspect, Check, Run, Test
 internal/mongo     MongoDB: Connect, Introspect (inferred), Parse, Check, Run, Test
-internal/mytest    MySQL, MariaDB and MongoDB containers for integration tests
+internal/redis     Redis and Valkey: Connect, Analyze (keyspace report), Model, Test
+internal/mytest    MySQL, MariaDB, MongoDB, Redis and Valkey containers for integration tests
 internal/schema    the shared relational model; Model.Engine is empty for PostgreSQL
 ```
 
@@ -42,12 +44,13 @@ models of their own rather than being forced into tables and columns.
 
 ## Engines
 
-| Engine | ERD | Query | Ask | Migrations | Workload |
+| Engine | ERD | Query | Ask | Migrations | Workload / keyspace |
 |---|---|---|---|---|---|
 | PostgreSQL | yes | yes | yes | yes | yes |
 | SQLite | yes | yes | not yet | yes | n/a |
 | MySQL / MariaDB | yes | yes | not yet | yes | not yet |
 | MongoDB | inferred | yes | not yet | not yet | n/a |
+| Redis / Valkey | key patterns | n/a | n/a | n/a | keyspace report |
 
 ### SQLite
 
@@ -217,6 +220,56 @@ call's context deadline, which the v2 driver also sends as `maxTimeMS` (adding
 it by hand is a duplicate field); whichever side gives up first, the server
 leaves no dbscope operation running, which the tests check with `$currentOp`.
 
+### Redis and Valkey
+
+Research with sources: [research-redis.md](research-redis.md). Tested against
+Redis 7, Redis 8 and Valkey 8 in containers. One `redis` engine covers both;
+Valkey reports `redis_version:7.2.4`, so `server_name`/`valkey_version` decide.
+A profile's database is its number (default 0) and the user is optional.
+
+There is no schema to draw, so the capability is a **keyspace report**
+(`GET /profiles/{id}/keyspace`, the Keyspace tab of the dock) and the canvas
+shows a **map of key patterns**: keys whose names differ only in id-like
+segments (numbers, hex, UUIDs, long tokens between `:` or `/`) group into one
+node, `user:*:profile`, with its type, memory and expiry.
+
+**Reading safely.** The scan is SCAN with COUNT 100, deduplicated, then two
+pipelined round trips per page: TYPE, PTTL and MEMORY USAGE (default samples),
+then the O(1) length command for the type. Values are never read, and every
+connection sends `CLIENT NO-TOUCH ON` so dbscope does not change keys' LRU or
+LFU data. A scan stops at 20,000 keys or 10 seconds and says so; it backs off
+when a page answers four times slower than the fastest one. Exact key and
+expiry counts come from `INFO keyspace`.
+
+**Read-only user.** Verified on all three servers: this user can produce the
+whole report and is refused GET and SET.
+
+```
+ACL SETUSER dbscope on >PASSWORD resetkeys %R~* resetchannels -@all
+  +ping +hello +info +dbsize +scan +type +pttl +strlen +llen +hlen +scard +zcard +xlen
+  +memory|usage +client|no-touch
+```
+
+The connection test checks write access with `ACL DRYRUN`, which only a user
+allowed to run it can use; otherwise it says it could not check.
+
+| Rule | When |
+|---|---|
+| `DBS-REDIS-NO-MAXMEMORY` | maxmemory is 0 on a primary |
+| `DBS-REDIS-NOEVICTION-FULL` | above 90% of maxmemory under noeviction |
+| `DBS-REDIS-VOLATILE-NO-TTL` | a volatile-* policy while most scanned keys have no expiry, so it acts like noeviction |
+| `DBS-REDIS-ALLKEYS-EVICTS-DATA` | an allkeys-* policy with no key expiring: primary data can be evicted |
+| `DBS-REDIS-PATTERN-NO-TTL` | 100+ keys of a session, cache or tmp pattern with no expiry |
+| `DBS-REDIS-BIG-KEY` | a string of 10 MiB or a collection of 10,000 elements or 100 MiB (cloud vendors' thresholds; Redis sets none) |
+| `DBS-REDIS-KEYS-USED`, `-FLUSH-USED` | KEYS, FLUSHALL or FLUSHDB in INFO commandstats |
+| `DBS-REDIS-BGSAVE-FAILED`, `-AOF-FAILED`, `-UNSAVED` | persistence failures, or many changes since the last snapshot with no AOF |
+| `DBS-REDIS-FRAGMENTATION`, `-SWAP`, `-EVICTING` | fragmentation over 1.5 and 100 MiB, RSS below used memory, evictions |
+
+Not yet: cluster mode (SCAN is per node), hot keys (LFU's OBJECT FREQ or Redis
+8.6's HOTKEYS), and SLOWLOG, which needs an admin grant.
+
 ## Next engines
 
-Redis and Valkey next (research in [research-redis.md](research-redis.md)).
+The remaining candidates from the October 2026 list: DynamoDB, Cassandra and
+ScyllaDB, Neo4j, Elasticsearch and OpenSearch, ClickHouse, SQL Server and
+Oracle. Each gets research first, then a build tested against a real server.

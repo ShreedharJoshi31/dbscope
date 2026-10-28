@@ -20,7 +20,7 @@ export function ConnectionFormDialog({ onSaved }: ConnectionFormDialogProps) {
           <DialogDescription>
             {editing
               ? "Changes apply the next time dbscope connects."
-              : "Connect dbscope to a PostgreSQL database. Credentials stay on this machine."}
+              : "Connect dbscope to a database. Credentials stay on this machine."}
           </DialogDescription>
         </DialogHeader>
         {dialog && (

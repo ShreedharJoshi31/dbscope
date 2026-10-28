@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -25,6 +26,9 @@ const (
 	EngineMySQL   Engine = "mysql"
 	EngineMariaDB Engine = "mariadb"
 	EngineMongoDB Engine = "mongodb"
+	// EngineRedis covers Redis and Valkey; EngineValkey appears only in test results.
+	EngineRedis  Engine = "redis"
+	EngineValkey Engine = "valkey"
 )
 
 // Capabilities are the modes an engine supports beyond the ERD, which every engine has.
@@ -33,6 +37,8 @@ type Capabilities struct {
 	Ask        bool `json:"ask"`
 	Migrations bool `json:"migrations"`
 	Workload   bool `json:"workload"`
+	// Keyspace is the key-pattern report of key-value stores.
+	Keyspace bool `json:"keyspace"`
 }
 
 func (e Engine) Capabilities() Capabilities {
@@ -45,6 +51,8 @@ func (e Engine) Capabilities() Capabilities {
 		return Capabilities{Query: true, Migrations: true}
 	case EngineMongoDB:
 		return Capabilities{Query: true}
+	case EngineRedis:
+		return Capabilities{Keyspace: true}
 	}
 	return Capabilities{}
 }
@@ -167,9 +175,9 @@ func (in ProfileInput) Profile() (Profile, error) {
 	switch p.Engine {
 	case "":
 		p.Engine = EnginePostgres
-	case EnginePostgres, EngineSQLite, EngineMySQL, EngineMongoDB:
+	case EnginePostgres, EngineSQLite, EngineMySQL, EngineMongoDB, EngineRedis:
 	default:
-		return Profile{}, invalid("engine must be one of postgres, sqlite, mysql, mongodb")
+		return Profile{}, invalid("engine must be one of postgres, sqlite, mysql, mongodb, redis")
 	}
 	p.Capabilities = p.Engine.Capabilities()
 	switch p.Engine {
@@ -177,6 +185,15 @@ func (in ProfileInput) Profile() (Profile, error) {
 		p.Port = 3306
 	case EngineMongoDB:
 		p.Port = 27017
+	case EngineRedis:
+		p.Port = 6379
+		// A Redis database is a number and the user is optional (the default user).
+		if p.Database == "" {
+			p.Database = "0"
+		}
+		if n, err := strconv.Atoi(p.Database); err != nil || n < 0 {
+			return Profile{}, invalid("the database of a Redis profile is its number, such as 0")
+		}
 	}
 	if err := p.connOptions(in); err != nil {
 		return Profile{}, err
@@ -249,7 +266,7 @@ func (p *Profile) networkTarget(in ProfileInput) error {
 	if p.Database == "" {
 		return invalid("database is required")
 	}
-	if p.User == "" {
+	if p.User == "" && p.Engine != EngineRedis {
 		return invalid("user is required")
 	}
 	if p.SSLMode == "" {

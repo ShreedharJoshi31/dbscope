@@ -111,8 +111,14 @@ export function validateConnectionForm(values: ConnectionFormValues): Connection
     if (!isWholeNumber(values.port) || port < 1 || port > 65_535) {
       errors.port = "Port must be a whole number from 1 to 65535.";
     }
-    if (!values.database.trim()) errors.database = "Enter the database name.";
-    if (!values.user.trim()) errors.user = "Enter the user name.";
+    if (values.engine === "redis") {
+      // A Redis database is a number, default 0, and the user is optional (the default user).
+      if (values.database.trim() && !isWholeNumber(values.database))
+        errors.database = "A Redis database is a number, such as 0.";
+    } else {
+      if (!values.database.trim()) errors.database = "Enter the database name.";
+      if (!values.user.trim()) errors.user = "Enter the user name.";
+    }
   }
 
   if (!isWholeNumber(values.statementTimeoutMs) || Number(values.statementTimeoutMs) < 1) {

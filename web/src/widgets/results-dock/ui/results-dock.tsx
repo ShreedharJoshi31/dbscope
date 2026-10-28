@@ -1,11 +1,13 @@
 import { PanelBottomClose } from "lucide-react";
 import type { ReactNode } from "react";
+import { useActiveConnection } from "@/entities/connection";
 import { type DockTab, useRunStore } from "@/entities/query";
 import { togglePanel } from "@/features/toggle-panel";
 import { formatCombo, SHORTCUTS } from "@/shared/config/shortcuts";
 import { Button } from "@/shared/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/shared/ui/tooltip";
+import { KeyspaceTab } from "@/widgets/results-dock/ui/keyspace-tab";
 import { MessagesTab } from "@/widgets/results-dock/ui/messages-tab";
 import { PlanTab } from "@/widgets/results-dock/ui/plan-tab";
 import { ResultsTab } from "@/widgets/results-dock/ui/results-tab";
@@ -31,10 +33,16 @@ const TABS: { value: DockTab; label: ReactNode; content: ReactNode }[] = [
   { value: "messages", label: <MessagesLabel />, content: <MessagesTab /> },
   { value: "plan", label: "Plan", content: <PlanTab /> },
   { value: "risk", label: "Risk", content: <RiskTab /> },
+  { value: "keyspace", label: "Keyspace", content: <KeyspaceTab /> },
 ];
 
 export function ResultsDock() {
-  const tab = useRunStore((s) => s.dockTab);
+  const { profile } = useActiveConnection();
+  const keyspace = Boolean(profile?.capabilities.keyspace);
+  // Key-value stores have no queries to show; their dock is the keyspace report.
+  const tabs = keyspace ? TABS.filter((t) => t.value === "keyspace") : TABS.filter((t) => t.value !== "keyspace");
+  const stored = useRunStore((s) => s.dockTab);
+  const tab = tabs.some((t) => t.value === stored) ? stored : (tabs[0]?.value ?? "results");
   const hide = () => togglePanel("dock");
   const combo = SHORTCUTS.toggleDock.combo;
 
@@ -46,7 +54,7 @@ export function ResultsDock() {
     >
       <div className="flex h-8 shrink-0 items-end border-b border-border-default bg-surface-subtle px-2">
         <TabsList variant="line" aria-label="Results dock" className="h-8 gap-0 p-0">
-          {TABS.map((t) => (
+          {tabs.map((t) => (
             <TabsTrigger key={t.value} value={t.value} className="h-8 flex-none rounded-none px-3 text-xs">
               {t.label}
             </TabsTrigger>
@@ -69,7 +77,7 @@ export function ResultsDock() {
           <TooltipContent side="top">Hide results dock {formatCombo(combo)}</TooltipContent>
         </Tooltip>
       </div>
-      {TABS.map((t) => (
+      {tabs.map((t) => (
         <TabsContent key={t.value} value={t.value} className="min-h-0 flex-1">
           {t.content}
         </TabsContent>

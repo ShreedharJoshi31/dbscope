@@ -1,6 +1,6 @@
 /** Wire types for the Phase 0 agent API (docs/API.md). */
 
-export type Engine = "postgres" | "mysql" | "sqlite" | "mongodb";
+export type Engine = "postgres" | "mysql" | "sqlite" | "mongodb" | "redis";
 export type Env = "local" | "staging" | "prod-replica";
 export type SummaryMode = "off" | "profile" | "rows";
 export type SSLMode = "disable" | "prefer" | "require" | "verify-ca" | "verify-full";
@@ -11,6 +11,8 @@ export interface Capabilities {
   ask: boolean;
   migrations: boolean;
   workload: boolean;
+  /** The key-pattern report of Redis and Valkey. */
+  keyspace?: boolean;
 }
 
 export interface Profile {
@@ -62,7 +64,7 @@ export type TestErrorKind = "auth" | "network" | "tls" | "timeout" | "database" 
 export interface TestResult {
   ok: boolean;
   /** The server reached; omitted for PostgreSQL. */
-  engine?: Engine | "mariadb";
+  engine?: Engine | "mariadb" | "valkey";
   latencyMs?: number;
   serverVersion?: string;
   serverVersionNum?: number;

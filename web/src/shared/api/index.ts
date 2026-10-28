@@ -7,6 +7,7 @@ export {
   errorFromEnvelope,
   isApiError,
 } from "@/shared/api/errors";
+export * from "@/shared/api/keyspace-api";
 export * from "@/shared/api/llm-api";
 export type * from "@/shared/api/llm-types";
 export * from "@/shared/api/migration-api";

@@ -185,6 +185,25 @@ func (s *server) sampleSchema(w http.ResponseWriter, r *http.Request) {
 
 // workload reads the connection's traffic statistics (docs/WORKLOAD.md),
 // attributed to the tables of its current schema.
+// keyspace is the key-pattern report of a Redis or Valkey profile.
+func (s *server) keyspace(w http.ResponseWriter, r *http.Request) {
+	p, password, ok := s.profileWithSecret(w, r)
+	if !ok || !supports(w, p, p.Capabilities.Keyspace, "The keyspace report") {
+		return
+	}
+	src, _ := s.source.(engineSource)[conn.EngineRedis].(*redisSource)
+	if src == nil {
+		s.upstreamError(w, r, errUnsupported)
+		return
+	}
+	rep, err := src.Keyspace(r.Context(), p, password)
+	if err != nil {
+		s.upstreamError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, rep)
+}
+
 func (s *server) workload(w http.ResponseWriter, r *http.Request) {
 	p, password, ok := s.profileWithSecret(w, r)
 	if !ok || !supports(w, p, p.Capabilities.Workload, "Workload") {

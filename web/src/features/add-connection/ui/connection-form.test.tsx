@@ -22,7 +22,7 @@ describe("ConnectionForm", () => {
       }),
     );
     const { user, onSaved } = renderForm();
-    await user.click(screen.getByRole("radio", { name: "MySQL / MariaDB" }));
+    await user.click(screen.getByRole("radio", { name: "MySQL" }));
     expect(screen.getByLabelText("Port")).toHaveValue("3306");
     expect(screen.queryByLabelText("Paste a connection URL")).not.toBeInTheDocument();
     await user.type(screen.getByLabelText("Name"), "shop");

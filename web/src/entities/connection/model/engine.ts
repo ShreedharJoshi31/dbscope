@@ -1,6 +1,6 @@
 import type { Engine, TestResult } from "@/shared/api";
 
-export const ENGINE_ORDER: readonly Engine[] = ["postgres", "mysql", "sqlite", "mongodb"];
+export const ENGINE_ORDER: readonly Engine[] = ["postgres", "mysql", "sqlite", "mongodb", "redis"];
 
 export const ENGINE_META: Record<Engine, { label: string; description: string; defaultPort?: number }> = {
   postgres: {
@@ -9,8 +9,8 @@ export const ENGINE_META: Record<Engine, { label: string; description: string; d
     defaultPort: 5432,
   },
   mysql: {
-    label: "MySQL / MariaDB",
-    description: "ERD, read-only queries and online DDL migration risk.",
+    label: "MySQL",
+    description: "MySQL or MariaDB: ERD, read-only queries and online DDL migration risk.",
     defaultPort: 3306,
   },
   mongodb: {
@@ -18,6 +18,12 @@ export const ENGINE_META: Record<Engine, { label: string; description: string; d
     description:
       "A schema inferred from sampled documents, with likely references, and read-only queries as JSON commands.",
     defaultPort: 27017,
+  },
+  redis: {
+    label: "Redis",
+    description:
+      "Redis or Valkey: a map of key patterns with memory and expiry, big keys and server risks, read without touching values.",
+    defaultPort: 6379,
   },
   sqlite: {
     label: "SQLite",
@@ -32,6 +38,10 @@ export function engineLabel(engine: TestResult["engine"]): string {
       return "MySQL";
     case "mariadb":
       return "MariaDB";
+    case "redis":
+      return "Redis";
+    case "valkey":
+      return "Valkey";
     case undefined:
       return "PostgreSQL";
   }

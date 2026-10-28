@@ -133,7 +133,7 @@ function NetworkFields({
           <Input
             {...control}
             {...text("database")}
-            placeholder={values.engine === "postgres" ? "postgres" : "app"}
+            placeholder={values.engine === "postgres" ? "postgres" : values.engine === "redis" ? "0" : "app"}
             autoComplete="off"
             spellCheck={false}
             className="font-mono"
@@ -145,7 +145,7 @@ function NetworkFields({
           <Input
             {...control}
             {...text("user")}
-            placeholder={values.engine === "postgres" ? "postgres" : "root"}
+            placeholder={values.engine === "postgres" ? "postgres" : values.engine === "redis" ? "default" : "root"}
             autoComplete="off"
             spellCheck={false}
             className="font-mono"

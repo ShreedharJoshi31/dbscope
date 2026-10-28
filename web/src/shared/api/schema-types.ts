@@ -4,7 +4,14 @@
  * nil slice as null, so every slice without `omitempty` may arrive as null.
  */
 
-export type RelKind = "table" | "partitioned_table" | "view" | "materialized_view" | "foreign_table" | "collection";
+export type RelKind =
+  | "table"
+  | "partitioned_table"
+  | "view"
+  | "materialized_view"
+  | "foreign_table"
+  | "collection"
+  | "key_pattern";
 
 export interface QualifiedName {
   schema: string;

@@ -19,6 +19,8 @@ const (
 	KindForeignTable     RelKind = "foreign_table"
 	// KindCollection is a MongoDB collection; its columns are inferred from sampled documents.
 	KindCollection RelKind = "collection"
+	// KindKeyPattern is a group of Redis keys whose names differ only in id-like segments.
+	KindKeyPattern RelKind = "key_pattern"
 )
 
 type Model struct {

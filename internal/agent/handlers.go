@@ -9,6 +9,7 @@ import (
 	"github.com/dbscope/dbscope/internal/conn"
 	"github.com/dbscope/dbscope/internal/mongo"
 	"github.com/dbscope/dbscope/internal/mysql"
+	"github.com/dbscope/dbscope/internal/redis"
 	"github.com/dbscope/dbscope/internal/secrets"
 	"github.com/dbscope/dbscope/internal/sqlite"
 	"github.com/dbscope/dbscope/internal/store"
@@ -212,6 +213,8 @@ func testProfile(ctx context.Context, p conn.Profile, password string) conn.Test
 		return mysql.Test(ctx, p, password)
 	case conn.EngineMongoDB:
 		return mongo.Test(ctx, p, password)
+	case conn.EngineRedis:
+		return redis.Test(ctx, p, password)
 	}
 	return conn.Test(ctx, p, password)
 }
