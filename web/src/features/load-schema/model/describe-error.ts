@@ -1,5 +1,5 @@
-import { ERROR_KIND_COPY } from "@/entities/connection";
-import type { ApiError, TestErrorKind } from "@/shared/api";
+import { errorCopy } from "@/entities/connection";
+import type { ApiError, Engine, TestErrorKind } from "@/shared/api";
 
 const KINDS: readonly TestErrorKind[] = ["auth", "network", "tls", "timeout", "database", "other"];
 
@@ -12,10 +12,10 @@ export interface SchemaErrorCopy {
 }
 
 /** Turns an introspection failure into a named cause and a hint (UX rule 10). */
-export function describeSchemaError(error: ApiError, statementTimeoutMs?: number): SchemaErrorCopy {
+export function describeSchemaError(error: ApiError, statementTimeoutMs?: number, engine?: Engine): SchemaErrorCopy {
   if (error.code === "upstream") {
     const kind = KINDS.find((k) => k === error.detail) ?? "other";
-    const copy = ERROR_KIND_COPY[kind];
+    const copy = errorCopy(kind, engine ?? "unknown");
     return { title: copy.title, hint: copy.hint, message: error.message };
   }
   if (error.code === "timeout") {

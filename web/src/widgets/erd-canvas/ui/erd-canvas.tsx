@@ -63,6 +63,7 @@ export function ErdCanvas() {
       <SchemaLoadError
         error={query.error}
         statementTimeoutMs={profile?.statementTimeoutMs}
+        engine={profile?.engine}
         onRetry={() => void query.refetch()}
         retrying={query.isFetching}
         onOpenSample={source === "profile" ? openSample : undefined}

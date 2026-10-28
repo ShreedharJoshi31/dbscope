@@ -12,11 +12,11 @@ export interface ChecklistItem {
 export const ERROR_KIND_COPY: Record<TestErrorKind, { title: string; hint: string }> = {
   auth: {
     title: "Authentication failed",
-    hint: "Check the user name and password. The server's pg_hba.conf must also allow this user from this machine.",
+    hint: "Check the user name and password, and that the server lets this user connect from this machine.",
   },
   network: {
     title: "Could not reach the server",
-    hint: "Check the host and port, any VPN or SSH tunnel, and that PostgreSQL accepts TCP connections (listen_addresses).",
+    hint: "Check the host and port, any VPN or SSH tunnel, and that the server accepts connections from this machine.",
   },
   tls: {
     title: "TLS handshake failed",
@@ -35,6 +35,53 @@ export const ERROR_KIND_COPY: Record<TestErrorKind, { title: string; hint: strin
     hint: "Read the server message above for the cause.",
   },
 };
+
+type ServerEngine = TestResult["engine"];
+
+/** Where each server is told which addresses to listen on, for "could not reach the server". */
+const LISTEN_SETTING: Partial<Record<NonNullable<ServerEngine>, string>> = {
+  postgres: "PostgreSQL accepts TCP connections (listen_addresses)",
+  mysql: "MySQL listens beyond localhost (bind_address)",
+  mariadb: "MariaDB listens beyond localhost (bind_address)",
+  mongodb: "MongoDB listens beyond localhost (net.bindIp)",
+  redis: "Redis listens on this address (bind) and protected-mode allows remote clients",
+  valkey: "Valkey listens on this address (bind) and protected-mode allows remote clients",
+  cassandra: "Cassandra serves CQL on this address (rpc_address)",
+  scylladb: "ScyllaDB serves CQL on this address (rpc_address)",
+  neo4j: "Neo4j listens beyond localhost (server.default_listen_address)",
+};
+
+/**
+ * The title and hint for a failed connection. The hint names the setting of
+ * the engine at hand; an undefined engine is PostgreSQL (as in TestResult),
+ * and "unknown" gets the generic hint.
+ */
+export function errorCopy(kind: TestErrorKind, engine: ServerEngine | "unknown"): { title: string; hint: string } {
+  const copy = ERROR_KIND_COPY[kind];
+  const server = engine === "unknown" ? undefined : (engine ?? "postgres");
+  if (kind === "network" && server === "dynamodb") {
+    return {
+      ...copy,
+      hint: "Check the region, the endpoint if one is set, and any proxy or VPN between this machine and AWS.",
+    };
+  }
+  if (kind === "network" && server && LISTEN_SETTING[server]) {
+    return { ...copy, hint: `Check the host and port, any VPN or SSH tunnel, and that ${LISTEN_SETTING[server]}.` };
+  }
+  if (kind === "auth" && server === "postgres") {
+    return {
+      ...copy,
+      hint: "Check the user name and password. The server's pg_hba.conf must also allow this user from this machine.",
+    };
+  }
+  if (kind === "auth" && (server === "mysql" || server === "mariadb")) {
+    return {
+      ...copy,
+      hint: "Check the user name and password. The account's host part ('user'@'host') must match this machine's address.",
+    };
+  }
+  return copy;
+}
 
 /** Turns a successful TestResult into an ordered, human-readable checklist. */
 export function buildChecklist(result: TestResult, env: Env | undefined): ChecklistItem[] {

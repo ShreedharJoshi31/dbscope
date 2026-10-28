@@ -114,6 +114,7 @@ export function SchemaExplorer() {
           compact
           error={query.error}
           statementTimeoutMs={profile?.statementTimeoutMs}
+          engine={profile?.engine}
           onRetry={refresh}
           retrying={query.isFetching}
         />

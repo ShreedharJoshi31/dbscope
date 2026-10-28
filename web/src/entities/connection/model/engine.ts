@@ -11,18 +11,24 @@ export const ENGINE_ORDER: readonly Engine[] = [
   "neo4j",
 ];
 
-export const ENGINE_META: Record<Engine, { label: string; description: string; defaultPort?: number }> = {
+export const ENGINE_META: Record<
+  Engine,
+  { label: string; description: string; defaultPort?: number /** What a query tab takes. */; queryLanguage?: string }
+> = {
   postgres: {
+    queryLanguage: "SQL",
     label: "PostgreSQL",
     description: "ERD, queries, questions in plain English, migration risk and workload.",
     defaultPort: 5432,
   },
   mysql: {
+    queryLanguage: "SQL",
     label: "MySQL",
     description: "MySQL or MariaDB: ERD, read-only queries and online DDL migration risk.",
     defaultPort: 3306,
   },
   mongodb: {
+    queryLanguage: "a JSON command",
     label: "MongoDB",
     description:
       "A schema inferred from sampled documents, with likely references, and read-only queries as JSON commands.",
@@ -35,23 +41,27 @@ export const ENGINE_META: Record<Engine, { label: string; description: string; d
     defaultPort: 6379,
   },
   dynamodb: {
+    queryLanguage: "PartiQL",
     label: "DynamoDB",
     description:
       "Tables, keys and indexes with attributes from a small sample, and PartiQL SELECTs whose plan says when they scan. Uses your AWS credentials.",
   },
   cassandra: {
+    queryLanguage: "CQL",
     label: "Cassandra",
     description:
       "Cassandra or ScyllaDB: tables with partition and clustering keys, indexes by kind, and read-only CQL whose plan says when a query scans the cluster.",
     defaultPort: 9042,
   },
   neo4j: {
+    queryLanguage: "Cypher",
     label: "Neo4j",
     description:
       "A map of node labels and the relationships between them, and read-only Cypher whose plan flags full scans, cartesian products and unbounded paths.",
     defaultPort: 7687,
   },
   sqlite: {
+    queryLanguage: "SQL",
     label: "SQLite",
     description: "A database file on this machine, opened read-only: ERD, queries and migration checks.",
   },

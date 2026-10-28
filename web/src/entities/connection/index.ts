@@ -12,6 +12,7 @@ export {
   buildChecklist,
   type ChecklistItem,
   ERROR_KIND_COPY,
+  errorCopy,
   summarizeTest,
 } from "@/entities/connection/model/test-result";
 export { useActiveConnection } from "@/entities/connection/model/use-active-connection";

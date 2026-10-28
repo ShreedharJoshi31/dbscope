@@ -1,7 +1,7 @@
 import { BookText, LoaderCircle, MessageSquarePlus, PanelRightClose, Settings2, Sparkles } from "lucide-react";
 import { type ReactNode, useEffect, useRef } from "react";
 import { useThread } from "@/entities/assistant-turn";
-import { engineLabel, useActiveConnection } from "@/entities/connection";
+import { ENGINE_META, engineLabel, useActiveConnection } from "@/entities/connection";
 import { useWorkspaceStore } from "@/entities/schema";
 import { useAssistantActions } from "@/features/ask-assistant";
 import { openGlossary } from "@/features/edit-glossary";
@@ -102,7 +102,13 @@ function Body() {
       <EmptyState
         icon={Sparkles}
         title={`Questions are not available for ${engineLabel(profile.engine)} yet`}
-        description="Write SQL in a query tab instead; it runs read-only against this database."
+        description={
+          profile.capabilities.query
+            ? `Write ${ENGINE_META[profile.engine].queryLanguage ?? "a query"} in a query tab instead; it runs read-only against this database.`
+            : profile.capabilities.keyspace
+              ? "Open the Keyspace tab of the results dock for its memory, expiry and big-key report."
+              : "Browse it on the canvas instead."
+        }
       />
     );
   }

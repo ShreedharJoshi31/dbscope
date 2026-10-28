@@ -1,5 +1,5 @@
 import { cn } from "cn";
-import { buildChecklist, ERROR_KIND_COPY } from "@/entities/connection/model/test-result";
+import { buildChecklist, errorCopy } from "@/entities/connection/model/test-result";
 import type { Env, TestResult } from "@/shared/api";
 import { StatusIcon } from "@/shared/ui/status-icon";
 
@@ -44,7 +44,7 @@ function PassedResult({ result, env }: { result: TestResult; env: Env | undefine
 
 function FailedResult({ result }: { result: TestResult }) {
   const kind = result.error?.kind ?? "other";
-  const copy = ERROR_KIND_COPY[kind];
+  const copy = errorCopy(kind, result.engine);
   return (
     <div className="flex items-start gap-2 text-sm" data-error-kind={kind}>
       <StatusIcon tone="danger" className="mt-0.5" />

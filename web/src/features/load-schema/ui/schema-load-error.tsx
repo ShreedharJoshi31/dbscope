@@ -1,11 +1,13 @@
 import { OctagonX } from "lucide-react";
 import { describeSchemaError } from "@/features/load-schema/model/describe-error";
-import type { ApiError } from "@/shared/api";
+import type { ApiError, Engine } from "@/shared/api";
 import { Button } from "@/shared/ui/button";
 
 interface SchemaLoadErrorProps {
   error: ApiError;
   statementTimeoutMs?: number | undefined;
+  /** Names the server's own settings in the hint. */
+  engine?: Engine | undefined;
   onRetry: () => void;
   retrying?: boolean;
   /** Offered as a way forward when the database can't be read. */
@@ -17,12 +19,13 @@ interface SchemaLoadErrorProps {
 export function SchemaLoadError({
   error,
   statementTimeoutMs,
+  engine,
   onRetry,
   retrying,
   onOpenSample,
   compact,
 }: SchemaLoadErrorProps) {
-  const copy = describeSchemaError(error, statementTimeoutMs);
+  const copy = describeSchemaError(error, statementTimeoutMs, engine);
   return (
     <div role="alert" className="flex h-full min-h-0 items-center justify-center overflow-auto p-6">
       <div className={compact ? "flex flex-col gap-2" : "flex max-w-md flex-col gap-3"}>
