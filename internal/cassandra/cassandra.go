@@ -208,7 +208,11 @@ func Introspect(ctx context.Context, s *gocql.Session, keyspace string) (*schema
 	iter := s.Query("SELECT * FROM system_schema.tables WHERE keyspace_name = ?", keyspace).IterContext(ctx)
 	row := map[string]any{}
 	for iter.MapScan(row) {
-		add(str(row["table_name"]), schema.KindTable, tableComment(row))
+		name := str(row["table_name"])
+		add(name, schema.KindTable, tableComment(row))
+		if g, ok := row["gc_grace_seconds"].(int); ok && g == 0 {
+			byName[name].AddFinding("DBS-CQL-GC-GRACE-ZERO", "warn", "gc_grace_seconds is 0, so tombstones can be purged before every replica has seen the delete, and a repair can bring deleted rows back", "")
+		}
 		row = map[string]any{}
 	}
 	if err := iter.Close(); err != nil {
@@ -239,6 +243,9 @@ func Introspect(ctx context.Context, s *gocql.Session, keyspace string) (*schema
 			continue
 		}
 		add(view, schema.KindMatView, "materialized view of "+base+" where "+where)
+		if srv.Flavor == "cassandra" {
+			byName[view].AddFinding("DBS-CQL-MATERIALIZED-VIEW", "warn", "materialized views are experimental in Cassandra and off by default (materialized_views_enabled); the view can drift from its base table", "")
+		}
 		byName[view].DependsOn = []schema.QualifiedName{{Schema: keyspace, Name: base}}
 	}
 	if err := iter.Close(); err != nil {
@@ -301,7 +308,11 @@ func Introspect(ctx context.Context, s *gocql.Session, keyspace string) (*schema
 	}
 	for _, ix := range idxs {
 		if r := byName[ix.table]; r != nil {
-			r.Indexes = append(r.Indexes, schema.Index{Name: ix.name, Columns: []string{ix.target}, Method: indexKind(ix.kind, ix.class, srv.Flavor), Valid: true})
+			kind := indexKind(ix.kind, ix.class, srv.Flavor)
+			r.Indexes = append(r.Indexes, schema.Index{Name: ix.name, Columns: []string{ix.target}, Method: kind, Valid: true})
+			if kind == "sasi" {
+				r.AddFinding("DBS-CQL-SASI", "warn", "SASI index "+ix.name+" is experimental in Cassandra and off by default (sasi_indexes_enabled); SAI is its replacement", ix.target)
+			}
 		}
 	}
 	for _, name := range order {

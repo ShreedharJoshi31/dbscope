@@ -12,6 +12,7 @@ import (
 	"github.com/dbscope/dbscope/internal/query/exec"
 	"github.com/dbscope/dbscope/internal/query/guard"
 	"github.com/dbscope/dbscope/internal/query/plan"
+	"github.com/dbscope/dbscope/internal/schema"
 )
 
 func TestParse(t *testing.T) {
@@ -160,11 +161,12 @@ func testServer(t *testing.T, name string) {
 		}
 		products := m.Relations[byName["products"]]
 		if *products.RowEstimate != 2 || products.Column("title.keyword") == nil || products.Column("variants").Type != "nested" ||
-			products.Column("maker.name") == nil || !strings.Contains(products.Comment, "2 shards, 0 replicas") || !strings.Contains(products.Comment, "no replicas") {
+			products.Column("maker.name") == nil || !strings.Contains(products.Comment, "2 shards, 0 replicas") || !hasFinding(products.Findings, "DBS-ES-NO-REPLICAS", "") {
 			t.Errorf("products %+v", products)
 		}
 		logs := m.Relations[byName["logs"]]
-		if col := logs.Column("status"); col == nil || col.Type != "keyword | long" || !strings.Contains(col.Comment, "long in logs-a") {
+		if col := logs.Column("status"); col == nil || col.Type != "keyword | long" || !strings.Contains(col.Comment, "long in logs-a") ||
+			!hasFinding(logs.Findings, "DBS-ES-TYPE-CONFLICT", "status") {
 			t.Errorf("alias %+v", logs)
 		}
 		for _, r := range m.Relations {
@@ -208,6 +210,15 @@ func testServer(t *testing.T, name string) {
 			t.Errorf("delete parsed: %v", err)
 		}
 	})
+}
+
+func hasFinding(fs []schema.Finding, rule, column string) bool {
+	for _, f := range fs {
+		if f.RuleID == rule && f.Column == column {
+			return true
+		}
+	}
+	return false
 }
 
 func hasFlag(n *plan.Node, code string) bool {

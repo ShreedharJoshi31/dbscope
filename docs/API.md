@@ -102,6 +102,9 @@ Profile create/update/test-by-id with a locked vault → `423 {"error":{"code":"
   `REPEATABLE READ READ ONLY` transaction with `statement_timeout` = the profile's `statementTimeoutMs`.
   Partitions are collapsed into their parent (`partitions`, `partitionKey`, summed `rowEstimate`).
   Relations outside the selected schemas that a foreign key references are included with `"stub": true`.
+  Design risks the engine's introspection found are in each relation's `findings`:
+  `[{"ruleId":"DBS-CH-NO-PRIMARY-INDEX","level":"warn","message":"...","column":"..."}]`, `level` one of
+  `info|warn|danger`, `column` only when the risk is about one column (docs/ENGINES.md, Schema risks).
   Foreign keys inferred from naming carry `"inferred": true` and a `confidence` in (0,1]; inferred
   keys the user rejected are omitted and accepted ones are returned with `"inferred": true, "confidence": 1`.
   Errors: connection failures → `502 {"error":{"code":"upstream", ...}}` with `detail` = the TestResult

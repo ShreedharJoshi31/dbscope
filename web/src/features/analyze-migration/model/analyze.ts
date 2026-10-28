@@ -233,7 +233,7 @@ export function stepStatement(direction: 1 | -1): boolean {
   return true;
 }
 
-/** From the Risk tab: opens the statement's migration tab and focuses its marker. */
+/** From the Migration risk tab: opens the statement's migration tab and focuses its marker. */
 export function openStatement(id: string, statementIndex: number): void {
   const review = useReviewStore.getState().reviews[id];
   if (!review) return;

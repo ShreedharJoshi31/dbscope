@@ -363,7 +363,7 @@ func Introspect(ctx context.Context, c *Client) (*schema.Model, error) {
 		st := stats.Indices[ix.Name]
 		n := docs[ix.Name]
 		r.RowEstimate = &n
-		r.Comment = indexComment(settings[ix.Name].Settings, st.Primaries.Store.Size, n, fields, dynamic, ix.Aliases)
+		r.Comment = indexComment(&r, settings[ix.Name].Settings, st.Primaries.Store.Size, n, fields, dynamic, ix.Aliases)
 		m.Relations = append(m.Relations, r)
 	}
 	for _, ds := range resolved.DataStreams {
@@ -380,7 +380,7 @@ func Introspect(ctx context.Context, c *Client) (*schema.Model, error) {
 		}
 		r.RowEstimate = &n
 		r.Comment = fmt.Sprintf("data stream over %d backing indices; fields of the write index %s; ", len(ds.BackingIndices), write) +
-			indexComment(settings[write].Settings, size, n, fields, dynamic, nil)
+			indexComment(&r, settings[write].Settings, size, n, fields, dynamic, nil)
 		m.Relations = append(m.Relations, r)
 	}
 	for i, a := range resolved.Aliases {
@@ -469,6 +469,7 @@ func (c *Client) aliasRelation(ctx context.Context, alias string, indices []stri
 				parts = append(parts, t+" in "+strings.Join(in, ", "))
 			}
 			col.Comment = "type conflict: " + strings.Join(parts, "; ")
+			r.AddFinding("DBS-ES-TYPE-CONFLICT", "warn", n+" is mapped as "+strings.Join(parts, "; ")+": sorting and aggregating on it across the alias fail or skip indices", n)
 		}
 		r.Columns = append(r.Columns, col)
 	}
@@ -543,8 +544,8 @@ func flatten(mapping map[string]any, r *schema.Relation) (int, string) {
 	return count, dynamic
 }
 
-// indexComment summarises the index and its risks.
-func indexComment(s map[string]string, bytes, docs int64, fields int, dynamic string, aliases []string) string {
+// indexComment summarises the index and records its risks as findings on r.
+func indexComment(r *schema.Relation, s map[string]string, bytes, docs int64, fields int, dynamic string, aliases []string) string {
 	shards, _ := strconv.Atoi(s["index.number_of_shards"])
 	parts := []string{fmt.Sprintf("%d shards, %s replicas, %s", shards, s["index.number_of_replicas"], size(bytes))}
 	limit := defaultTotalFields
@@ -555,33 +556,31 @@ func indexComment(s map[string]string, bytes, docs int64, fields int, dynamic st
 	if len(aliases) > 0 {
 		parts = append(parts, "aliases: "+strings.Join(aliases, ", "))
 	}
-	var risks []string
-	if fields*5 >= limit*4 {
-		risks = append(risks, fmt.Sprintf("near the field limit (%d of %d): new fields will be refused", fields, limit))
+	switch {
+	case fields >= limit:
+		r.AddFinding("DBS-ES-FIELD-LIMIT", "danger", fmt.Sprintf("at the field limit (%d of %d): documents with new fields are refused", fields, limit), "")
+	case fields*5 >= limit*4:
+		r.AddFinding("DBS-ES-FIELD-LIMIT", "warn", fmt.Sprintf("near the field limit (%d of %d): new fields will soon be refused", fields, limit), "")
 	}
 	if s["index.number_of_replicas"] == "0" {
-		risks = append(risks, "no replicas: a lost node loses its shards")
+		r.AddFinding("DBS-ES-NO-REPLICAS", "warn", "no replicas: a lost node loses its shards", "")
 	}
 	for _, b := range []string{"read_only", "read_only_allow_delete", "write", "read", "metadata"} {
 		if s["index.blocks."+b] == "true" {
-			msg := "block " + b + " is set"
+			msg := "the block " + b + " is set"
 			if b == "read_only_allow_delete" {
-				msg += " (usually the disk flood-stage watermark)"
+				msg += ", usually by the disk flood-stage watermark"
 			}
-			risks = append(risks, msg)
+			r.AddFinding("DBS-ES-BLOCK", "danger", msg, "")
 		}
 	}
 	if shards > 0 && bytes/int64(shards) > 50<<30 {
-		risks = append(risks, fmt.Sprintf("shards average %s, above the 50 GB guidance", size(bytes/int64(shards))))
+		r.AddFinding("DBS-ES-LARGE-SHARDS", "warn", fmt.Sprintf("shards average %s, above the 50 GB guidance", size(bytes/int64(shards))), "")
 	}
 	if shards > 0 && docs/int64(shards) > 200_000_000 {
-		risks = append(risks, "more than 200M documents per shard")
+		r.AddFinding("DBS-ES-SHARD-DOCS", "warn", "more than 200M documents per shard", "")
 	}
-	out := strings.Join(parts, ", ")
-	if len(risks) > 0 {
-		out += "; risk: " + strings.Join(risks, "; ")
-	}
-	return out
+	return strings.Join(parts, ", ")
 }
 
 func size(n int64) string {

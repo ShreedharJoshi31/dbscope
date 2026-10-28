@@ -62,6 +62,9 @@ type Relation struct {
 	Stub bool `json:"stub,omitempty"`
 	// DependsOn holds the relations a view or matview reads from.
 	DependsOn []QualifiedName `json:"dependsOn,omitempty"`
+	// Findings are design risks the engine's introspection found in this
+	// relation, such as a table with no primary index or an index near its field limit.
+	Findings []Finding `json:"findings,omitempty"`
 }
 
 type Column struct {
@@ -79,6 +82,19 @@ type Column struct {
 }
 
 // FK actions use the SQL words: "no action", "restrict", "cascade", "set null", "set default".
+// Finding is one risk in a relation's design.
+type Finding struct {
+	RuleID  string `json:"ruleId"` // stable, such as DBS-CH-NO-PRIMARY-INDEX
+	Level   string `json:"level"`  // info, warn or danger
+	Message string `json:"message"`
+	Column  string `json:"column,omitempty"`
+}
+
+// AddFinding records a risk on the relation.
+func (r *Relation) AddFinding(ruleID, level, message, column string) {
+	r.Findings = append(r.Findings, Finding{RuleID: ruleID, Level: level, Message: message, Column: column})
+}
+
 type ForeignKey struct {
 	Name      string        `json:"name"`
 	Columns   []string      `json:"columns"`

@@ -67,6 +67,7 @@ func testServer(t *testing.T, flavor string) {
 		`CREATE TABLE app.orders (customer text, placed timestamp, id uuid, status text, total decimal, note text static, tags set<text>,
 			PRIMARY KEY ((customer), placed, id)) WITH CLUSTERING ORDER BY (placed DESC, id ASC) AND default_time_to_live = 86400`,
 		"CREATE INDEX by_status ON app.orders (status)",
+		"CREATE TABLE app.audit (id uuid PRIMARY KEY, what text) WITH gc_grace_seconds = 0",
 		"INSERT INTO app.orders (customer, placed, id, status, total, note, tags) VALUES ('c1', '2026-10-01', 5b6962dd-3f90-4c93-8f61-eabfa4a803e2, 'paid', 12.50, 'vip', {'a'})",
 		"INSERT INTO app.orders (customer, placed, id, status, total) VALUES ('c1', '2026-10-02', 6b6962dd-3f90-4c93-8f61-eabfa4a803e2, 'new', 99999999999999999999.01)",
 		"INSERT INTO app.orders (customer, placed, id, status) VALUES ('c2', '2026-10-03', 7b6962dd-3f90-4c93-8f61-eabfa4a803e2, 'paid')",
@@ -114,10 +115,13 @@ func testServer(t *testing.T, flavor string) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(m.Relations) != 1 { // ScyllaDB's index view is folded into the index
+		if len(m.Relations) != 2 || m.Relations[0].Name != "audit" { // ScyllaDB's index view is folded into the index
 			t.Fatalf("relations %+v", m.Relations)
 		}
-		o := m.Relations[0]
+		if f := m.Relations[0].Findings; len(f) != 1 || f[0].RuleID != "DBS-CQL-GC-GRACE-ZERO" {
+			t.Errorf("audit findings %+v", f)
+		}
+		o := m.Relations[1]
 		if strings.Join(o.PrimaryKey, ",") != "customer,placed,id" || o.Columns[0].Comment != "partition key" || o.Columns[1].Comment != "clustering key, desc" ||
 			o.Columns[3].Name != "note" || !strings.HasPrefix(o.Columns[3].Comment, "static") || !strings.Contains(o.Comment, "default TTL 1 day") || !strings.Contains(o.Comment, "gc_grace 10 days") {
 			t.Errorf("orders %+v", o)

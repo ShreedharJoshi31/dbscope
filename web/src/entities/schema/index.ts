@@ -31,6 +31,12 @@ export {
   showMigrationDiff,
 } from "@/entities/schema/model/diff-overlay";
 export {
+  type FindingRow,
+  findingCount,
+  schemaFindings,
+  worstLevel,
+} from "@/entities/schema/model/findings";
+export {
   buildSchemaGraph,
   type ColumnFlags,
   type ColumnPair,

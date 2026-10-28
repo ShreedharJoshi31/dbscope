@@ -93,6 +93,16 @@ export interface Relation {
   stub?: boolean;
   /** Relations a view or matview reads from. */
   dependsOn?: QualifiedName[];
+  /** Design risks the engine's introspection found, such as no primary index or a field type conflict. */
+  findings?: Finding[];
+}
+
+export interface Finding {
+  /** Stable, such as DBS-CH-NO-PRIMARY-INDEX. */
+  ruleId: string;
+  level: "info" | "warn" | "danger";
+  message: string;
+  column?: string;
 }
 
 export interface Model {

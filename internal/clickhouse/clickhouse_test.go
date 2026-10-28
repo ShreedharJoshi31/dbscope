@@ -119,7 +119,9 @@ func testServer(t *testing.T, name string) {
 			if user == "ro1" && !strings.Contains(events.Comment, "need SELECT on system.parts") {
 				t.Errorf("parts without grant: %s", events.Comment)
 			}
-			if !strings.Contains(m.Relations[byName["raw"]].Comment, "ORDER BY tuple()") || m.Relations[byName["daily_mv"]].Kind != "materialized_view" {
+			raw := m.Relations[byName["raw"]]
+			if len(raw.Findings) != 1 || raw.Findings[0].RuleID != "DBS-CH-NO-PRIMARY-INDEX" || m.Relations[byName["daily_mv"]].Kind != "materialized_view" ||
+				len(events.Findings) != 0 {
 				t.Errorf("raw / mv %+v", m.Relations)
 			}
 

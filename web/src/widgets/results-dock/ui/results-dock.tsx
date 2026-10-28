@@ -12,6 +12,7 @@ import { MessagesTab } from "@/widgets/results-dock/ui/messages-tab";
 import { PlanTab } from "@/widgets/results-dock/ui/plan-tab";
 import { ResultsTab } from "@/widgets/results-dock/ui/results-tab";
 import { RiskTab } from "@/widgets/results-dock/ui/risk-tab";
+import { SchemaRisksLabel, SchemaRisksTab } from "@/widgets/results-dock/ui/schema-risks-tab";
 
 function MessagesLabel() {
   const errors = useRunStore((s) => s.messages.filter((m) => m.level === "error").length);
@@ -32,7 +33,8 @@ const TABS: { value: DockTab; label: ReactNode; content: ReactNode }[] = [
   { value: "results", label: "Results", content: <ResultsTab /> },
   { value: "messages", label: <MessagesLabel />, content: <MessagesTab /> },
   { value: "plan", label: "Plan", content: <PlanTab /> },
-  { value: "risk", label: "Risk", content: <RiskTab /> },
+  { value: "risk", label: "Migration risk", content: <RiskTab /> },
+  { value: "schema", label: <SchemaRisksLabel />, content: <SchemaRisksTab /> },
   { value: "keyspace", label: "Keyspace", content: <KeyspaceTab /> },
 ];
 

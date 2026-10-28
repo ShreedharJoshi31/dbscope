@@ -16,6 +16,7 @@ import { confidenceLabel, InferredFkActions } from "@/features/review-inferred-f
 import type { Relation } from "@/shared/api";
 import { formatGrouped } from "@/shared/lib/format-number";
 import { Button } from "@/shared/ui/button";
+import { StatusIcon } from "@/shared/ui/status-icon";
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -100,6 +101,24 @@ function Body({ graph, id }: { graph: SchemaGraph; id: string }) {
         {relation.pages > 0 && ` · ${formatGrouped(relation.pages)} pages`}
       </p>
       {relation.comment && <p className="text-xs">{relation.comment}</p>}
+      {(relation.findings?.length ?? 0) > 0 && (
+        <Section title={`Risks (${relation.findings?.length})`}>
+          <ul aria-label="Design risks" className="flex flex-col gap-1.5">
+            {relation.findings?.map((f) => (
+              <li key={f.ruleId + (f.column ?? "") + f.message} className="flex items-start gap-1.5 text-xs">
+                <StatusIcon tone={f.level} className="mt-0.5 size-3.5" />
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span>{f.message}</span>
+                  <span className="font-mono text-2xs text-text-muted">
+                    {f.ruleId}
+                    {f.column && ` · ${f.column}`}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
       {relation.kind === "partitioned_table" && (
         <Section title="Partitions">
           <p className="font-mono text-xs">{relation.partitionKey}</p>

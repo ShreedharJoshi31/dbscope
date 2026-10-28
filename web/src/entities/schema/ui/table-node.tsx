@@ -23,6 +23,7 @@ import {
   useCanvasStore,
 } from "@/entities/schema/model/canvas-store";
 import { DIFF_CHANGE_META } from "@/entities/schema/model/diff-overlay";
+import { worstLevel } from "@/entities/schema/model/findings";
 import { relationKey } from "@/entities/schema/model/keys";
 import {
   type ColumnRow,
@@ -88,6 +89,30 @@ function OverlayBadge({ entry }: { entry: OverlayEntry }) {
         </span>
       )}
       {details && <span className="sr-only">. {entry.details?.join(". ")}</span>}
+    </span>
+  );
+}
+
+/** How many design risks the table has, toned by the worst; the messages are in the tooltip and accessible name. */
+function RiskBadge({ relation }: { relation: TableNodeData["relation"] }) {
+  const findings = relation.findings ?? [];
+  const worst = worstLevel(findings);
+  if (!worst) return null;
+  const Icon = OVERLAY_ICON[worst];
+  const lines = findings.map((f) => f.message);
+  return (
+    <span
+      data-testid="risk-badge"
+      data-level={worst}
+      title={lines.join("\n")}
+      className={cn(
+        "flex shrink-0 items-center gap-0.5 rounded-xs border px-1 text-2xs font-semibold",
+        OVERLAY_TONE[worst],
+      )}
+    >
+      <Icon aria-hidden className="size-3" />
+      {findings.length} risk{findings.length === 1 ? "" : "s"}
+      <span className="sr-only">: {lines.join(". ")}</span>
     </span>
   );
 }
@@ -333,6 +358,7 @@ function Header({ id, data, mark }: { id: string; data: TableNodeData; mark: str
       {(mark === "impact" || mark === "impact-heuristic") && <ImpactChip heuristic={mark === "impact-heuristic"} />}
       {change && <DiffBadge change={change} columns={columns} />}
       {overlay && <OverlayBadge entry={overlay} />}
+      {!overlay && <RiskBadge relation={relation} />}
       <button
         type="button"
         tabIndex={-1}

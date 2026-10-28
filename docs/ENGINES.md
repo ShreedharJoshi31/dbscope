@@ -42,6 +42,18 @@ internal/schema    the shared relational model; Model.Engine is empty for Postgr
 Relational engines map onto `schema.Model`. Non-relational engines will get
 models of their own rather than being forced into tables and columns.
 
+### Schema risks
+
+Design risks an engine's introspection finds are `findings` on the relation
+(rule id, level `info`, `warn` or `danger`, message, and the column when
+there is one), not prose in its comment. The canvas shows a card's count,
+toned by the worst level, unless a query or workload overlay is showing;
+the table details list them; the dock's **Schema risks** tab lists every
+one, most serious first, and opens the table it names. Today they come from
+ClickHouse (`DBS-CH-*`), Elasticsearch and OpenSearch (`DBS-ES-*`) and
+Cassandra (`DBS-CQL-*`: `gc_grace_seconds` of 0, and Cassandra's
+experimental materialized views and SASI indexes).
+
 ## Engines
 
 | Engine | ERD | Query | Ask | Migrations | Workload / keyspace |
@@ -513,13 +525,13 @@ search on `_index`, because index stats count nested objects as documents.
 The comment gives shards, replicas, size, the field count against
 `index.mapping.total_fields.limit` (counted as Elasticsearch does: every
 object level, leaf, multi-field and runtime field), the `dynamic` setting
-and aliases, then risks: within 80% of the field limit, no replicas, any
-`index.blocks.*` (`read_only_allow_delete` usually means the disk
-flood-stage watermark), shards above 50 GB or 200M documents. A data stream
+and aliases. Findings: within 80% of the field limit (at it: danger), no
+replicas, any `index.blocks.*` (`read_only_allow_delete` usually means the
+disk flood-stage watermark), shards above 50 GB or 200M documents. A data stream
 is one card with its write index's fields. An alias is a view over its
 indices whose columns come from `_field_caps`; a field with more than one
-type across them is a **type conflict**, named per index, since it breaks
-sorting and aggregations across the alias.
+type across them is a **type conflict** (`DBS-ES-TYPE-CONFLICT`), named per
+index, since it breaks sorting and aggregations across the alias.
 
 **Queries.** The query tab takes a search request as JSON, with an optional
 `"index"` (default: the profile's pattern), or SQL (`SELECT`, `SHOW`,
@@ -587,7 +599,7 @@ user) give each table's engine, `ORDER BY`, primary key (in key order),
 partition key, rows, compressed size, active parts and TTL, and each
 column's role in the keys, codec and DEFAULT, MATERIALIZED or ALIAS
 expression. A materialized view points at its `TO` table (read from its
-CREATE statement; `system.tables.target_table` is new in 26.x). Risks:
+CREATE statement; `system.tables.target_table` is new in 26.x). Findings:
 
 | Risk | When |
 |---|---|

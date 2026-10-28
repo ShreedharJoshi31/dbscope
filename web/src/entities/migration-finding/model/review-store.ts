@@ -55,7 +55,7 @@ export interface MigrationReview {
 
 interface ReviewState {
   reviews: Readonly<Record<string, MigrationReview>>;
-  /** The review the Risk tab shows when no migration tab is active: the last one analyzed or viewed. */
+  /** The review the Migration risk tab shows when no migration tab is active: the last one analyzed or viewed. */
   current: string | null;
   riskSort: RiskSort;
   add: (review: MigrationReview) => void;

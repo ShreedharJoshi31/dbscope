@@ -18,7 +18,7 @@ import { Button } from "@/shared/ui/button";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { StatusIcon } from "@/shared/ui/status-icon";
 
-/** The review the Risk tab shows: the active migration tab's, else the last one analyzed or viewed in this scope. */
+/** The review the Migration risk tab shows: the active migration tab's, else the last one analyzed or viewed in this scope. */
 function useRiskReview(): MigrationReview | undefined {
   const active = useSqlTabs((s) => s.active);
   const scope = useSqlTabs((s) => s.scope);

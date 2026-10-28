@@ -259,6 +259,9 @@ func Introspect(ctx context.Context, c *Client) (*schema.Model, error) {
 			r.PrimaryKey = splitKey(t.primary)
 			r.PartitionKey = t.partition
 			r.Comment = tableComment(t.engine, t.sorting, t.primary, t.partition, t.bytes, t.activeParts, t.ttl != "")
+			if strings.Contains(t.engine, "MergeTree") && (t.sorting == "" || t.sorting == "tuple()") {
+				r.AddFinding("DBS-CH-NO-PRIMARY-INDEX", "warn", "ORDER BY tuple() has no primary index, so every query reads the whole table", "")
+			}
 		}
 		byName[t.name] = r
 	}
@@ -291,7 +294,7 @@ func Introspect(ctx context.Context, c *Client) (*schema.Model, error) {
 		if inSort == 1 {
 			notes = append(notes, "sorting key")
 			if col.Nullable {
-				r.Comment += "; risk: " + name + " is Nullable in the sorting key, which needs allow_nullable_key and adds a null mask to every key read"
+				r.AddFinding("DBS-CH-NULLABLE-KEY", "warn", name+" is Nullable in the sorting key, which needs allow_nullable_key and adds a null mask to every key read", name)
 			}
 		}
 		if inPartition == 1 {
@@ -345,12 +348,12 @@ func (c *Client) addPartitions(ctx context.Context, byName map[string]*schema.Re
 		r.Comment += fmt.Sprintf("; %d partitions, up to %d parts in one", partitions, maxParts)
 		switch {
 		case maxParts > partsToThrowInsert:
-			r.Comment += fmt.Sprintf("; risk: %d parts in one partition, above parts_to_throw_insert (3000): inserts fail with Too many parts", maxParts)
+			r.AddFinding("DBS-CH-TOO-MANY-PARTS", "danger", fmt.Sprintf("%d parts in one partition, above parts_to_throw_insert (3000): inserts fail with Too many parts", maxParts), "")
 		case maxParts > partsToDelayInsert:
-			r.Comment += fmt.Sprintf("; risk: %d parts in one partition, above parts_to_delay_insert (1000): inserts are slowed", maxParts)
+			r.AddFinding("DBS-CH-MANY-PARTS", "warn", fmt.Sprintf("%d parts in one partition, above parts_to_delay_insert (1000): inserts are slowed", maxParts), "")
 		}
 		if partitions > partitionsWarn {
-			r.Comment += fmt.Sprintf("; risk: %d partitions; parts never merge across partitions, so a coarser partition key (under 1,000 values) usually works better", partitions)
+			r.AddFinding("DBS-CH-TOO-MANY-PARTITIONS", "warn", fmt.Sprintf("%d partitions; parts never merge across partitions, so a coarser partition key (under 1,000 values) usually works better", partitions), "")
 		}
 	}
 }
@@ -371,9 +374,10 @@ func (c *Client) addMutations(ctx context.Context, byName map[string]*schema.Rel
 			continue
 		}
 		r := byName[table]
-		r.Comment += fmt.Sprintf("; risk: %d mutations pending since %s", n, since.UTC().Format(time.RFC3339))
 		if failed > 0 {
-			r.Comment += fmt.Sprintf(", %d failing (%s)", failed, reason)
+			r.AddFinding("DBS-CH-MUTATION-FAILING", "danger", fmt.Sprintf("%d of %d pending mutations are failing: %s", failed, n, reason), "")
+		} else {
+			r.AddFinding("DBS-CH-MUTATIONS-PENDING", "warn", fmt.Sprintf("%d mutations pending since %s; they rewrite parts in the background", n, since.UTC().Format(time.RFC3339)), "")
 		}
 	}
 }
@@ -426,8 +430,7 @@ func note(byName map[string]*schema.Relation, msg string) {
 	}
 }
 
-// tableComment describes the engine, keys and size, and flags keys that
-// make every query a full scan.
+// tableComment describes the engine, keys and size.
 func tableComment(engine, sorting, primary, partition string, bytes, parts *uint64, ttl bool) string {
 	parts0 := []string{engine}
 	if sorting != "" {
@@ -448,11 +451,7 @@ func tableComment(engine, sorting, primary, partition string, bytes, parts *uint
 	if ttl {
 		parts0 = append(parts0, "TTL set")
 	}
-	out := strings.Join(parts0, ", ")
-	if strings.Contains(engine, "MergeTree") && (sorting == "" || sorting == "tuple()") {
-		out += "; risk: ORDER BY tuple() has no primary index, so every query reads the whole table"
-	}
-	return out
+	return strings.Join(parts0, ", ")
 }
 
 func size(n uint64) string {

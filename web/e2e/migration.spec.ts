@@ -112,7 +112,7 @@ test.describe("migration review", () => {
     await expect(tableNode(page, "shop.shipments").getByTestId("diff-badge")).toContainText("dropped");
 
     // Risk tab: findings, sortable; a click jumps back to the statement.
-    await expect(dock(page).getByRole("tab", { name: "Risk" })).toHaveAttribute("aria-selected", "true");
+    await expect(dock(page).getByRole("tab", { name: "Migration risk" })).toHaveAttribute("aria-selected", "true");
     const rows = dock(page).getByTestId("risk-row");
     await expect(rows).toHaveCount(10);
     await expect(rows.first()).toHaveAttribute("data-rule", "DBS-DROP-TABLE");
@@ -261,7 +261,7 @@ test.describe("migration review", () => {
     await page.getByRole("button", { name: "Open sample schema" }).first().click();
     await waitForCanvas(page);
     await page.keyboard.press("ControlOrMeta+J");
-    await dock(page).getByRole("tab", { name: "Risk" }).click();
+    await dock(page).getByRole("tab", { name: "Migration risk" }).click();
     await expect(dock(page)).toContainText("No migration analyzed");
     await dropFiles(page, MIGRATION_FILES);
     await expect(review(page).getByTestId("overall-rating")).toHaveText("Critical");
