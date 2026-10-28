@@ -30,6 +30,7 @@ export {
   partitionDiffRelations,
   showMigrationDiff,
 } from "@/entities/schema/model/diff-overlay";
+export { type Drift, type DriftChange, type DriftItem, diffModels } from "@/entities/schema/model/drift";
 export {
   type FindingRow,
   findingCount,

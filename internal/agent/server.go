@@ -101,6 +101,8 @@ func New(cfg Config) (*Agent, error) {
 	mux.HandleFunc("GET /api/profiles/{id}/namespaces", s.namespaces)
 	mux.HandleFunc("GET /api/profiles/{id}/schema", s.schema)
 	mux.HandleFunc("PUT /api/profiles/{id}/inferred-fks", s.setInferredFK)
+	mux.HandleFunc("GET /api/profiles/{id}/snapshots", s.snapshots)
+	mux.HandleFunc("GET /api/profiles/{id}/snapshots/{snapshot}", s.snapshot)
 	mux.HandleFunc("GET /api/profiles/{id}/layout", s.getLayout)
 	mux.HandleFunc("PUT /api/profiles/{id}/layout", s.putLayout)
 	mux.HandleFunc("GET /api/sample/schema", s.sampleSchema)

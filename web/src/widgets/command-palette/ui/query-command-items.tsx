@@ -2,6 +2,7 @@ import {
   BookText,
   Eraser,
   FilePlus2,
+  GitCompareArrows,
   History,
   MessageSquareText,
   Play,
@@ -13,6 +14,7 @@ import { useThreadStore } from "@/entities/assistant-turn";
 import { useActiveConnection } from "@/entities/connection";
 import { openSqlTab, useRunStore, useSqlTabs } from "@/entities/query";
 import { clearCanvasOverlay, hasCanvasOverlay, useCanvasStore } from "@/entities/schema";
+import { openCompare } from "@/features/compare-schema";
 import { openGlossary } from "@/features/edit-glossary";
 import { openLlmSettings } from "@/features/llm-settings";
 import { useQueryRunner } from "@/features/run-query";
@@ -42,6 +44,12 @@ export function QueryCommandItems({ run }: { run: Run }) {
   const running = useRunStore((s) => s.running !== null);
   return (
     <CommandGroup heading="Query">
+      {profile && (
+        <CommandItem value="compare schema drift snapshot connection" onSelect={run(openCompare)}>
+          <GitCompareArrows aria-hidden />
+          Compare schema…
+        </CommandItem>
+      )}
       <CommandItem value="new sql tab query editor" onSelect={run(() => openSqlTab())}>
         <FilePlus2 aria-hidden />
         {SHORTCUTS.newSqlTab.label}

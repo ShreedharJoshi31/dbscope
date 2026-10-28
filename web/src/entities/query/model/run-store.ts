@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { ApiError, Overlay, PlanNode, QueryResult } from "@/shared/api";
 
-export type DockTab = "results" | "messages" | "plan" | "risk" | "schema" | "keyspace";
+export type DockTab = "results" | "messages" | "plan" | "risk" | "schema" | "drift" | "keyspace";
 export type RunKind = "query" | "explain";
 export type RunSource = "editor" | "assistant";
 

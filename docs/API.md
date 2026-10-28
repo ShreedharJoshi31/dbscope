@@ -102,6 +102,8 @@ Profile create/update/test-by-id with a locked vault → `423 {"error":{"code":"
   `REPEATABLE READ READ ONLY` transaction with `statement_timeout` = the profile's `statementTimeoutMs`.
   Partitions are collapsed into their parent (`partitions`, `partitionKey`, summed `rowEstimate`).
   Relations outside the selected schemas that a foreign key references are included with `"stub": true`.
+  Each successful read is kept as a snapshot when its structure (relations, columns, keys, indexes,
+  findings; not counts, sizes or comments) differs from the newest one; the newest 20 per profile are kept.
   Design risks the engine's introspection found are in each relation's `findings`:
   `[{"ruleId":"DBS-CH-NO-PRIMARY-INDEX","level":"warn","message":"...","column":"..."}]`, `level` one of
   `info|warn|danger`, `column` only when the risk is about one column (docs/ENGINES.md, Schema risks).
@@ -109,6 +111,17 @@ Profile create/update/test-by-id with a locked vault → `423 {"error":{"code":"
   keys the user rejected are omitted and accepted ones are returned with `"inferred": true, "confidence": 1`.
   Errors: connection failures → `502 {"error":{"code":"upstream", ...}}` with `detail` = the TestResult
   error kind (`auth|network|tls|timeout|database|other`); statement timeout → `504 {"error":{"code":"timeout"}}`.
+
+### Schema snapshots
+
+- `GET /api/profiles/{id}/snapshots` → `200 [{"id":7,"takenAt":"…","relations":42,"schemas":["public"]}]`, newest first.
+- `GET /api/profiles/{id}/snapshots/{snapshot}` → `200 Model` as it was read (before inferred-key decisions),
+  `404 not_found` for an unknown id or another profile's snapshot.
+
+The UI compares the current model with a snapshot or with another profile's schema in the browser
+(`diffModels`): tables, columns (type, nullability, default), primary and partition keys, indexes,
+declared foreign keys and findings. A relation in a schema the other side did not read is reported as
+not compared rather than added or dropped.
 
 ### Inferred foreign keys
 

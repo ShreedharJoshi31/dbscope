@@ -10,7 +10,32 @@ export const schemaQueryKeys = {
   schema: (profileId: string) => ["profiles", profileId, "schema"] as const,
   layout: (profileId: string, key: string) => ["profiles", profileId, "layout", key] as const,
   sample: ["sample", "schema"] as const,
+  snapshots: (profileId: string) => ["profiles", profileId, "snapshots"] as const,
 };
+
+/** A stored schema of a connection, saved when its structure changed (docs/API.md). */
+export interface SnapshotInfo {
+  id: number;
+  takenAt: string;
+  relations: number;
+  schemas: string[];
+}
+
+export function useSnapshots(profileId: string | undefined, enabled = true) {
+  return useQuery<SnapshotInfo[], ApiError>({
+    queryKey: schemaQueryKeys.snapshots(profileId ?? ""),
+    queryFn: ({ signal }) => apiFetch<SnapshotInfo[]>(`${profilePath(profileId ?? "")}/snapshots`, { signal }),
+    enabled: enabled && Boolean(profileId),
+  });
+}
+
+export function fetchSnapshot(profileId: string, id: number): Promise<Model> {
+  return apiFetch<Model>(`${profilePath(profileId)}/snapshots/${id}`);
+}
+
+export function fetchProfileSchema(profileId: string): Promise<Model> {
+  return apiFetch<Model>(`${profilePath(profileId)}/schema`);
+}
 
 export function useNamespaces(profileId: string | undefined, enabled = true) {
   return useQuery<Namespace[], ApiError>({

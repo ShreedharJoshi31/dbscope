@@ -4,6 +4,7 @@ import { type DocTab, type SqlTab, useRunStore, useSqlTabsScope } from "@/entiti
 import { useCanvasStore, useWorkspaceStore } from "@/entities/schema";
 import { ConnectionFormDialog } from "@/features/add-connection";
 import { AnalyzeMigrationDialog, MigrationDropTarget } from "@/features/analyze-migration";
+import { CompareSchemaDialog } from "@/features/compare-schema";
 import { DeleteConnectionDialog } from "@/features/delete-connection";
 import { GlossaryDialog } from "@/features/edit-glossary";
 import { LlmSettingsDialog } from "@/features/llm-settings";
@@ -83,6 +84,7 @@ export function WorkbenchPage() {
       <RunConfirmDialog />
       <LlmSettingsDialog />
       <GlossaryDialog />
+      <CompareSchemaDialog />
       <ImportSharedDialog />
       <ConnectionFormDialog
         onSaved={(profile, mode) => {

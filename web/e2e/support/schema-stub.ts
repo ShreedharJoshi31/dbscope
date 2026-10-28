@@ -131,6 +131,10 @@ export interface SchemaStubOptions {
   /** Respond to GET schema with this error envelope instead. */
   schemaError?: { status: number; code: string; message: string; detail?: string };
   namespaces?: { name: string; relationCount: number }[];
+  /** Models by profile id, for profiles whose schema differs from `schema`. */
+  schemasByProfile?: Record<string, StubModel>;
+  /** Snapshots by profile id: GET /snapshots lists them, GET /snapshots/{id} returns the model. */
+  snapshots?: Record<string, { id: number; takenAt: string; model: StubModel }[]>;
 }
 
 /** In-memory Phase 1 state that survives page reloads within one test. */
@@ -166,6 +170,30 @@ export async function handleSchemaRoute(
     await json(route, 200, options.sample ?? sampleModel());
     return true;
   }
+  const snap = pathname.match(/^\/api\/profiles\/([^/]+)\/snapshots(?:\/(\d+))?$/);
+  if (snap && method === "GET") {
+    const list = options.snapshots?.[snap[1] ?? ""] ?? [];
+    if (snap[2]) {
+      const found = list.find((s) => String(s.id) === snap[2]);
+      await json(
+        route,
+        found ? 200 : 404,
+        found ? found.model : { error: { code: "not_found", message: "not found" } },
+      );
+    } else {
+      await json(
+        route,
+        200,
+        list.map((s) => ({
+          id: s.id,
+          takenAt: s.takenAt,
+          relations: s.model.relations?.length ?? 0,
+          schemas: s.model.schemas ?? [],
+        })),
+      );
+    }
+    return true;
+  }
   const m = pathname.match(/^\/api\/profiles\/([^/]+)\/(schema|namespaces|inferred-fks|layout)$/);
   if (!m) return false;
   const [, profileId, what] = m;
@@ -177,7 +205,11 @@ export async function handleSchemaRoute(
       await json(route, status, { error });
       return true;
     }
-    await json(route, 200, applyDecisions(options.schema ?? sampleModel(), state.decisions));
+    await json(
+      route,
+      200,
+      applyDecisions(options.schemasByProfile?.[profileId ?? ""] ?? options.schema ?? sampleModel(), state.decisions),
+    );
     return true;
   }
   if (what === "namespaces" && method === "GET") {

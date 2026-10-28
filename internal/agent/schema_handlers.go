@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/dbscope/dbscope/internal/conn"
 	"github.com/dbscope/dbscope/internal/infer"
 	"github.com/dbscope/dbscope/internal/sample"
+	"github.com/dbscope/dbscope/internal/schema"
 	"github.com/dbscope/dbscope/internal/store"
 )
 
@@ -81,6 +83,7 @@ func (s *server) schema(w http.ResponseWriter, r *http.Request) {
 		s.upstreamError(w, r, err)
 		return
 	}
+	s.saveSnapshot(r, p.ID, m)
 	decisions, err := s.store.InferredFKDecisions(r.Context(), p.ID)
 	if err != nil {
 		s.internalError(w, r, err)
@@ -88,6 +91,49 @@ func (s *server) schema(w http.ResponseWriter, r *http.Request) {
 	}
 	infer.Apply(m, decisions)
 	writeJSON(w, http.StatusOK, m)
+}
+
+// saveSnapshot keeps the schema as read, before the user's inferred-key
+// decisions apply, when its structure changed since the last snapshot. A
+// failure is logged, never sent: the schema itself was read.
+func (s *server) saveSnapshot(r *http.Request, profileID string, m *schema.Model) {
+	body, err := json.Marshal(m)
+	if err == nil {
+		_, err = s.store.SaveSnapshot(r.Context(), profileID, schema.StructureHash(m), m.Schemas, len(m.Relations), body)
+	}
+	if err != nil {
+		s.log.Warn("schema snapshot not saved", "profile", profileID, "err", err)
+	}
+}
+
+// snapshots lists the profile's schema snapshots, newest first.
+func (s *server) snapshots(w http.ResponseWriter, r *http.Request) {
+	if _, err := s.store.GetProfile(r.Context(), r.PathValue("id")); err != nil {
+		s.storeError(w, r, err)
+		return
+	}
+	list, err := s.store.Snapshots(r.Context(), r.PathValue("id"))
+	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+// snapshot returns one snapshot's model as it was read.
+func (s *server) snapshot(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("snapshot"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "validation", "snapshot must be a number")
+		return
+	}
+	body, err := s.store.Snapshot(r.Context(), r.PathValue("id"), id)
+	if err != nil {
+		s.storeError(w, r, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(body)
 }
 
 func (s *server) setInferredFK(w http.ResponseWriter, r *http.Request) {

@@ -7,6 +7,7 @@ import {
   partitionDiffRelations,
   useCanvasStore,
 } from "@/entities/schema";
+import { clearComparison, DRIFT_SOURCE } from "@/features/compare-schema";
 import { announce } from "@/shared/lib/announcer";
 import { formatCompact } from "@/shared/lib/format-number";
 import { Button } from "@/shared/ui/button";
@@ -54,6 +55,8 @@ export function MigrationLegend() {
   const root = useCanvasStore((s) => s.derived.impactRoot);
   const selected = useCanvasStore((s) => s.selectedId);
   if (!diff) return null;
+  // A schema comparison reuses the overlay; it has no dependents to explain.
+  const comparison = diff.sourceId === DRIFT_SOURCE;
 
   const counts = { added: 0, altered: 0, dropped: 0 };
   for (const change of Object.values(diff.relations)) counts[change] += 1;
@@ -62,46 +65,50 @@ export function MigrationLegend() {
 
   return (
     <section
-      aria-label="Migration overlay"
+      aria-label={comparison ? "Comparison overlay" : "Migration overlay"}
       data-testid="migration-legend"
       className="absolute top-3 left-3 z-10 flex max-h-[60%] w-72 flex-col gap-2 overflow-y-auto rounded-md border border-border-default bg-surface-raised p-2 text-xs shadow-sm"
     >
       <h3 className="font-semibold break-all text-text-primary">
-        Migration: <span className="font-mono">{diff.label}</span>
+        {comparison ? "Compared " : "Migration: "}
+        <span className="font-mono">{diff.label}</span>
       </h3>
       <Button
         variant="outline"
         size="xs"
         className="self-start"
         onClick={() => {
-          clearMigrationOverlay();
-          announce("Cleared the migration overlay.");
+          if (comparison) clearComparison();
+          else clearMigrationOverlay();
+          announce(comparison ? "Cleared the comparison." : "Cleared the migration overlay.");
         }}
       >
         <Eraser aria-hidden />
-        Clear migration overlay
+        {comparison ? "Clear comparison" : "Clear migration overlay"}
       </Button>
       <ul aria-label="Changed relations" className="flex flex-wrap gap-x-3 gap-y-1">
         {(["added", "altered", "dropped"] as const).map((c) => (
           <ChangeKey key={c} change={c} count={counts[c]} />
         ))}
       </ul>
-      <ul aria-label="Dependency certainty" className="flex flex-col gap-0.5 text-text-muted">
-        <li className="flex items-center gap-1">
-          <span className="flex items-center gap-0.5 rounded-xs border border-accent-fg px-1 text-2xs font-semibold text-accent-fg">
-            <Link2 aria-hidden className="size-3" />
-            catalog
-          </span>
-          depends on it, recorded in the catalog
-        </li>
-        <li className="flex items-center gap-1">
-          <span className="flex items-center gap-0.5 rounded-xs border border-dashed border-accent-fg px-1 text-2xs font-semibold text-accent-fg">
-            <Link2 aria-hidden className="size-3" />
-            heuristic
-          </span>
-          matched by name, may be wrong
-        </li>
-      </ul>
+      {!comparison && (
+        <ul aria-label="Dependency certainty" className="flex flex-col gap-0.5 text-text-muted">
+          <li className="flex items-center gap-1">
+            <span className="flex items-center gap-0.5 rounded-xs border border-accent-fg px-1 text-2xs font-semibold text-accent-fg">
+              <Link2 aria-hidden className="size-3" />
+              catalog
+            </span>
+            depends on it, recorded in the catalog
+          </li>
+          <li className="flex items-center gap-1">
+            <span className="flex items-center gap-0.5 rounded-xs border border-dashed border-accent-fg px-1 text-2xs font-semibold text-accent-fg">
+              <Link2 aria-hidden className="size-3" />
+              heuristic
+            </span>
+            matched by name, may be wrong
+          </li>
+        </ul>
+      )}
       {missing.length > 0 && (
         <p className="text-text-muted">
           Not on the canvas:{" "}
@@ -113,7 +120,9 @@ export function MigrationLegend() {
           ))}
         </p>
       )}
-      {root ? (
+      {comparison ? (
+        <p className="text-text-muted">Every difference, with what changed, is in the Drift tab of the results dock.</p>
+      ) : root ? (
         <section aria-labelledby="impact-heading" data-testid="impact-list" className="flex flex-col gap-1">
           <h4 id="impact-heading" className="font-semibold text-text-primary">
             Depends on <span className="font-mono">{root}</span> ({impact.length})

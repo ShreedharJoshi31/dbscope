@@ -7,6 +7,7 @@ import { formatCombo, SHORTCUTS } from "@/shared/config/shortcuts";
 import { Button } from "@/shared/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/shared/ui/tooltip";
+import { DriftTab } from "@/widgets/results-dock/ui/drift-tab";
 import { KeyspaceTab } from "@/widgets/results-dock/ui/keyspace-tab";
 import { MessagesTab } from "@/widgets/results-dock/ui/messages-tab";
 import { PlanTab } from "@/widgets/results-dock/ui/plan-tab";
@@ -35,6 +36,7 @@ const TABS: { value: DockTab; label: ReactNode; content: ReactNode }[] = [
   { value: "plan", label: "Plan", content: <PlanTab /> },
   { value: "risk", label: "Migration risk", content: <RiskTab /> },
   { value: "schema", label: <SchemaRisksLabel />, content: <SchemaRisksTab /> },
+  { value: "drift", label: "Drift", content: <DriftTab /> },
   { value: "keyspace", label: "Keyspace", content: <KeyspaceTab /> },
 ];
 

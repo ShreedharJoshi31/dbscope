@@ -210,13 +210,15 @@ function ColumnDiffLabel({ change, to }: { change: ColumnChangeKind; to?: string
 const MAX_ADDED_ROWS = 3;
 
 /**
- * Columns the migration adds are not in the model, so they have no row. They
+ * Columns a migration adds are not in the model, so they have no row. They
  * are drawn as a strip under the card (absolutely positioned: the node keeps
- * its size and the layout does not move).
+ * its size and the layout does not move). A schema comparison's added columns
+ * already have rows, so they are not drawn again.
  */
-function AddedColumns({ columns }: { columns: ColumnDiff | undefined }) {
+function AddedColumns({ columns, relation }: { columns: ColumnDiff | undefined; relation: TableNodeData["relation"] }) {
+  const existing = new Set((relation.columns ?? []).map((c) => c.name));
   const added = Object.entries(columns ?? {})
-    .filter(([, c]) => c.change === "added")
+    .filter(([name, c]) => c.change === "added" && !existing.has(name))
     .map(([name]) => name);
   if (added.length === 0) return null;
   const shown = added.slice(0, MAX_ADDED_ROWS);
@@ -488,7 +490,7 @@ function TableNodeView({ id, data }: NodeProps<TableNodeType>) {
           </div>
         )}
       </div>
-      {detailed && !dim && <AddedColumns columns={columnDiff} />}
+      {detailed && !dim && <AddedColumns columns={columnDiff} relation={data.relation} />}
       <HandleAnchors layout={layout} anchors={data.anchors} />
     </>
   );
