@@ -53,6 +53,7 @@ models of their own rather than being forced into tables and columns.
 | Redis / Valkey | key patterns | n/a | n/a | n/a | keyspace report |
 | DynamoDB | key schemas + sampled attributes | PartiQL SELECT | not yet | n/a | not yet |
 | Cassandra / ScyllaDB | keyspace tables | CQL SELECT | not yet | not yet | not yet |
+| Neo4j | labels and relationship types | read-only Cypher | not yet | not yet | not yet |
 
 ### SQLite
 
@@ -393,7 +394,73 @@ Not yet: per-node health signals (`system_views` tombstones per read and
 partition sizes on Cassandra, `system.large_partitions` on ScyllaDB),
 schema-change risk for CQL DDL, and schema agreement across nodes.
 
+### Neo4j
+
+Research with sources: [research-neo4j.md](research-neo4j.md). Tested against
+Neo4j 5.26 and 2026.10 Community and 2026.10 Enterprise (evaluation license)
+in containers, the last also as a user with only the built-in `reader` role.
+The driver is neo4j-go-driver v6, with telemetry off.
+
+A profile is a host, port (7687), database (default `neo4j`) and an
+optional user. It connects to one server with `bolt://`; `options`
+`routing=true` uses a cluster's routing table (`neo4j://`). sslMode
+`require` accepts any certificate (`+ssc`), `verify-ca` and `verify-full`
+check it (`+s`); `disable` and `prefer` are plaintext, since Bolt has no
+"TLS if offered".
+
+**Reading safely.** Neo4j's read access mode routes a transaction to a
+reader; it is not a permission. Community Edition has no roles at all, so
+every Community user can write, and the connection test says so. On
+Enterprise it reports the `admin`, `architect`, `publisher` and `editor`
+roles as write access. dbscope therefore layers its own checks:
+
+1. Before sending: no `CREATE`, `MERGE`, `SET`, `DELETE`, `REMOVE`,
+   `FOREACH`, `DROP`, `ALTER`, user or privilege commands, `LOAD CSV`,
+   `CALL { } IN TRANSACTIONS`, `USE`, `PROFILE` (which runs the query) or a
+   second statement. Words inside strings, comments and backquoted names
+   do not count.
+2. Every `CALL`ed procedure must have mode `READ` in `SHOW PROCEDURES`; a
+   `DBMS`-mode procedure such as `db.clearQueryCaches` is refused too.
+3. `EXPLAIN` must report the query type `r` (read only).
+4. The query runs in a read transaction with the profile's timeout that is
+   always rolled back, never committed; a single server also refuses a
+   write in it (`Neo.ClientError.Statement.AccessMode`, seen on 5.26).
+
+A read-only Enterprise user: `CREATE USER dbscope SET PASSWORD '...'` then
+`GRANT ROLE reader TO dbscope`.
+
+**Graph map.** Each node label is a card with its count (from the count
+store), its properties with their types (`db.schema.nodeTypeProperties`;
+Cypher 5's Java type names are shown as Cypher's), uniqueness and key
+constraints, and its indexes by type. Each relationship type leaving a
+label is a row on its card, `-[:WORKS_AT]-> Company`, with its count and
+properties, and an edge to the label at its other end.
+`db.schema.visualization` reads the count store and can list label pairs no
+relationship joins, so each pair is checked with a `LIMIT 1` match under a
+2-second timeout; a pair that cannot be checked in time is kept and marked
+unchecked.
+
+**Plans.** Explain shows Neo4j's own plan (operators without the `@neo4j`
+suffix, details and estimated rows) and flags:
+
+| Flag | When |
+|---|---|
+| `all_nodes_scan`, `all_relationships_scan` (danger) | `AllNodesScan` or an all-relationships scan |
+| `unbounded_path` (danger) | a variable-length pattern with no upper bound, such as `[:KNOWS*]` or `[*2..]` |
+| `cartesian_product` (warn, danger from a million rows) | `CartesianProduct` |
+| `eager` (warn) | `Eager`, which holds earlier rows in memory |
+| `label_scan` (info, warn from 100,000 rows) | `NodeByLabelScan` |
+| `index_scan` (info) | reading a whole index rather than seeking |
+| `gql_03N9x`, `gql_01N5x` | the server's performance notifications and unknown label, type or property warnings, by GQLSTATUS code |
+
+Results render nodes and relationships as JSON with their labels or type,
+paths as their nodes and relationships, and temporal values as text.
+
+Not yet: risks of schema-changing Cypher (constraint creation on existing
+duplicates, index population), and relationship types between labels the
+count store does not connect.
+
 ## Next engines
 
-The remaining candidates from the October 2026 list: Neo4j,
-Elasticsearch and OpenSearch, ClickHouse, SQL Server and Oracle. Each gets research first, then a build tested against a real server.
+The remaining candidates from the October 2026 list: Elasticsearch and
+OpenSearch, ClickHouse, SQL Server and Oracle. Each gets research first, then a build tested against a real server.

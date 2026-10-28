@@ -34,6 +34,8 @@ const (
 	// EngineCassandra covers Cassandra and ScyllaDB; EngineScylla appears only in test results.
 	EngineCassandra Engine = "cassandra"
 	EngineScylla    Engine = "scylladb"
+	// EngineNeo4j reaches one Neo4j server (bolt) or a cluster (options routing=true).
+	EngineNeo4j Engine = "neo4j"
 )
 
 // Capabilities are the modes an engine supports beyond the ERD, which every engine has.
@@ -58,7 +60,7 @@ func (e Engine) Capabilities() Capabilities {
 		return Capabilities{Query: true}
 	case EngineRedis:
 		return Capabilities{Keyspace: true}
-	case EngineDynamoDB, EngineCassandra:
+	case EngineDynamoDB, EngineCassandra, EngineNeo4j:
 		return Capabilities{Query: true}
 	}
 	return Capabilities{}
@@ -182,9 +184,9 @@ func (in ProfileInput) Profile() (Profile, error) {
 	switch p.Engine {
 	case "":
 		p.Engine = EnginePostgres
-	case EnginePostgres, EngineSQLite, EngineMySQL, EngineMongoDB, EngineRedis, EngineDynamoDB, EngineCassandra:
+	case EnginePostgres, EngineSQLite, EngineMySQL, EngineMongoDB, EngineRedis, EngineDynamoDB, EngineCassandra, EngineNeo4j:
 	default:
-		return Profile{}, invalid("engine must be one of postgres, sqlite, mysql, mongodb, redis, dynamodb, cassandra")
+		return Profile{}, invalid("engine must be one of postgres, sqlite, mysql, mongodb, redis, dynamodb, cassandra, neo4j")
 	}
 	p.Capabilities = p.Engine.Capabilities()
 	switch p.Engine {
@@ -194,6 +196,11 @@ func (in ProfileInput) Profile() (Profile, error) {
 		p.Port = 27017
 	case EngineCassandra:
 		p.Port = 9042
+	case EngineNeo4j:
+		p.Port = 7687
+		if p.Database == "" {
+			p.Database = "neo4j"
+		}
 	case EngineRedis:
 		p.Port = 6379
 		// A Redis database is a number and the user is optional (the default user).
@@ -231,8 +238,8 @@ func (p *Profile) connOptions(in ProfileInput) error {
 	if p.Options == "" {
 		return nil
 	}
-	if p.Engine != EngineMongoDB && p.Engine != EngineDynamoDB && p.Engine != EngineCassandra {
-		return invalid("options are only for MongoDB, DynamoDB and Cassandra profiles")
+	if p.Engine != EngineMongoDB && p.Engine != EngineDynamoDB && p.Engine != EngineCassandra && p.Engine != EngineNeo4j {
+		return invalid("options are only for MongoDB, DynamoDB, Cassandra and Neo4j profiles")
 	}
 	q, err := url.ParseQuery(p.Options)
 	if err != nil {
@@ -248,6 +255,13 @@ func (p *Profile) connOptions(in ProfileInput) error {
 		for k := range q {
 			if k != "dc" {
 				return invalid("Cassandra options take dc (the local datacenter), not %s", k)
+			}
+		}
+	}
+	if p.Engine == EngineNeo4j {
+		for k, v := range q {
+			if k != "routing" || (v[0] != "true" && v[0] != "false") {
+				return invalid("Neo4j options take routing=true (a cluster's neo4j:// routing), not %s", k)
 			}
 		}
 	}
@@ -313,8 +327,8 @@ func (p *Profile) networkTarget(in ProfileInput) error {
 	if p.Database == "" {
 		return invalid("database is required")
 	}
-	// Redis has a default user, and a Cassandra cluster may run without authentication.
-	if p.User == "" && p.Engine != EngineRedis && p.Engine != EngineCassandra {
+	// Redis has a default user, and Cassandra or Neo4j may run without authentication.
+	if p.User == "" && p.Engine != EngineRedis && p.Engine != EngineCassandra && p.Engine != EngineNeo4j {
 		return invalid("user is required")
 	}
 	if p.SSLMode == "" {

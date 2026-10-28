@@ -11,7 +11,8 @@ export type RelKind =
   | "materialized_view"
   | "foreign_table"
   | "collection"
-  | "key_pattern";
+  | "key_pattern"
+  | "node_label";
 
 export interface QualifiedName {
   schema: string;

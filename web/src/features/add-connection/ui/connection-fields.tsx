@@ -139,7 +139,13 @@ function NetworkFields({
           <Input
             {...control}
             {...text("database")}
-            placeholder={values.engine === "postgres" ? "postgres" : values.engine === "redis" ? "0" : "app"}
+            placeholder={
+              values.engine === "postgres" || values.engine === "neo4j"
+                ? values.engine
+                : values.engine === "redis"
+                  ? "0"
+                  : "app"
+            }
             autoComplete="off"
             spellCheck={false}
             className="font-mono"
@@ -158,7 +164,9 @@ function NetworkFields({
                   ? "default"
                   : values.engine === "cassandra"
                     ? "dbscope_ro"
-                    : "root"
+                    : values.engine === "neo4j"
+                      ? "neo4j"
+                      : "root"
             }
             autoComplete="off"
             spellCheck={false}

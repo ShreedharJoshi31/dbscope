@@ -21,6 +21,8 @@ const (
 	KindCollection RelKind = "collection"
 	// KindKeyPattern is a group of Redis keys whose names differ only in id-like segments.
 	KindKeyPattern RelKind = "key_pattern"
+	// KindNodeLabel is a Neo4j node label; its columns are the properties nodes with it carry.
+	KindNodeLabel RelKind = "node_label"
 )
 
 type Model struct {

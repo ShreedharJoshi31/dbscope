@@ -118,6 +118,8 @@ export function validateConnectionForm(values: ConnectionFormValues): Connection
       // A Redis database is a number, default 0, and the user is optional (the default user).
       if (values.database.trim() && !isWholeNumber(values.database))
         errors.database = "A Redis database is a number, such as 0.";
+    } else if (values.engine === "neo4j") {
+      // The database defaults to neo4j, and a server may run without authentication.
     } else if (values.engine === "cassandra") {
       // The user is optional: a cluster without authentication has none.
       if (!values.database.trim()) errors.database = "Enter the keyspace.";
@@ -195,7 +197,8 @@ export function toProfileInput(values: ConnectionFormValues): ProfileInput {
   }
   const input: ProfileInput = {
     engine: values.engine,
-    ...((values.engine === "mongodb" || values.engine === "cassandra") && values.options.trim()
+    ...((values.engine === "mongodb" || values.engine === "cassandra" || values.engine === "neo4j") &&
+    values.options.trim()
       ? { options: values.options.trim() }
       : {}),
     name: values.name.trim(),

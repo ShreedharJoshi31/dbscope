@@ -16,6 +16,7 @@ const KIND_LABEL: Record<string, string> = {
   foreign_table: "foreign table",
   collection: "collection",
   key_pattern: "key pattern",
+  node_label: "node label",
 };
 
 /**

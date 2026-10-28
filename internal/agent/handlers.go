@@ -11,6 +11,7 @@ import (
 	"github.com/dbscope/dbscope/internal/dynamo"
 	"github.com/dbscope/dbscope/internal/mongo"
 	"github.com/dbscope/dbscope/internal/mysql"
+	"github.com/dbscope/dbscope/internal/neo4j"
 	"github.com/dbscope/dbscope/internal/redis"
 	"github.com/dbscope/dbscope/internal/secrets"
 	"github.com/dbscope/dbscope/internal/sqlite"
@@ -221,6 +222,8 @@ func testProfile(ctx context.Context, p conn.Profile, password string) conn.Test
 		return dynamo.Test(ctx, p)
 	case conn.EngineCassandra:
 		return cassandra.Test(ctx, p, password)
+	case conn.EngineNeo4j:
+		return neo4j.Test(ctx, p, password)
 	}
 	return conn.Test(ctx, p, password)
 }

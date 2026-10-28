@@ -1,4 +1,4 @@
-import { Braces, DatabaseZap, Eye, Globe, KeyRound, Layers, type LucideIcon, Table2 } from "lucide-react";
+import { Braces, CircleDot, DatabaseZap, Eye, Globe, KeyRound, Layers, type LucideIcon, Table2 } from "lucide-react";
 import type { RelKind } from "@/shared/api";
 
 export const KIND_META: Record<RelKind, { label: string; icon: LucideIcon }> = {
@@ -9,6 +9,7 @@ export const KIND_META: Record<RelKind, { label: string; icon: LucideIcon }> = {
   foreign_table: { label: "Foreign table", icon: Globe },
   collection: { label: "Collection", icon: Braces },
   key_pattern: { label: "Key pattern", icon: KeyRound },
+  node_label: { label: "Node label", icon: CircleDot },
 };
 
 /** Kind icon with the kind as accessible text, so the kind never depends on the icon alone. */

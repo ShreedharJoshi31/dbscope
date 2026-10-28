@@ -14,6 +14,7 @@ import (
 	"github.com/aws/smithy-go"
 	mysqldrv "github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v5/pgconn"
+	neo4jdrv "github.com/neo4j/neo4j-go-driver/v6/neo4j"
 	mongodrv "go.mongodb.org/mongo-driver/v2/mongo"
 	sqlitedrv "modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
@@ -23,6 +24,7 @@ import (
 	"github.com/dbscope/dbscope/internal/dynamo"
 	"github.com/dbscope/dbscope/internal/mongo"
 	"github.com/dbscope/dbscope/internal/mysql"
+	"github.com/dbscope/dbscope/internal/neo4j"
 	"github.com/dbscope/dbscope/internal/query/exec"
 	qguard "github.com/dbscope/dbscope/internal/query/guard"
 	"github.com/dbscope/dbscope/internal/sqlite"
@@ -167,6 +169,20 @@ func (s *server) execute(ctx context.Context, p conn.Profile, password string, b
 		}
 		return res, nil
 	}
+	if p.Engine == conn.EngineNeo4j {
+		if err := neo4j.Check(body.SQL); err != nil {
+			return nil, mapRunError(ctx, err)
+		}
+		src, _ := s.source.(engineSource)[conn.EngineNeo4j].(*neo4jSource)
+		if src == nil {
+			return nil, mapRunError(ctx, errUnsupported)
+		}
+		res, err := src.Run(ctx, p, password, body.SQL, maxRows, explainOnly)
+		if err != nil {
+			return nil, mapRunError(ctx, err)
+		}
+		return res, nil
+	}
 	if p.Engine == conn.EngineCassandra {
 		if err := cassandra.Check(body.SQL); err != nil {
 			return nil, mapRunError(ctx, err)
@@ -261,6 +277,7 @@ func mapRunError(ctx context.Context, err error) *runError {
 	var mongoErr mongodrv.CommandError
 	var awsErr smithy.APIError
 	var cqlErr gocql.RequestError
+	var neoErr *neo4jdrv.Neo4jError
 	switch {
 	case errors.As(err, &ge):
 		return &runError{status: http.StatusUnprocessableEntity, code: "rejected", message: ge.Message, detail: string(ge.Reason),
@@ -298,6 +315,18 @@ func mapRunError(ctx context.Context, err error) *runError {
 		case "ProvisionedThroughputExceededException", "ThrottlingException", "RequestLimitExceeded":
 			r.status, r.code = http.StatusServiceUnavailable, "upstream"
 			r.message = "DynamoDB throttled the read; try again or read less (" + awsErr.ErrorMessage() + ")"
+		}
+		return r
+	case errors.As(err, &neoErr):
+		r := &runError{status: http.StatusBadRequest, code: "database", message: neoErr.Msg,
+			histStatus: store.HistoryError, histCode: neoErr.Code}
+		switch {
+		case strings.HasPrefix(neoErr.Code, "Neo.ClientError.Security."), neoErr.Code == "Neo.ClientError.Statement.AccessMode":
+			r.message = "Blocked: this user or a read transaction may not do that (" + neoErr.Msg + ")"
+		case strings.Contains(neoErr.Code, "TransactionTimedOut"):
+			r.status, r.code, r.histCode = http.StatusGatewayTimeout, "timeout", "timeout"
+		case strings.HasPrefix(neoErr.Code, "Neo.TransientError."):
+			r.status, r.code = http.StatusServiceUnavailable, "upstream"
 		}
 		return r
 	case errors.As(err, &cqlErr):

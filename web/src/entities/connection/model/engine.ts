@@ -8,6 +8,7 @@ export const ENGINE_ORDER: readonly Engine[] = [
   "redis",
   "dynamodb",
   "cassandra",
+  "neo4j",
 ];
 
 export const ENGINE_META: Record<Engine, { label: string; description: string; defaultPort?: number }> = {
@@ -43,6 +44,12 @@ export const ENGINE_META: Record<Engine, { label: string; description: string; d
     description:
       "Cassandra or ScyllaDB: tables with partition and clustering keys, indexes by kind, and read-only CQL whose plan says when a query scans the cluster.",
     defaultPort: 9042,
+  },
+  neo4j: {
+    label: "Neo4j",
+    description:
+      "A map of node labels and the relationships between them, and read-only Cypher whose plan flags full scans, cartesian products and unbounded paths.",
+    defaultPort: 7687,
   },
   sqlite: {
     label: "SQLite",

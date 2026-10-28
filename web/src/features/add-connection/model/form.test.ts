@@ -116,6 +116,24 @@ describe("Cassandra", () => {
   });
 });
 
+describe("Neo4j", () => {
+  it("needs neither a database nor a user, and sends the routing option", () => {
+    const ok = {
+      ...EMPTY_CONNECTION_FORM,
+      engine: "neo4j" as const,
+      name: "graph",
+      env: "local" as const,
+      host: "h",
+      port: "7687",
+      database: "",
+      user: "",
+      options: "routing=true",
+    };
+    expect(validateConnectionForm(ok)).toEqual({});
+    expect(toProfileInput(ok)).toMatchObject({ engine: "neo4j", database: "", options: "routing=true" });
+  });
+});
+
 describe("toProfileInput", () => {
   it("trims, converts numbers, splits schemas and omits an empty password", () => {
     expect(

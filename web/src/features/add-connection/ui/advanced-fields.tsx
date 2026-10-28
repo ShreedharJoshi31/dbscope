@@ -55,6 +55,24 @@ export function AdvancedFields({
         <span className="font-normal">schemas, assistant data, statement timeout, cost limit</span>
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-3 flex flex-col gap-4 border-l border-border-default pl-4">
+        {values.engine === "neo4j" && (
+          <FormField
+            label="Connection options"
+            optional
+            description="routing=true connects to a cluster through its routing table (neo4j://); leave empty for one server (bolt://)."
+          >
+            {(control) => (
+              <Input
+                {...control}
+                value={values.options}
+                onChange={(e) => onChange("options", e.target.value)}
+                placeholder="routing=true"
+                className="font-mono text-xs"
+                spellCheck={false}
+              />
+            )}
+          </FormField>
+        )}
         {values.engine === "cassandra" && (
           <FormField
             label="Connection options"
