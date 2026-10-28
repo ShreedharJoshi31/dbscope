@@ -62,6 +62,25 @@ describe("SQLite", () => {
   });
 });
 
+describe("MongoDB", () => {
+  it("sends connection options only for MongoDB", () => {
+    const base = {
+      ...EMPTY_CONNECTION_FORM,
+      name: "docs",
+      env: "local" as const,
+      host: "h",
+      database: "app",
+      user: "u",
+    };
+    expect(toProfileInput({ ...base, engine: "mongodb", port: "27017", options: " authSource=admin " })).toMatchObject({
+      engine: "mongodb",
+      port: 27017,
+      options: "authSource=admin",
+    });
+    expect(toProfileInput({ ...base, engine: "postgres", options: "authSource=admin" })).not.toHaveProperty("options");
+  });
+});
+
 describe("toProfileInput", () => {
   it("trims, converts numbers, splits schemas and omits an empty password", () => {
     expect(

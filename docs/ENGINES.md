@@ -29,9 +29,11 @@ internal/agent     engineSource routes each SchemaSource call by profile engine
   pools.go         PostgreSQL (pgx pools)
   sqlite_source.go SQLite (one read-only open per call)
   mysql_source.go  MySQL and MariaDB (database/sql pool per profile)
+  mongo_source.go  MongoDB (a client per profile)
 internal/sqlite    SQLite: Open, Introspect, Check, Run, Test, Split, Analyze
 internal/mysql     MySQL and MariaDB: Open, Introspect, Check, Run, Test
-internal/mytest    MySQL and MariaDB containers for integration tests
+internal/mongo     MongoDB: Connect, Introspect (inferred), Parse, Check, Run, Test
+internal/mytest    MySQL, MariaDB and MongoDB containers for integration tests
 internal/schema    the shared relational model; Model.Engine is empty for PostgreSQL
 ```
 
@@ -45,6 +47,7 @@ models of their own rather than being forced into tables and columns.
 | PostgreSQL | yes | yes | yes | yes | yes |
 | SQLite | yes | yes | not yet | yes | n/a |
 | MySQL / MariaDB | yes | yes | not yet | yes | not yet |
+| MongoDB | inferred | yes | not yet | not yet | n/a |
 
 ### SQLite
 
@@ -177,6 +180,43 @@ foreign keys and primary key. The CLI takes a live base (`--mysql URL` or
 `DBSCOPE_MYSQL_DSN`) or only a version (`--mysql-version 8.4`, `mariadb-11.8`),
 which assumes type changes copy the table.
 
+### MongoDB
+
+Research with sources: [research-mongodb.md](research-mongodb.md). Tested
+against MongoDB 8.0 in a container, as a user with only the `read` role.
+
+A profile has the usual network fields plus `options`, a URL query for the
+connection string (`authSource=admin&replicaSet=rs0`; `srv=true` selects
+`mongodb+srv`). Credentials never enter the URI; `authSource` defaults to
+`admin`. Reads prefer secondaries, and every operation is tagged
+`appName=dbscope` and `comment: dbscope`.
+
+**Inferred schema.** Collections have no declared columns, so each is
+sampled: up to 200 documents, with `$sample` (a cheap random cursor when it
+asks for under 5% of more than 100 documents; disk use refused otherwise) or
+a plain `find` for small collections and views, where `$sample` would scan.
+Every field path (`address.city`, `items[].sku`, four levels deep) becomes a
+column whose type is the mix of BSON types seen, e.g. `int 76% | decimal 24%`,
+and whose comment gives its coverage when not every document has it. `_id` is
+the primary key; indexes, unique indexes and the validator come from the
+catalog; counts are `estimatedDocumentCount`. A reference is inferred from a
+top-level field holding only ObjectIds and named after another collection
+(`customer`, `customerId`, `customer_id` for `customers`) when most of its
+distinct sampled values exist as that collection's `_id`; the share found is
+the confidence.
+
+**Queries.** A query is a command document in Extended JSON: `find`,
+`aggregate`, `count` or `distinct`. `mongo.Check` refuses `$out`, `$merge`,
+`$where`, `$function`, `$accumulator`, `mapReduce`, `bypassDocumentValidation`
+and `writeConcern` at any depth (pipelines nest in `$lookup`, `$facet` and
+`$unionWith`); server-side JavaScript is still on by default in 8.0. The
+`read` role is the real guard: `$out` fails for it even past Check. Plans use
+`explain` with `verbosity: "queryPlanner"`, since the command's default
+executes the query, and a `COLLSCAN` is flagged. The statement timeout is the
+call's context deadline, which the v2 driver also sends as `maxTimeMS` (adding
+it by hand is a duplicate field); whichever side gives up first, the server
+leaves no dbscope operation running, which the tests check with `$currentOp`.
+
 ## Next engines
 
-MongoDB, then Redis.
+Redis and Valkey next (research in [research-redis.md](research-redis.md)).

@@ -11,10 +11,12 @@ import (
 
 	mysqldrv "github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v5/pgconn"
+	mongodrv "go.mongodb.org/mongo-driver/v2/mongo"
 	sqlitedrv "modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
 
 	"github.com/dbscope/dbscope/internal/conn"
+	"github.com/dbscope/dbscope/internal/mongo"
 	"github.com/dbscope/dbscope/internal/mysql"
 	"github.com/dbscope/dbscope/internal/query/exec"
 	qguard "github.com/dbscope/dbscope/internal/query/guard"
@@ -146,6 +148,24 @@ func (s *server) execute(ctx context.Context, p conn.Profile, password string, b
 		}
 		return res, nil
 	}
+	if p.Engine == conn.EngineMongoDB {
+		cmd, err := mongo.Parse(body.SQL)
+		if err == nil {
+			err = mongo.Check(cmd)
+		}
+		if err != nil {
+			return nil, mapRunError(ctx, err)
+		}
+		src, _ := s.source.(engineSource)[conn.EngineMongoDB].(*mongoSource)
+		if src == nil {
+			return nil, mapRunError(ctx, errUnsupported)
+		}
+		res, err := src.Run(ctx, p, password, body.SQL, maxRows, explainOnly)
+		if err != nil {
+			return nil, mapRunError(ctx, err)
+		}
+		return res, nil
+	}
 	if p.Engine == conn.EngineMySQL {
 		if err := mysql.Check(body.SQL); err != nil {
 			return nil, mapRunError(ctx, err)
@@ -205,6 +225,7 @@ func mapRunError(ctx context.Context, err error) *runError {
 	var pgErr *pgconn.PgError
 	var liteErr *sqlitedrv.Error
 	var myErr *mysqldrv.MySQLError
+	var mongoErr mongodrv.CommandError
 	switch {
 	case errors.As(err, &ge):
 		return &runError{status: http.StatusUnprocessableEntity, code: "rejected", message: ge.Message, detail: string(ge.Reason),
@@ -230,6 +251,16 @@ func mapRunError(ctx context.Context, err error) *runError {
 		return sqliteError(liteErr)
 	case !errors.Is(err, exec.ErrConnect) && errors.As(err, &myErr):
 		return mysqlError(myErr)
+	case mongo.IsTimeout(err):
+		return &runError{status: http.StatusGatewayTimeout, code: "timeout", message: "Stopped after the profile's statement timeout",
+			histStatus: store.HistoryError, histCode: "timeout"}
+	case errors.As(err, &mongoErr):
+		r := &runError{status: http.StatusBadRequest, code: "database", message: mongoErr.Message,
+			histStatus: store.HistoryError, histCode: "mongo_" + strconv.Itoa(int(mongoErr.Code))}
+		if mongoErr.Code == 13 { // Unauthorized: a read-only user tried to write
+			r.message = "Blocked: this would modify data (" + mongoErr.Message + ")"
+		}
+		return r
 	}
 	te := conn.Classify(err)
 	if te.Kind == "other" && !errors.Is(err, exec.ErrConnect) {

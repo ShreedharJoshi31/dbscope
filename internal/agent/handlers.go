@@ -7,6 +7,7 @@ import (
 	"runtime"
 
 	"github.com/dbscope/dbscope/internal/conn"
+	"github.com/dbscope/dbscope/internal/mongo"
 	"github.com/dbscope/dbscope/internal/mysql"
 	"github.com/dbscope/dbscope/internal/secrets"
 	"github.com/dbscope/dbscope/internal/sqlite"
@@ -209,6 +210,8 @@ func testProfile(ctx context.Context, p conn.Profile, password string) conn.Test
 		return sqlite.Test(ctx, p.Path)
 	case conn.EngineMySQL:
 		return mysql.Test(ctx, p, password)
+	case conn.EngineMongoDB:
+		return mongo.Test(ctx, p, password)
 	}
 	return conn.Test(ctx, p, password)
 }

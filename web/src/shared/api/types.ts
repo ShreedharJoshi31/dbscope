@@ -1,6 +1,6 @@
 /** Wire types for the Phase 0 agent API (docs/API.md). */
 
-export type Engine = "postgres" | "mysql" | "sqlite";
+export type Engine = "postgres" | "mysql" | "sqlite" | "mongodb";
 export type Env = "local" | "staging" | "prod-replica";
 export type SummaryMode = "off" | "profile" | "rows";
 export type SSLMode = "disable" | "prefer" | "require" | "verify-ca" | "verify-full";
@@ -19,6 +19,8 @@ export interface Profile {
   engine: Engine;
   /** The database file of a file-based engine (SQLite). */
   path?: string;
+  /** Connection-string options for MongoDB, as a URL query: authSource=admin&replicaSet=rs0 (srv=true for mongodb+srv). */
+  options?: string;
   host: string;
   port: number;
   database: string;

@@ -17,6 +17,8 @@ const (
 	KindView             RelKind = "view"
 	KindMatView          RelKind = "materialized_view"
 	KindForeignTable     RelKind = "foreign_table"
+	// KindCollection is a MongoDB collection; its columns are inferred from sampled documents.
+	KindCollection RelKind = "collection"
 )
 
 type Model struct {

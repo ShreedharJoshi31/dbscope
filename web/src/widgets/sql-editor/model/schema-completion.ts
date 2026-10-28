@@ -14,6 +14,7 @@ const KIND_LABEL: Record<string, string> = {
   view: "view",
   materialized_view: "materialized view",
   foreign_table: "foreign table",
+  collection: "collection",
 };
 
 /**

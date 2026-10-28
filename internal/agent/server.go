@@ -84,7 +84,7 @@ func New(cfg Config) (*Agent, error) {
 	if s.source == nil {
 		s.source = newPools()
 	}
-	s.source = engineSource{conn.EnginePostgres: s.source, conn.EngineSQLite: sqliteSource{}, conn.EngineMySQL: newMySQLSource()}
+	s.source = engineSource{conn.EnginePostgres: s.source, conn.EngineSQLite: sqliteSource{}, conn.EngineMySQL: newMySQLSource(), conn.EngineMongoDB: newMongoSource()}
 	qguard.Warm() // the first parse loads a WebAssembly module (~600 ms)
 
 	mux := http.NewServeMux()

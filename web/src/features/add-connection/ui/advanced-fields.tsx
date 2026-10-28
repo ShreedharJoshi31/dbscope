@@ -55,6 +55,24 @@ export function AdvancedFields({
         <span className="font-normal">schemas, assistant data, statement timeout, cost limit</span>
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-3 flex flex-col gap-4 border-l border-border-default pl-4">
+        {values.engine === "mongodb" && (
+          <FormField
+            label="Connection options"
+            optional
+            description="Connection-string options, for example authSource=admin&replicaSet=rs0. Add srv=true for a mongodb+srv address."
+          >
+            {(control) => (
+              <Input
+                {...control}
+                value={values.options}
+                onChange={(e) => onChange("options", e.target.value)}
+                placeholder="authSource=admin"
+                className="font-mono text-xs"
+                spellCheck={false}
+              />
+            )}
+          </FormField>
+        )}
         <FormField
           label="Schemas"
           optional

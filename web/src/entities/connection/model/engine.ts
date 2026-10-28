@@ -1,6 +1,6 @@
 import type { Engine, TestResult } from "@/shared/api";
 
-export const ENGINE_ORDER: readonly Engine[] = ["postgres", "mysql", "sqlite"];
+export const ENGINE_ORDER: readonly Engine[] = ["postgres", "mysql", "sqlite", "mongodb"];
 
 export const ENGINE_META: Record<Engine, { label: string; description: string; defaultPort?: number }> = {
   postgres: {
@@ -12,6 +12,12 @@ export const ENGINE_META: Record<Engine, { label: string; description: string; d
     label: "MySQL / MariaDB",
     description: "ERD, read-only queries and online DDL migration risk.",
     defaultPort: 3306,
+  },
+  mongodb: {
+    label: "MongoDB",
+    description:
+      "A schema inferred from sampled documents, with likely references, and read-only queries as JSON commands.",
+    defaultPort: 27017,
   },
   sqlite: {
     label: "SQLite",

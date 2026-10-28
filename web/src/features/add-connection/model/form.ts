@@ -7,6 +7,8 @@ export interface ConnectionFormValues {
   engine: Engine;
   /** The database file, for SQLite. */
   path: string;
+  /** MongoDB connection-string options. */
+  options: string;
   host: string;
   port: string;
   database: string;
@@ -48,6 +50,7 @@ export const EMPTY_CONNECTION_FORM: ConnectionFormValues = {
   name: "",
   engine: "postgres",
   path: "",
+  options: "",
   host: "",
   port: "5432",
   database: "",
@@ -68,6 +71,7 @@ export function formFromProfile(profile: Profile): ConnectionFormValues {
     name: profile.name,
     engine: profile.engine,
     path: profile.path ?? "",
+    options: profile.options ?? "",
     host: profile.host,
     port: String(profile.port),
     database: profile.database,
@@ -162,6 +166,7 @@ export function toProfileInput(values: ConnectionFormValues): ProfileInput {
   }
   const input: ProfileInput = {
     engine: values.engine,
+    ...(values.engine === "mongodb" && values.options.trim() ? { options: values.options.trim() } : {}),
     name: values.name.trim(),
     host: values.host.trim(),
     port: Number(values.port),

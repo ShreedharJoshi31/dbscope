@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"time"
@@ -23,6 +24,7 @@ const (
 	// results, which report the server actually reached.
 	EngineMySQL   Engine = "mysql"
 	EngineMariaDB Engine = "mariadb"
+	EngineMongoDB Engine = "mongodb"
 )
 
 // Capabilities are the modes an engine supports beyond the ERD, which every engine has.
@@ -41,6 +43,8 @@ func (e Engine) Capabilities() Capabilities {
 		return Capabilities{Query: true, Migrations: true}
 	case EngineMySQL:
 		return Capabilities{Query: true, Migrations: true}
+	case EngineMongoDB:
+		return Capabilities{Query: true}
 	}
 	return Capabilities{}
 }
@@ -85,6 +89,8 @@ type Profile struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
 	Engine Engine `json:"engine"`
+	// Options are connection-string options for engines that take them (MongoDB), as a URL query.
+	Options string `json:"options,omitempty"`
 	// Path is the database file of a file-based engine (SQLite); network engines leave it empty.
 	Path               string      `json:"path,omitempty"`
 	Host               string      `json:"host"`
@@ -115,6 +121,7 @@ type ProfileInput struct {
 	Name               string      `json:"name"`
 	Engine             Engine      `json:"engine"`
 	Path               string      `json:"path"`
+	Options            string      `json:"options"`
 	Host               string      `json:"host"`
 	Port               *int        `json:"port"`
 	Database           string      `json:"database"`
@@ -160,13 +167,19 @@ func (in ProfileInput) Profile() (Profile, error) {
 	switch p.Engine {
 	case "":
 		p.Engine = EnginePostgres
-	case EnginePostgres, EngineSQLite, EngineMySQL:
+	case EnginePostgres, EngineSQLite, EngineMySQL, EngineMongoDB:
 	default:
-		return Profile{}, invalid("engine must be one of postgres, sqlite, mysql")
+		return Profile{}, invalid("engine must be one of postgres, sqlite, mysql, mongodb")
 	}
 	p.Capabilities = p.Engine.Capabilities()
-	if p.Engine == EngineMySQL {
+	switch p.Engine {
+	case EngineMySQL:
 		p.Port = 3306
+	case EngineMongoDB:
+		p.Port = 27017
+	}
+	if err := p.connOptions(in); err != nil {
+		return Profile{}, err
 	}
 	if p.Engine == EngineSQLite {
 		if err := p.fileTarget(in); err != nil {
@@ -179,6 +192,29 @@ func (in ProfileInput) Profile() (Profile, error) {
 		return Profile{}, err
 	}
 	return p, nil
+}
+
+// connOptions validates driver options a connection string carries, which
+// only MongoDB takes: a URL query such as "authSource=admin&replicaSet=rs0".
+func (p *Profile) connOptions(in ProfileInput) error {
+	p.Options = strings.TrimPrefix(strings.TrimSpace(in.Options), "?")
+	if p.Options == "" {
+		return nil
+	}
+	if p.Engine != EngineMongoDB {
+		return invalid("options are only for MongoDB profiles")
+	}
+	q, err := url.ParseQuery(p.Options)
+	if err != nil {
+		return invalid("options must be a URL query like authSource=admin&replicaSet=rs0")
+	}
+	for k := range q {
+		switch strings.ToLower(k) {
+		case "password", "username", "authmechanismproperties":
+			return invalid("options must not hold credentials; use the user and password fields")
+		}
+	}
+	return nil
 }
 
 // fileTarget validates a file-based profile: an absolute path and no network fields.
