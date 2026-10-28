@@ -130,7 +130,11 @@ function NetworkFields({
         {(control) => <Input {...control} {...text("port")} inputMode="numeric" className="font-mono tabular-nums" />}
       </FormField>
 
-      <FormField label="Database" error={errorFor("database")} className="col-span-3">
+      <FormField
+        label={values.engine === "cassandra" ? "Keyspace" : "Database"}
+        error={errorFor("database")}
+        className="col-span-3"
+      >
         {(control) => (
           <Input
             {...control}
@@ -147,7 +151,15 @@ function NetworkFields({
           <Input
             {...control}
             {...text("user")}
-            placeholder={values.engine === "postgres" ? "postgres" : values.engine === "redis" ? "default" : "root"}
+            placeholder={
+              values.engine === "postgres"
+                ? "postgres"
+                : values.engine === "redis"
+                  ? "default"
+                  : values.engine === "cassandra"
+                    ? "dbscope_ro"
+                    : "root"
+            }
             autoComplete="off"
             spellCheck={false}
             className="font-mono"

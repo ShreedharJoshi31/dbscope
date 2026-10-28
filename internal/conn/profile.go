@@ -31,6 +31,9 @@ const (
 	EngineValkey Engine = "valkey"
 	// EngineDynamoDB reaches a region's DynamoDB with the AWS SDK's own credentials.
 	EngineDynamoDB Engine = "dynamodb"
+	// EngineCassandra covers Cassandra and ScyllaDB; EngineScylla appears only in test results.
+	EngineCassandra Engine = "cassandra"
+	EngineScylla    Engine = "scylladb"
 )
 
 // Capabilities are the modes an engine supports beyond the ERD, which every engine has.
@@ -55,7 +58,7 @@ func (e Engine) Capabilities() Capabilities {
 		return Capabilities{Query: true}
 	case EngineRedis:
 		return Capabilities{Keyspace: true}
-	case EngineDynamoDB:
+	case EngineDynamoDB, EngineCassandra:
 		return Capabilities{Query: true}
 	}
 	return Capabilities{}
@@ -179,9 +182,9 @@ func (in ProfileInput) Profile() (Profile, error) {
 	switch p.Engine {
 	case "":
 		p.Engine = EnginePostgres
-	case EnginePostgres, EngineSQLite, EngineMySQL, EngineMongoDB, EngineRedis, EngineDynamoDB:
+	case EnginePostgres, EngineSQLite, EngineMySQL, EngineMongoDB, EngineRedis, EngineDynamoDB, EngineCassandra:
 	default:
-		return Profile{}, invalid("engine must be one of postgres, sqlite, mysql, mongodb, redis, dynamodb")
+		return Profile{}, invalid("engine must be one of postgres, sqlite, mysql, mongodb, redis, dynamodb, cassandra")
 	}
 	p.Capabilities = p.Engine.Capabilities()
 	switch p.Engine {
@@ -189,6 +192,8 @@ func (in ProfileInput) Profile() (Profile, error) {
 		p.Port = 3306
 	case EngineMongoDB:
 		p.Port = 27017
+	case EngineCassandra:
+		p.Port = 9042
 	case EngineRedis:
 		p.Port = 6379
 		// A Redis database is a number and the user is optional (the default user).
@@ -226,8 +231,8 @@ func (p *Profile) connOptions(in ProfileInput) error {
 	if p.Options == "" {
 		return nil
 	}
-	if p.Engine != EngineMongoDB && p.Engine != EngineDynamoDB {
-		return invalid("options are only for MongoDB and DynamoDB profiles")
+	if p.Engine != EngineMongoDB && p.Engine != EngineDynamoDB && p.Engine != EngineCassandra {
+		return invalid("options are only for MongoDB, DynamoDB and Cassandra profiles")
 	}
 	q, err := url.ParseQuery(p.Options)
 	if err != nil {
@@ -237,6 +242,13 @@ func (p *Profile) connOptions(in ProfileInput) error {
 		switch strings.ToLower(k) {
 		case "password", "username", "authmechanismproperties":
 			return invalid("options must not hold credentials; use the user and password fields")
+		}
+	}
+	if p.Engine == EngineCassandra {
+		for k := range q {
+			if k != "dc" {
+				return invalid("Cassandra options take dc (the local datacenter), not %s", k)
+			}
 		}
 	}
 	return nil
@@ -301,7 +313,8 @@ func (p *Profile) networkTarget(in ProfileInput) error {
 	if p.Database == "" {
 		return invalid("database is required")
 	}
-	if p.User == "" && p.Engine != EngineRedis {
+	// Redis has a default user, and a Cassandra cluster may run without authentication.
+	if p.User == "" && p.Engine != EngineRedis && p.Engine != EngineCassandra {
 		return invalid("user is required")
 	}
 	if p.SSLMode == "" {

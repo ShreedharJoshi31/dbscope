@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"runtime"
 
+	"github.com/dbscope/dbscope/internal/cassandra"
 	"github.com/dbscope/dbscope/internal/conn"
 	"github.com/dbscope/dbscope/internal/dynamo"
 	"github.com/dbscope/dbscope/internal/mongo"
@@ -218,6 +219,8 @@ func testProfile(ctx context.Context, p conn.Profile, password string) conn.Test
 		return redis.Test(ctx, p, password)
 	case conn.EngineDynamoDB:
 		return dynamo.Test(ctx, p)
+	case conn.EngineCassandra:
+		return cassandra.Test(ctx, p, password)
 	}
 	return conn.Test(ctx, p, password)
 }

@@ -1,6 +1,14 @@
 import type { Engine, TestResult } from "@/shared/api";
 
-export const ENGINE_ORDER: readonly Engine[] = ["postgres", "mysql", "sqlite", "mongodb", "redis", "dynamodb"];
+export const ENGINE_ORDER: readonly Engine[] = [
+  "postgres",
+  "mysql",
+  "sqlite",
+  "mongodb",
+  "redis",
+  "dynamodb",
+  "cassandra",
+];
 
 export const ENGINE_META: Record<Engine, { label: string; description: string; defaultPort?: number }> = {
   postgres: {
@@ -30,6 +38,12 @@ export const ENGINE_META: Record<Engine, { label: string; description: string; d
     description:
       "Tables, keys and indexes with attributes from a small sample, and PartiQL SELECTs whose plan says when they scan. Uses your AWS credentials.",
   },
+  cassandra: {
+    label: "Cassandra",
+    description:
+      "Cassandra or ScyllaDB: tables with partition and clustering keys, indexes by kind, and read-only CQL whose plan says when a query scans the cluster.",
+    defaultPort: 9042,
+  },
   sqlite: {
     label: "SQLite",
     description: "A database file on this machine, opened read-only: ERD, queries and migration checks.",
@@ -47,6 +61,8 @@ export function engineLabel(engine: TestResult["engine"]): string {
       return "Redis";
     case "valkey":
       return "Valkey";
+    case "scylladb":
+      return "ScyllaDB";
     case undefined:
       return "PostgreSQL";
   }

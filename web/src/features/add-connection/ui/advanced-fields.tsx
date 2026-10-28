@@ -55,6 +55,24 @@ export function AdvancedFields({
         <span className="font-normal">schemas, assistant data, statement timeout, cost limit</span>
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-3 flex flex-col gap-4 border-l border-border-default pl-4">
+        {values.engine === "cassandra" && (
+          <FormField
+            label="Connection options"
+            optional
+            description="dc=NAME sends reads to that datacenter's nodes; leave empty for a single-datacenter cluster."
+          >
+            {(control) => (
+              <Input
+                {...control}
+                value={values.options}
+                onChange={(e) => onChange("options", e.target.value)}
+                placeholder="dc=datacenter1"
+                className="font-mono text-xs"
+                spellCheck={false}
+              />
+            )}
+          </FormField>
+        )}
         {values.engine === "mongodb" && (
           <FormField
             label="Connection options"

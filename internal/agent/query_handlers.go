@@ -3,12 +3,14 @@ package agent
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	gocql "github.com/apache/cassandra-gocql-driver/v2"
 	"github.com/aws/smithy-go"
 	mysqldrv "github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -16,6 +18,7 @@ import (
 	sqlitedrv "modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
 
+	"github.com/dbscope/dbscope/internal/cassandra"
 	"github.com/dbscope/dbscope/internal/conn"
 	"github.com/dbscope/dbscope/internal/dynamo"
 	"github.com/dbscope/dbscope/internal/mongo"
@@ -164,6 +167,20 @@ func (s *server) execute(ctx context.Context, p conn.Profile, password string, b
 		}
 		return res, nil
 	}
+	if p.Engine == conn.EngineCassandra {
+		if err := cassandra.Check(body.SQL); err != nil {
+			return nil, mapRunError(ctx, err)
+		}
+		src, _ := s.source.(engineSource)[conn.EngineCassandra].(*cassandraSource)
+		if src == nil {
+			return nil, mapRunError(ctx, errUnsupported)
+		}
+		res, err := src.Run(ctx, p, password, body.SQL, maxRows, explainOnly)
+		if err != nil {
+			return nil, mapRunError(ctx, err)
+		}
+		return res, nil
+	}
 	if p.Engine == conn.EngineMongoDB {
 		cmd, err := mongo.Parse(body.SQL)
 		if err == nil {
@@ -243,6 +260,7 @@ func mapRunError(ctx context.Context, err error) *runError {
 	var myErr *mysqldrv.MySQLError
 	var mongoErr mongodrv.CommandError
 	var awsErr smithy.APIError
+	var cqlErr gocql.RequestError
 	switch {
 	case errors.As(err, &ge):
 		return &runError{status: http.StatusUnprocessableEntity, code: "rejected", message: ge.Message, detail: string(ge.Reason),
@@ -280,6 +298,18 @@ func mapRunError(ctx context.Context, err error) *runError {
 		case "ProvisionedThroughputExceededException", "ThrottlingException", "RequestLimitExceeded":
 			r.status, r.code = http.StatusServiceUnavailable, "upstream"
 			r.message = "DynamoDB throttled the read; try again or read less (" + awsErr.ErrorMessage() + ")"
+		}
+		return r
+	case errors.As(err, &cqlErr):
+		r := &runError{status: http.StatusBadRequest, code: "database", message: cqlErr.Message(),
+			histStatus: store.HistoryError, histCode: fmt.Sprintf("cql_%04x", cqlErr.Code())}
+		switch cqlErr.Code() {
+		case gocql.ErrCodeUnauthorized:
+			r.message = "Blocked: this role may not do that (" + cqlErr.Message() + ")"
+		case gocql.ErrCodeReadTimeout:
+			r.status, r.code, r.histCode = http.StatusGatewayTimeout, "timeout", "timeout"
+		case gocql.ErrCodeUnavailable, gocql.ErrCodeOverloaded:
+			r.status, r.code = http.StatusServiceUnavailable, "upstream"
 		}
 		return r
 	case errors.As(err, &mongoErr):

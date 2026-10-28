@@ -98,6 +98,24 @@ describe("DynamoDB", () => {
   });
 });
 
+describe("Cassandra", () => {
+  it("needs a keyspace, not a user, and sends the datacenter option", () => {
+    const base = {
+      ...EMPTY_CONNECTION_FORM,
+      engine: "cassandra" as const,
+      name: "cql",
+      env: "local" as const,
+      host: "h",
+      port: "9042",
+      user: "",
+    };
+    expect(Object.keys(validateConnectionForm({ ...base, database: "" }))).toEqual(["database"]);
+    const ok = { ...base, database: "app", options: "dc=dc1" };
+    expect(validateConnectionForm(ok)).toEqual({});
+    expect(toProfileInput(ok)).toMatchObject({ engine: "cassandra", database: "app", user: "", options: "dc=dc1" });
+  });
+});
+
 describe("toProfileInput", () => {
   it("trims, converts numbers, splits schemas and omits an empty password", () => {
     expect(

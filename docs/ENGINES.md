@@ -52,6 +52,7 @@ models of their own rather than being forced into tables and columns.
 | MongoDB | inferred | yes | not yet | not yet | n/a |
 | Redis / Valkey | key patterns | n/a | n/a | n/a | keyspace report |
 | DynamoDB | key schemas + sampled attributes | PartiQL SELECT | not yet | n/a | not yet |
+| Cassandra / ScyllaDB | keyspace tables | CQL SELECT | not yet | not yet | not yet |
 
 ### SQLite
 
@@ -331,8 +332,68 @@ Not yet: access-pattern findings (hot or low-cardinality partition keys,
 large items, missing TTL, GSI back-pressure, provisioned capacity without
 auto scaling) and CloudWatch or Contributor Insights reports.
 
+### Cassandra and ScyllaDB
+
+Research with sources: [research-cassandra.md](research-cassandra.md). Tested
+against Cassandra 5.0 and ScyllaDB 2025.1 in containers, as a role with only
+SELECT on the keyspace and with grants enforced. One `cassandra` engine
+covers both; ScyllaDB reports `release_version` 3.0.8, so it is recognised
+by `system.versions`, which exists only there (a plain role may not read it,
+and that refusal is the signal). The driver is upstream gocql v2.
+
+A profile is a contact point, port (9042) and keyspace; the user is optional
+because a cluster may run without authentication. `options` may hold
+`dc=NAME`, the local datacenter, for token-aware routing within it. The
+keyspace is set on the session, since ScyllaDB lacks protocol v5's
+per-query keyspace.
+
+**Reading safely.** There is no read-only connection mode: grants are the
+guard, and both servers ship with `AllowAllAuthorizer`, under which every
+connection may write. The connection test lists the role's grants with
+`LIST ROLES OF` and `LIST ALL PERMISSIONS OF`, which a role may run on
+itself, reports MODIFY, CREATE, ALTER, DROP and AUTHORIZE grants and
+superusers, and warns when LIST fails the way it does under AllowAll.
+Statements are checked too: one `SELECT`, never `system_auth`, ScyllaDB's
+writable `system.config`, the role tables or `salted_hash` (ScyllaDB's
+Alternator secret). Every read is at `LOCAL_ONE`, because a read at a higher
+level can trigger blocking read repair, which writes.
+
+```cql
+-- with authenticator: PasswordAuthenticator and authorizer: CassandraAuthorizer
+CREATE ROLE dbscope_ro WITH LOGIN = true AND PASSWORD = '...';
+GRANT SELECT ON KEYSPACE app TO dbscope_ro;
+```
+
+**Table map.** `system_schema` gives each table's columns by kind: the
+partition key, clustering columns with their order, static columns, and the
+primary key in that order. Indexes are named by kind: `secondary index`
+(Cassandra's legacy, node-local kind), `sai`, `sasi`, or `global index` on
+ScyllaDB, whose hidden `<index>_index` view is folded into it. Materialized
+views appear with their base table. The table comment gives the compaction
+strategy, default TTL and `gc_grace_seconds`.
+
+**Queries and their plans.** Before a SELECT runs, the plan names the read
+from the table's keys and indexes (docs/research-cassandra.md, 3):
+
+| Plan | When | Flag |
+|---|---|---|
+| Single-partition read | every partition-key column with `=` | info if it also filters other columns |
+| Multi-partition read | a partition-key column with `IN` | info: one read per value |
+| Index read | an indexed column, no full partition key | warn for a legacy secondary index (asks every node) |
+| Token range scan | `token(...)` bounds | warn |
+| Full scan | no partition key, nothing to filter | warn |
+| Full scan with filtering | non-key columns without the partition key | danger: needs ALLOW FILTERING |
+
+Explain also prepares the statement without running it: both servers decide
+at prepare time whether ALLOW FILTERING is required, so the server's own
+refusal is added to the plan. Values render as JSON; varint, decimal, UUIDs,
+blobs and times as text, and collections as JSON text.
+
+Not yet: per-node health signals (`system_views` tombstones per read and
+partition sizes on Cassandra, `system.large_partitions` on ScyllaDB),
+schema-change risk for CQL DDL, and schema agreement across nodes.
+
 ## Next engines
 
-The remaining candidates from the October 2026 list: Cassandra and
-ScyllaDB, Neo4j, Elasticsearch and OpenSearch, ClickHouse, SQL Server and
-Oracle. Each gets research first, then a build tested against a real server.
+The remaining candidates from the October 2026 list: Neo4j,
+Elasticsearch and OpenSearch, ClickHouse, SQL Server and Oracle. Each gets research first, then a build tested against a real server.
