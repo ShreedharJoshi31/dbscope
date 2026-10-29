@@ -243,7 +243,7 @@ func TestQueryEndToEnd(t *testing.T) {
 	p := e.createProfile(body(`,"maxCost":50`))
 	base := "/api/profiles/" + p.ID
 
-	w := e.do("POST", base+"/query", `{"sql":"SELECT id, email FROM app.accounts WHERE id = 7"}`)
+	w := e.do("POST", base+"/query", `{"sql":"SELECT id, email FROM app.accounts WHERE region = 'eu' AND id = 7"}`)
 	expect(t, w, 200, "")
 	res := decodeBody[exec.Result](t, w)
 	if res.RowCount != 1 || string(res.Rows[0][0]) != "7" || res.Columns[1].Relation != "app.accounts" ||

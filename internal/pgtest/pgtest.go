@@ -257,7 +257,7 @@ func (d *DB) As(t testing.TB, user string) conn.Profile {
 	t.Helper()
 	p, err := conn.ProfileInput{
 		Name: "test " + d.Name, Host: d.cfg.Host, Port: ptr(int(d.cfg.Port)), Database: d.Name, User: user,
-		SSLMode: sslMode(d.cfg), Env: conn.EnvLocal,
+		SSLMode: SSLMode(d.cfg), Env: conn.EnvLocal,
 	}.Profile()
 	if err != nil {
 		t.Fatal(err)
@@ -265,11 +265,18 @@ func (d *DB) As(t testing.TB, user string) conn.Profile {
 	return p
 }
 
-func sslMode(cfg *pgx.ConnConfig) conn.SSLMode {
-	if cfg.TLSConfig != nil {
-		return conn.SSLRequire
+// SSLMode keeps a DSN's TLS policy. A DSN without sslmode means prefer: pgx
+// tries TLS with a plaintext fallback, which CI's non-TLS servers need.
+func SSLMode(cfg *pgx.ConnConfig) conn.SSLMode {
+	if cfg.TLSConfig == nil {
+		return conn.SSLDisable
 	}
-	return conn.SSLDisable
+	for _, fb := range cfg.Fallbacks {
+		if fb.TLSConfig == nil {
+			return conn.SSLPrefer
+		}
+	}
+	return conn.SSLRequire
 }
 
 func ptr[T any](v T) *T { return &v }

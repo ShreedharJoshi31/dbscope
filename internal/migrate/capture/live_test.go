@@ -65,12 +65,8 @@ func helper(mode string) int {
 
 func dbURL(t *testing.T, d *pgtest.DB) string {
 	cfg := d.Admin.Config()
-	ssl := "disable"
-	if cfg.TLSConfig != nil {
-		ssl = "require"
-	}
 	u := url.URL{Scheme: "postgres", User: url.UserPassword(cfg.User, cfg.Password),
-		Host: net.JoinHostPort(cfg.Host, strconv.Itoa(int(cfg.Port))), Path: "/" + cfg.Database, RawQuery: "sslmode=" + ssl}
+		Host: net.JoinHostPort(cfg.Host, strconv.Itoa(int(cfg.Port))), Path: "/" + cfg.Database, RawQuery: "sslmode=" + string(pgtest.SSLMode(cfg))}
 	return u.String()
 }
 

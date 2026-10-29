@@ -80,9 +80,15 @@ func startDB() {
 		dbSkip = "DBSCOPE_TEST_DSN does not parse" // never echo the DSN
 		return
 	}
+	// pgtest.SSLMode, which this package cannot import: no sslmode means prefer.
 	mode := SSLDisable
 	if cfg.TLSConfig != nil {
 		mode = SSLRequire
+		for _, fb := range cfg.Fallbacks {
+			if fb.TLSConfig == nil {
+				mode = SSLPrefer
+			}
+		}
 	}
 	dbAdmin, _ = ProfileInput{
 		Name: "admin", Host: cfg.Host, Port: ptr(int(cfg.Port)), Database: cfg.Database, User: cfg.User,
@@ -277,6 +283,13 @@ func TestIntegrationClientEncoding(t *testing.T) {
 	if _, err := c.Exec(ctx, "CREATE TABLE enc(s text); INSERT INTO enc VALUES ('café ñ')"); err != nil {
 		t.Fatal(err)
 	}
+	// A DBSCOPE_TEST_DSN server outlives the run: leave it as found, so the test can run again.
+	t.Cleanup(func() {
+		if c, err := pgx.ConnectConfig(context.Background(), cc); err == nil {
+			c.Exec(context.Background(), "DROP TABLE enc; ALTER DATABASE "+pgx.Identifier{p.Database}.Sanitize()+" RESET client_encoding")
+			c.Close(context.Background())
+		}
+	})
 	if _, err := c.Exec(ctx, "ALTER DATABASE "+pgx.Identifier{p.Database}.Sanitize()+" SET client_encoding = 'LATIN1'"); err != nil {
 		t.Fatal(err)
 	}
