@@ -7,7 +7,7 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!dist", "!playwright-report", "!test-results", "!e2e/**/*-snapshots"]
+    "includes": ["**", "!dist", "!playwright-report", "!test-results", "!e2e/**/*-snapshots", "!pnpm-lock.yaml"]
   },
   "formatter": {
     "enabled": true,
