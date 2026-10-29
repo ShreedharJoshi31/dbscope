@@ -33,7 +33,6 @@ Stack choices below were researched on 2026-10-26 from primary sources
 | LLM | `anthropic-sdk-go/v2` (structured output via `OutputConfig.Format`), `openai-go/v3` Chat Completions (works with Ollama `/v1`; not the Responses API) | |
 | Logging | `log/slog`; `Secret` type implementing `LogValuer` + `ReplaceAttr` key filter | never log a DSN string |
 | Tests | stdlib `testing`; `testcontainers-go` postgres module locally/Linux CI; `DBSCOPE_TEST_DSN` on macOS/Windows CI via `ikalnytskyi/action-setup-postgres@v8` | |
-| Release | goreleaser OSS v2, quill notarize, jsign (Azure Artifact Signing), cosign keyless; homebrew_casks, scoop, winget, nfpm | |
 
 Recovery conflict on hot standby: SQLSTATE `40001` + message containing
 "conflict with recovery" (40001 alone is also a serialization failure).
