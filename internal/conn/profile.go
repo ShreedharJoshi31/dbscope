@@ -146,6 +146,11 @@ type Profile struct {
 	// 0 means no limit and nil means the env default (see CostLimit).
 	MaxCost     *float64 `json:"maxCost,omitempty"`
 	HasPassword bool     `json:"hasPassword"`
+	// SSH, when set, reaches the server through an SSH tunnel.
+	SSH *SSHTunnel `json:"ssh,omitempty"`
+	// Origin is the server's own address while Host and Port point at the
+	// local end of its SSH tunnel; it is never stored or sent.
+	Origin *Address `json:"-"`
 	// Capabilities follow from Engine; they are sent so the UI need not know each engine.
 	Capabilities Capabilities `json:"capabilities"`
 	CreatedAt    time.Time    `json:"createdAt"`
@@ -173,6 +178,44 @@ type ProfileInput struct {
 	StatementTimeoutMs *int        `json:"statementTimeoutMs"`
 	MaxCost            *float64    `json:"maxCost"`
 	Password           *string     `json:"password"`
+	SSH                *SSHTunnel  `json:"ssh"`
+	// SSHPassphrase is the SSH key file's passphrase; like Password, omitted keeps the stored one.
+	SSHPassphrase *string `json:"sshPassphrase"`
+}
+
+// SSHTunnel is the SSH server (a bastion) a profile's database is reached
+// through. Keys come from ssh-agent and KeyFile; the server's host key must
+// be in ~/.ssh/known_hosts.
+type SSHTunnel struct {
+	Host string `json:"host"`
+	Port int    `json:"port"`
+	User string `json:"user"`
+	// KeyFile is a private key tried after the agent's; empty means the default ~/.ssh/id_* keys.
+	KeyFile string `json:"keyFile,omitempty"`
+	// HasPassphrase records whether the vault holds the key file's passphrase.
+	HasPassphrase bool `json:"hasPassphrase"`
+}
+
+type Address struct {
+	Host string
+	Port int
+}
+
+// Endpoint is the database server's own address, which differs from Host and
+// Port while those point at an SSH tunnel: TLS names, AWS signatures and
+// plaintext warnings use it.
+func (p Profile) Endpoint() Address {
+	if p.Origin != nil {
+		return *p.Origin
+	}
+	return Address{Host: p.Host, Port: p.Port}
+}
+
+// ViaTunnel is p reached at the local port of its SSH tunnel.
+func (p Profile) ViaTunnel(port int) Profile {
+	p.Origin = &Address{Host: p.Host, Port: p.Port}
+	p.Host, p.Port = "127.0.0.1", port
+	return p
 }
 
 type ValidationError struct{ Msg string }
@@ -264,7 +307,54 @@ func (in ProfileInput) Profile() (Profile, error) {
 	if err := p.options(in); err != nil {
 		return Profile{}, err
 	}
+	if err := p.sshTunnel(in); err != nil {
+		return Profile{}, err
+	}
 	return p, nil
+}
+
+// sshTunnel validates the SSH tunnel. A tunnel reaches one server, so
+// options that make a driver find and dial other hosts are refused.
+func (p *Profile) sshTunnel(in ProfileInput) error {
+	if in.SSH == nil {
+		if in.SSHPassphrase != nil && *in.SSHPassphrase != "" {
+			return invalid("sshPassphrase needs an SSH tunnel with a key file")
+		}
+		return nil
+	}
+	if p.Engine == EngineSQLite || p.Engine == EngineDynamoDB {
+		return invalid("an SSH tunnel is for databases on a server; %s profiles cannot use one", p.Engine)
+	}
+	t := SSHTunnel{Host: strings.TrimSpace(in.SSH.Host), Port: in.SSH.Port, User: strings.TrimSpace(in.SSH.User), KeyFile: strings.TrimSpace(in.SSH.KeyFile)}
+	if t.Host == "" || strings.ContainsAny(t.Host, " \t\r\n,/@") {
+		return invalid("the SSH host must be a single hostname or IP address")
+	}
+	if t.Port == 0 {
+		t.Port = 22
+	}
+	if t.Port < 1 || t.Port > 65535 {
+		return invalid("the SSH port must be 1-65535")
+	}
+	if t.User == "" {
+		return invalid("the SSH user is required")
+	}
+	if t.KeyFile != "" {
+		if !filepath.IsAbs(t.KeyFile) {
+			return invalid("the SSH key file must be an absolute path, such as /Users/you/.ssh/id_ed25519")
+		}
+		t.KeyFile = filepath.Clean(t.KeyFile)
+	} else if in.SSHPassphrase != nil && *in.SSHPassphrase != "" {
+		return invalid("sshPassphrase needs an SSH key file")
+	}
+	q, _ := url.ParseQuery(p.Options)
+	if p.Engine == EngineMongoDB && q.Get("srv") == "true" {
+		return invalid("an SSH tunnel reaches one server: use the host and port of one MongoDB member instead of srv")
+	}
+	if p.Engine == EngineNeo4j && q.Get("routing") == "true" {
+		return invalid("an SSH tunnel reaches one server: Neo4j routing=true would dial other cluster members")
+	}
+	p.SSH = &t
+	return nil
 }
 
 // connOptions validates driver options a connection string carries, which
@@ -489,6 +579,9 @@ func (p Profile) CostLimit() float64 {
 	}
 	return 0
 }
+
+// Loopback reports whether host is this machine, where plaintext never crosses a network.
+func Loopback(host string) bool { return isLoopback(host) }
 
 func isLoopback(host string) bool {
 	if strings.EqualFold(host, "localhost") {

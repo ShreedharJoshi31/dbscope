@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"sort"
 	"strings"
@@ -33,6 +34,13 @@ func Connect(p conn.Profile, password string) (*gocql.Session, error) {
 	c.ConnectTimeout = 10 * time.Second
 	c.NumConns = 1
 	c.Keyspace = p.Database // a session keyspace: ScyllaDB lacks protocol v5's per-query keyspace
+	if p.Origin != nil {
+		// Through a tunnel only this node is reachable: don't learn peers, and
+		// send the addresses the node reports for itself back to the tunnel.
+		c.DisableInitialHostLookup = true
+		local := net.ParseIP(p.Host)
+		c.AddressTranslator = gocql.AddressTranslatorFunc(func(net.IP, int) (net.IP, int) { return local, p.Port })
+	}
 	if dc := q.Get("dc"); dc != "" {
 		c.PoolConfig.HostSelectionPolicy = gocql.TokenAwareHostPolicy(gocql.DCAwareRoundRobinPolicy(dc))
 	} else {
@@ -81,7 +89,7 @@ func describe(ctx context.Context, s *gocql.Session) (Server, error) {
 // the default, gets a warning.
 func Test(ctx context.Context, p conn.Profile, password string) conn.TestResult {
 	res := conn.TestResult{Engine: conn.EngineCassandra, Warnings: []string{}}
-	if p.SSLMode == conn.SSLDisable && p.Host != "localhost" && p.Host != "127.0.0.1" && p.Host != "::1" {
+	if p.SSLMode == conn.SSLDisable && !conn.Loopback(p.Endpoint().Host) {
 		res.Warnings = append(res.Warnings, "sslMode is disable on a non-loopback host, so the password and results travel unencrypted.")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)

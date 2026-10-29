@@ -19,23 +19,48 @@ import (
 
 const maxKeyBytes = 4096
 
-// profileWithSecret loads the profile named in the path and its password.
-// A profile without a password works while the vault is locked.
+// profileWithSecret loads the profile named in the path and its password,
+// and points it at its SSH tunnel when it has one. A profile without
+// secrets works while the vault is locked.
 func (s *server) profileWithSecret(w http.ResponseWriter, r *http.Request) (conn.Profile, string, bool) {
-	p, err := s.store.GetProfile(r.Context(), r.PathValue("id"))
-	if err != nil {
-		s.storeError(w, r, err)
+	p, password, passphrase, ok := s.profileSecrets(w, r)
+	if !ok {
 		return p, "", false
 	}
-	if !p.HasPassword {
-		return p, "", true
-	}
-	password, _, err := s.vault.Get(p.ID)
+	p, err := s.tunnels.reach(r.Context(), p, passphrase)
 	if err != nil {
-		s.secretError(w, r, err)
+		s.upstreamError(w, r, err)
 		return p, "", false
 	}
 	return p, password, true
+}
+
+// profileSecrets loads the profile named in the path, its password and its SSH key passphrase.
+func (s *server) profileSecrets(w http.ResponseWriter, r *http.Request) (p conn.Profile, password, passphrase string, ok bool) {
+	p, err := s.store.GetProfile(r.Context(), r.PathValue("id"))
+	if err != nil {
+		s.storeError(w, r, err)
+		return p, "", "", false
+	}
+	if password, passphrase, err = s.secrets(p); err != nil {
+		s.secretError(w, r, err)
+		return p, "", "", false
+	}
+	return p, password, passphrase, true
+}
+
+func (s *server) secrets(p conn.Profile) (password, passphrase string, err error) {
+	if p.HasPassword {
+		if password, _, err = s.vault.Get(p.ID); err != nil {
+			return "", "", err
+		}
+	}
+	if p.SSH != nil && p.SSH.HasPassphrase {
+		if passphrase, _, err = s.vault.Get(sshVaultKey(p.ID)); err != nil {
+			return "", "", err
+		}
+	}
+	return password, passphrase, nil
 }
 
 // upstreamError reports a failure talking to the profile's database:

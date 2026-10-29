@@ -95,6 +95,44 @@ and MySQL servers, that the token replaces the stored password (the right
 password then fails to log in). That RDS and OpenSearch accept them is not
 verified here.
 
+## SSH tunnels
+
+A profile can reach its database through an SSH server (a bastion) when
+the database is only reachable from inside its network. dbscope forwards
+a local port on 127.0.0.1 through the SSH server to the profile's host and
+port, which are written as the SSH server sees them, and every driver
+dials that port (`internal/sshtunnel`). The tunnel opens on first use and
+stays open while the agent runs; if the SSH session drops it reconnects on
+the next connection, on the same local port, so the engine's pool is
+kept. A keepalive every 30 s notices a dead session.
+
+- **Keys.** dbscope logs in with ssh-agent's keys, then the profile's key
+  file, or, with no key file, `~/.ssh/id_ed25519`, `id_ecdsa` and `id_rsa`
+  when they need no passphrase. A key file's passphrase is stored in the
+  vault beside the password. Passwords for the SSH server are not
+  supported.
+- **Host keys.** Only servers whose host key is in `~/.ssh/known_hosts`
+  are trusted; an unknown or changed key fails with its fingerprint.
+  Connect once with `ssh` to check and add it. `~/.ssh/config` (aliases,
+  `ProxyJump`) is not read.
+- **One server.** A tunnel reaches one host, so cluster discovery is turned
+  off: MongoDB connects directly (`srv=true` is refused), Cassandra and
+  ScyllaDB talk only to the node named (peers are not dialled), and Neo4j
+  `routing=true` is refused. SQLite and DynamoDB profiles cannot use one.
+- **TLS and AWS.** TLS still checks the database server's own name, not
+  127.0.0.1; RDS IAM tokens and SigV4 signatures are made for the real
+  endpoint, and Elasticsearch requests keep its name in the URL. The
+  plaintext warning still applies, since the hop from the SSH server to
+  the database is not encrypted by the tunnel.
+- **Testing a draft** opens a tunnel of its own and closes it afterwards;
+  failures are reported as SSH errors, separate from the database's.
+
+Verified against a real OpenSSH server for every network engine
+(PostgreSQL, MySQL, MongoDB without `directConnection`, Redis, Cassandra,
+Neo4j, Elasticsearch, ClickHouse, SQL Server with TLS, Oracle), with the
+database at a name only the SSH server resolves; and for agent and key-file
+logins, encrypted keys, unknown and changed host keys, and a dropped session.
+
 ## Engines
 
 | Engine | ERD | Query | Ask | Migrations | Workload / keyspace |

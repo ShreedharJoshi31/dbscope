@@ -128,7 +128,7 @@ var writeGrants = []string{"ALL", "INSERT", "ALTER", "CREATE", "DROP", "TRUNCATE
 // Test connects and reports the version and what the user may change.
 func Test(ctx context.Context, p conn.Profile, password string) conn.TestResult {
 	res := conn.TestResult{Engine: conn.EngineClickHouse, Warnings: []string{}}
-	if (p.SSLMode == conn.SSLDisable || p.SSLMode == conn.SSLPrefer) && p.Host != "localhost" && p.Host != "127.0.0.1" && p.Host != "::1" {
+	if (p.SSLMode == conn.SSLDisable || p.SSLMode == conn.SSLPrefer) && !conn.Loopback(p.Endpoint().Host) {
 		res.Warnings = append(res.Warnings, "the connection is not encrypted (the native protocol has no \"TLS if offered\"), so the password and results travel in plain text; use sslMode require or verify-full, usually on port 9440.")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)

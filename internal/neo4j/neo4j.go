@@ -70,7 +70,8 @@ func Connect(p conn.Profile, password string) (*Client, error) {
 		c.SocketConnectTimeout = 10 * time.Second
 		c.MaxConnectionPoolSize = 4
 		c.MaxTransactionRetryTime = 0 // user queries are never retried
-		if cfgs[0] != nil && cfgs[0].RootCAs != nil {
+		// Through a tunnel the URI names 127.0.0.1, so the TLS config carries the server's name.
+		if cfgs[0] != nil && (cfgs[0].RootCAs != nil || p.Origin != nil) {
 			c.TlsConfig = cfgs[0]
 		}
 	})
@@ -137,7 +138,7 @@ var writeRoles = map[string]bool{"admin": true, "architect": true, "publisher": 
 // relies on its own checks and read transactions that are never committed.
 func Test(ctx context.Context, p conn.Profile, password string) conn.TestResult {
 	res := conn.TestResult{Engine: conn.EngineNeo4j, Warnings: []string{}}
-	if (p.SSLMode == conn.SSLDisable || p.SSLMode == conn.SSLPrefer) && p.Host != "localhost" && p.Host != "127.0.0.1" && p.Host != "::1" {
+	if (p.SSLMode == conn.SSLDisable || p.SSLMode == conn.SSLPrefer) && !conn.Loopback(p.Endpoint().Host) {
 		res.Warnings = append(res.Warnings, "the connection is not encrypted (Bolt has no \"TLS if offered\"), so the password and results travel in plain text; use sslMode require or verify-full.")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)

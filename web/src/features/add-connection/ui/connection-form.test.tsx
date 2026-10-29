@@ -210,4 +210,46 @@ describe("ConnectionForm", () => {
     await user.click(screen.getByRole("radio", { name: /prod-replica/ }));
     expect(screen.queryByRole("region", { name: "Connection test result" })).not.toBeInTheDocument();
   });
+  it("saves an SSH tunnel and shows an SSH failure from the test", async () => {
+    let sent: ProfileInput | undefined;
+    server.use(
+      http.post("/api/profiles/test", () =>
+        HttpResponse.json({
+          ok: false,
+          warnings: [],
+          error: { kind: "ssh", message: "the SSH server bastion:22 is not in /home/me/.ssh/known_hosts" },
+        }),
+      ),
+      http.post("/api/profiles", async ({ request }) => {
+        sent = (await request.json()) as ProfileInput;
+        return HttpResponse.json(makeProfile({ ...sent, id: "01JB0000000000000000000011" }), { status: 201 });
+      }),
+    );
+    const { user, onSaved } = renderForm();
+    await user.type(screen.getByLabelText("Name"), "orders-prod");
+    await user.click(screen.getByRole("radio", { name: /prod-replica/ }));
+    await user.type(screen.getByLabelText("Host"), "orders.internal");
+    await user.type(screen.getByLabelText("Database", { exact: true }), "orders");
+    await user.type(screen.getByLabelText("User"), "reader");
+    expect(screen.queryByLabelText("SSH host")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("checkbox", { name: /Connect through an SSH server/ }));
+    await user.click(screen.getByRole("button", { name: "Save and open" }));
+    expect(screen.getByLabelText("SSH host")).toHaveFocus();
+    await user.type(screen.getByLabelText("SSH host"), "bastion");
+    await user.type(screen.getByLabelText("SSH user"), "ops");
+    expect(screen.queryByLabelText(/Key passphrase/)).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText(/Key file/), "/Users/me/.ssh/id_ed25519");
+    await user.type(screen.getByLabelText(/Key passphrase/), "pp");
+
+    await user.click(screen.getByRole("button", { name: "Test connection" }));
+    expect(await screen.findByText("SSH tunnel failed")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Save and open" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(sent).toMatchObject({
+      host: "orders.internal",
+      ssh: { host: "bastion", port: 22, user: "ops", keyFile: "/Users/me/.ssh/id_ed25519" },
+      sshPassphrase: "pp",
+    });
+  });
 });

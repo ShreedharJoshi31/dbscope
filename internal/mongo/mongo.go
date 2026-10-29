@@ -43,6 +43,9 @@ func Connect(p conn.Profile, password string) (*mongo.Client, error) {
 		SetRetryWrites(false).
 		SetServerSelectionTimeout(10 * time.Second).
 		SetConnectTimeout(10 * time.Second)
+	if p.Origin != nil {
+		o.SetDirect(true) // through a tunnel only this member is reachable, not the replica set's own names
+	}
 	if p.User != "" {
 		if authSource == "" {
 			authSource = "admin"
@@ -90,7 +93,7 @@ var readRoles = []string{"read", "readAnyDatabase", "clusterMonitor"}
 // Test connects with the profile and reports the server and any roles that can write.
 func Test(ctx context.Context, p conn.Profile, password string) conn.TestResult {
 	res := conn.TestResult{Engine: conn.EngineMongoDB, Warnings: []string{}}
-	if p.SSLMode == conn.SSLDisable && p.Host != "localhost" && p.Host != "127.0.0.1" && p.Host != "::1" {
+	if p.SSLMode == conn.SSLDisable && !conn.Loopback(p.Endpoint().Host) {
 		res.Warnings = append(res.Warnings, "sslMode is disable on a non-loopback host, so the password and query results travel unencrypted.")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)

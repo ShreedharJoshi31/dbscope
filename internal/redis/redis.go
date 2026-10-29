@@ -116,7 +116,7 @@ var writeCommands = []string{"set", "del", "flushall", "config"}
 // can write, checked with ACL DRYRUN (Redis 7.0+) when the user may run it.
 func Test(ctx context.Context, p conn.Profile, password string) conn.TestResult {
 	res := conn.TestResult{Engine: conn.EngineRedis, Warnings: []string{}}
-	if p.SSLMode == conn.SSLDisable && p.Host != "localhost" && p.Host != "127.0.0.1" && p.Host != "::1" {
+	if p.SSLMode == conn.SSLDisable && !conn.Loopback(p.Endpoint().Host) {
 		res.Warnings = append(res.Warnings, "sslMode is disable on a non-loopback host, so the password and results travel unencrypted.")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)

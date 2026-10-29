@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
 import { Providers } from "@/app/providers";
 import { createQueryClient } from "@/app/query-client";
-import type { Profile } from "@/shared/api";
+import type { Profile, SSHTunnel } from "@/shared/api";
 import { bootstrapToken } from "@/shared/api";
 import { safeSessionStorage } from "@/shared/lib/storage";
 import { LiveRegion } from "@/shared/ui/live-region";
@@ -32,7 +32,13 @@ export function renderWithProviders(ui: ReactElement) {
   return { user, queryClient, ...result };
 }
 
-export function makeProfile(overrides: Partial<Profile> = {}): Profile {
+/** A profile with overrides; an input's ssh (no hasPassphrase) is accepted, as the agent echoes it back. */
+export function makeProfile(
+  overrides: Partial<Omit<Profile, "ssh">> & {
+    ssh?: Omit<SSHTunnel, "hasPassphrase"> & { hasPassphrase?: boolean };
+  } = {},
+): Profile {
+  const { ssh, ...rest } = overrides;
   return {
     id: "01JB0000000000000000000001",
     name: "orders-dev",
@@ -51,6 +57,7 @@ export function makeProfile(overrides: Partial<Profile> = {}): Profile {
     hasPassword: true,
     createdAt: "2026-10-26T10:00:00Z",
     updatedAt: "2026-10-26T10:00:00Z",
-    ...overrides,
+    ...rest,
+    ...(ssh ? { ssh: { ...ssh, hasPassphrase: ssh.hasPassphrase ?? false } } : {}),
   };
 }

@@ -53,7 +53,7 @@ func Open(p conn.Profile, password string, timeout time.Duration) (*sql.DB, erro
 			if err != nil {
 				return err
 			}
-			c.Passwd, err = awsauth.RDSToken(ctx, aws, p.Host, p.Port, p.User)
+			c.Passwd, err = awsauth.RDSToken(ctx, aws, p.Endpoint().Host, p.Endpoint().Port, p.User)
 			return err
 		})); err != nil {
 			return nil, err

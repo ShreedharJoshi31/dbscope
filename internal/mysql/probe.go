@@ -18,7 +18,7 @@ import (
 // starts read-only, and write privileges dbscope does not need.
 func Test(ctx context.Context, p conn.Profile, password string) conn.TestResult {
 	res := conn.TestResult{Engine: conn.EngineMySQL, Warnings: []string{}}
-	if p.SSLMode == conn.SSLDisable && !loopback(p.Host) {
+	if p.SSLMode == conn.SSLDisable && !loopback(p.Endpoint().Host) {
 		res.Warnings = append(res.Warnings, "sslMode is disable on a non-loopback host, so the password and query results travel unencrypted.")
 	}
 	db, err := Open(p, password, 10*time.Second)

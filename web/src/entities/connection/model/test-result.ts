@@ -34,6 +34,10 @@ export const ERROR_KIND_COPY: Record<TestErrorKind, { title: string; hint: strin
     title: "AWS sign-in failed",
     hint: "dbscope found no usable AWS credentials on this machine. Run aws sso login or aws configure, or set the AWS profile; the identity also needs rds-db:connect for this database user (RDS) or es:ESHttp* (OpenSearch).",
   },
+  ssh: {
+    title: "SSH tunnel failed",
+    hint: "Check the SSH server, its user and your key. dbscope logs in with ssh-agent's keys or the key file, and only to servers whose host key is in ~/.ssh/known_hosts: connect once with ssh to add it.",
+  },
   other: {
     title: "Connection failed",
     hint: "Read the server message above for the cause.",

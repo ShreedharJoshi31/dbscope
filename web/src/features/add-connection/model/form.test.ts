@@ -3,9 +3,11 @@ import {
   applyParsedUrl,
   EMPTY_CONNECTION_FORM,
   firstInvalidField,
+  formFromProfile,
   toProfileInput,
   validateConnectionForm,
 } from "@/features/add-connection/model/form";
+import { makeProfile } from "@/test/render";
 
 const valid = {
   ...EMPTY_CONNECTION_FORM,
@@ -284,5 +286,50 @@ describe("AWS sign-in", () => {
     expect(input.options).toBe("auth=rds-iam&region=eu-west-1");
     expect(input.password).toBeUndefined();
     expect(toProfileInput({ ...valid, password: "typed" }).password).toBe("typed");
+  });
+});
+
+describe("SSH tunnel", () => {
+  const tunnelled = { ...valid, ssh: true, sshHost: "bastion", sshPort: "22", sshUser: "ops" };
+
+  it("needs a host, a port and a user, and an absolute key file when one is given", () => {
+    expect(validateConnectionForm(tunnelled)).toEqual({});
+    const errors = validateConnectionForm({
+      ...tunnelled,
+      sshHost: " ",
+      sshPort: "0",
+      sshUser: "",
+      sshKeyFile: "id_rsa",
+    });
+    expect(Object.keys(errors).sort()).toEqual(["sshHost", "sshKeyFile", "sshPort", "sshUser"]);
+    expect(firstInvalidField(errors)).toBe("sshHost");
+    expect(validateConnectionForm({ ...valid, sshHost: "", sshUser: "" })).toEqual({});
+  });
+
+  it("sends the tunnel, and the passphrase only with a key file", () => {
+    expect(toProfileInput(tunnelled)).toMatchObject({ ssh: { host: "bastion", port: 22, user: "ops" } });
+    expect(toProfileInput({ ...tunnelled, sshPassphrase: "p" })).not.toHaveProperty("sshPassphrase");
+    const withKey = toProfileInput({ ...tunnelled, sshKeyFile: " /k/id ", sshPassphrase: "p" });
+    expect(withKey.ssh).toEqual({ host: "bastion", port: 22, user: "ops", keyFile: "/k/id" });
+    expect(withKey.sshPassphrase).toBe("p");
+    expect(toProfileInput({ ...valid, sshHost: "bastion" })).not.toHaveProperty("ssh");
+    expect(
+      toProfileInput({ ...tunnelled, engine: "sqlite", path: "/a.db", name: "s", env: "local" }),
+    ).not.toHaveProperty("ssh");
+  });
+
+  it("reads a saved tunnel back into the form", () => {
+    const values = formFromProfile(
+      makeProfile({ ssh: { host: "b", port: 2222, user: "u", keyFile: "/k", hasPassphrase: true } }),
+    );
+    expect(values).toMatchObject({
+      ssh: true,
+      sshHost: "b",
+      sshPort: "2222",
+      sshUser: "u",
+      sshKeyFile: "/k",
+      sshPassphrase: "",
+    });
+    expect(formFromProfile(makeProfile()).ssh).toBe(false);
   });
 });

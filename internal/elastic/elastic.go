@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"sort"
@@ -65,6 +66,14 @@ func Connect(p conn.Profile, password string) (*Client, error) {
 		}
 		tr.TLSClientConfig = cfgs[0]
 	}
+	if p.Origin != nil {
+		// The URL keeps the server's name for TLS and SigV4; every dial goes to the tunnel.
+		tunnel := net.JoinHostPort(p.Host, strconv.Itoa(p.Port))
+		tr.Proxy = nil
+		tr.DialContext = func(ctx context.Context, network, _ string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, network, tunnel)
+		}
+	}
 	pattern := p.Database
 	if pattern == "" {
 		pattern = "*"
@@ -84,11 +93,8 @@ func Connect(p conn.Profile, password string) (*Client, error) {
 }
 
 func netHost(p conn.Profile) string {
-	h := p.Host
-	if strings.Contains(h, ":") {
-		h = "[" + h + "]"
-	}
-	return h + ":" + strconv.Itoa(p.Port)
+	e := p.Endpoint()
+	return net.JoinHostPort(e.Host, strconv.Itoa(e.Port))
 }
 
 // Error is an error response from the server.
@@ -215,7 +221,7 @@ func Test(ctx context.Context, p conn.Profile, password string) conn.TestResult 
 		res.Error = classify(err)
 		return res
 	}
-	if !strings.HasPrefix(c.base, "https") && p.Host != "localhost" && p.Host != "127.0.0.1" && p.Host != "::1" {
+	if !strings.HasPrefix(c.base, "https") && !conn.Loopback(p.Endpoint().Host) {
 		res.Warnings = append(res.Warnings, "the connection uses http, so the password and results travel in plain text; use sslMode require or verify-full.")
 	}
 	start := time.Now()

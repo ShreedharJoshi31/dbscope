@@ -69,7 +69,7 @@ func rdsToken(ctx context.Context, p Profile) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return awsauth.RDSToken(ctx, cfg, p.Host, p.Port, p.User)
+	return awsauth.RDSToken(ctx, cfg, p.Endpoint().Host, p.Endpoint().Port, p.User)
 }
 
 func configure(cc *pgx.ConnConfig, p Profile, password string) error {
@@ -109,8 +109,8 @@ func tlsConfigsFor(p Profile) ([]*tls.Config, error) {
 		return []*tls.Config{nil}, nil
 	}
 	cfg := &tls.Config{}
-	if net.ParseIP(p.Host) == nil {
-		cfg.ServerName = p.Host // SNI; also the name checked by verify-full
+	if net.ParseIP(p.Endpoint().Host) == nil {
+		cfg.ServerName = p.Endpoint().Host // SNI; also the name checked by verify-full
 	}
 	if p.SSLRootCert != "" {
 		pem, err := os.ReadFile(p.SSLRootCert)
@@ -157,7 +157,7 @@ func tlsConfigsFor(p Profile) ([]*tls.Config, error) {
 			return err
 		}
 	case SSLVerifyFull:
-		cfg.ServerName = p.Host
+		cfg.ServerName = p.Endpoint().Host
 	}
 	return []*tls.Config{cfg}, nil
 }

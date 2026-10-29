@@ -23,6 +23,13 @@ export interface ConnectionFormValues {
   /** "" = the environment default, "0" = no limit. */
   maxCost: string;
   maxRowsToLLM: number;
+  /** Whether the database is reached through an SSH server. */
+  ssh: boolean;
+  sshHost: string;
+  sshPort: string;
+  sshUser: string;
+  sshKeyFile: string;
+  sshPassphrase: string;
 }
 
 export type ConnectionField = keyof ConnectionFormValues;
@@ -41,6 +48,10 @@ export const FIELD_ORDER: readonly ConnectionField[] = [
   "password",
   "sslMode",
   "sslRootCert",
+  "sshHost",
+  "sshPort",
+  "sshUser",
+  "sshKeyFile",
   "schemas",
   "summaryMode",
   "statementTimeoutMs",
@@ -65,6 +76,12 @@ export const EMPTY_CONNECTION_FORM: ConnectionFormValues = {
   statementTimeoutMs: String(defaultStatementTimeoutMs(undefined)),
   maxCost: "",
   maxRowsToLLM: 50,
+  ssh: false,
+  sshHost: "",
+  sshPort: "22",
+  sshUser: "",
+  sshKeyFile: "",
+  sshPassphrase: "",
 };
 
 export function formFromProfile(profile: Profile): ConnectionFormValues {
@@ -86,7 +103,18 @@ export function formFromProfile(profile: Profile): ConnectionFormValues {
     statementTimeoutMs: String(profile.statementTimeoutMs),
     maxCost: profile.maxCost === undefined ? "" : String(profile.maxCost),
     maxRowsToLLM: profile.maxRowsToLLM,
+    ssh: Boolean(profile.ssh),
+    sshHost: profile.ssh?.host ?? "",
+    sshPort: String(profile.ssh?.port ?? 22),
+    sshUser: profile.ssh?.user ?? "",
+    sshKeyFile: profile.ssh?.keyFile ?? "",
+    sshPassphrase: "",
   };
+}
+
+/** Whether the engine's database is on a server an SSH tunnel can reach. */
+export function sshCapable(engine: Engine): boolean {
+  return engine !== "sqlite" && engine !== "dynamodb";
 }
 
 const NAME_MAX = 80;
@@ -141,6 +169,18 @@ export function validateConnectionForm(values: ConnectionFormValues): Connection
     } else {
       if (!values.database.trim()) errors.database = "Enter the database name.";
       if (!values.user.trim()) errors.user = "Enter the user name.";
+    }
+    if (values.ssh) {
+      if (!values.sshHost.trim()) errors.sshHost = "Enter the SSH server's host name or IP address.";
+      const sshPort = Number(values.sshPort);
+      if (!isWholeNumber(values.sshPort) || sshPort < 1 || sshPort > 65_535) {
+        errors.sshPort = "Port must be a whole number from 1 to 65535.";
+      }
+      if (!values.sshUser.trim()) errors.sshUser = "Enter the user to log in to the SSH server as.";
+      const keyFile = values.sshKeyFile.trim();
+      if (keyFile && !isAbsolutePath(keyFile)) {
+        errors.sshKeyFile = "Enter the full path of the key file, e.g. /Users/you/.ssh/id_ed25519.";
+      }
     }
   }
 
@@ -236,6 +276,16 @@ export function toProfileInput(values: ConnectionFormValues): ProfileInput {
   const rootCert = values.sslRootCert.trim();
   if (rootCert && (values.sslMode === "verify-ca" || values.sslMode === "verify-full")) {
     input.sslRootCert = rootCert;
+  }
+  if (values.ssh && sshCapable(values.engine)) {
+    const keyFile = values.sshKeyFile.trim();
+    input.ssh = {
+      host: values.sshHost.trim(),
+      port: Number(values.sshPort),
+      user: values.sshUser.trim(),
+      ...(keyFile ? { keyFile } : {}),
+    };
+    if (keyFile && values.sshPassphrase) input.sshPassphrase = values.sshPassphrase;
   }
   // AWS sign-in stores no password: the token or signature comes from the AWS SDK.
   if (values.password && !(awsAuthKind(values.engine) && new URLSearchParams(values.options).get("auth"))) {

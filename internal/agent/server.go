@@ -45,6 +45,7 @@ type server struct {
 	vault       *secrets.Vault
 	log         *slog.Logger
 	source      SchemaSource
+	tunnels     *tunnels
 	newProvider ProviderFactory
 	convs       *nl.Conversations
 	// rowsConfirmed holds the prod-replica profiles whose rows the user
@@ -55,12 +56,16 @@ type server struct {
 // Agent is the agent's HTTP handler. Close releases its database pools.
 type Agent struct {
 	http.Handler
-	source SchemaSource
+	source  SchemaSource
+	tunnels *tunnels
 }
 
 // Close closes every database pool, waiting for in-flight queries to return
-// their connections. Call it after the HTTP server has shut down.
-func (a *Agent) Close() { a.source.Close() }
+// their connections, then the SSH tunnels. Call it after the HTTP server has shut down.
+func (a *Agent) Close() {
+	a.source.Close()
+	a.tunnels.Close()
+}
 
 // New returns the agent's HTTP handler: API routes and static assets behind
 // the localhost guard.
@@ -74,7 +79,7 @@ func New(cfg Config) (*Agent, error) {
 		return nil, errors.New("agent: Store and Secrets are required")
 	}
 	s := &server{store: cfg.Store, vault: cfg.Secrets, log: cfg.Logger, source: cfg.Schema,
-		newProvider: cfg.NewProvider, convs: nl.NewConversations()}
+		newProvider: cfg.NewProvider, convs: nl.NewConversations(), tunnels: newTunnels()}
 	if s.newProvider == nil {
 		s.newProvider = newProvider
 	}
@@ -130,7 +135,7 @@ func New(cfg Config) (*Agent, error) {
 	mux.Handle("/", getOnly(static(cfg.Assets)))
 
 	g := guard{port: strconv.Itoa(cfg.Port), token: []byte(cfg.Token), devOrigin: cfg.DevOrigin}
-	return &Agent{Handler: g.wrap(mux), source: s.source}, nil
+	return &Agent{Handler: g.wrap(mux), source: s.source, tunnels: s.tunnels}, nil
 }
 
 type apiError struct {

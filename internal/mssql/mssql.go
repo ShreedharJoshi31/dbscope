@@ -54,7 +54,7 @@ func Open(p conn.Profile, password string) (*sql.DB, error) {
 	switch {
 	case cfgs[0] == nil:
 		cfg.Encryption = msdsn.EncryptionOff
-		cfg.TLSConfig = &tls.Config{InsecureSkipVerify: true, ServerName: p.Host} // the login packet only
+		cfg.TLSConfig = &tls.Config{InsecureSkipVerify: true, ServerName: p.Endpoint().Host} // the login packet only
 	default:
 		cfg.Encryption = msdsn.EncryptionRequired
 		cfg.TLSConfig = cfgs[0]

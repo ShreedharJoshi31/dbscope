@@ -113,15 +113,16 @@ func (s *server) planShared(w http.ResponseWriter, r *http.Request, apply bool) 
 // up quietly (nil) when the vault is locked or the database is unreachable:
 // the import itself never needs the database.
 func (s *server) existing(ctx context.Context, p conn.Profile) *share.Existing {
-	password := ""
-	if p.HasPassword {
-		var err error
-		if password, _, err = s.vault.Get(p.ID); err != nil {
-			return nil
-		}
+	password, passphrase, err := s.secrets(p)
+	if err != nil {
+		return nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
+	if p, err = s.tunnels.reach(ctx, p, passphrase); err != nil {
+		s.log.Debug("shared-state preview without schema", "err", err)
+		return nil
+	}
 	m, err := s.source.Introspect(ctx, p, password)
 	if err != nil {
 		if !errors.Is(err, context.Canceled) {

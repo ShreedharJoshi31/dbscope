@@ -14,12 +14,14 @@ import {
   EMPTY_CONNECTION_FORM,
   firstInvalidField,
   formFromProfile,
+  sshCapable,
   toProfileInput,
   validateConnectionForm,
 } from "@/features/add-connection/model/form";
 import { AdvancedFields } from "@/features/add-connection/ui/advanced-fields";
 import { ConnectionFields } from "@/features/add-connection/ui/connection-fields";
 import { ConnectionUrlField } from "@/features/add-connection/ui/connection-url-field";
+import { SshFields } from "@/features/add-connection/ui/ssh-fields";
 import {
   type ApiError,
   type Engine,
@@ -49,6 +51,12 @@ const CONNECTION_FIELDS: ReadonlySet<ConnectionField> = new Set([
   "password",
   "sslMode",
   "sslRootCert",
+  "ssh",
+  "sshHost",
+  "sshPort",
+  "sshUser",
+  "sshKeyFile",
+  "sshPassphrase",
 ]);
 
 interface ConnectionFormProps {
@@ -158,12 +166,15 @@ export function ConnectionForm({ profile, submitLabel, onSaved, onCancel, autoFo
     setFormError(null);
     if (!ensureValid()) return;
     const input = toProfileInput(values);
-    if (profile && !values.password && profile.hasPassword) {
-      // The unsaved-test endpoint needs the password; the stored one is only usable for the saved profile.
+    const savedPassword = !values.password && profile?.hasPassword;
+    const savedPassphrase = !values.sshPassphrase && input.ssh?.keyFile && profile?.ssh?.hasPassphrase;
+    if (profile && (savedPassword || savedPassphrase)) {
+      // The unsaved-test endpoint needs the secrets; stored ones are only usable for the saved profile.
       if (connectionUnchanged(profile, values)) {
         testSaved.mutate(profile.id, { onSuccess: finishTest, onError: failTest });
       } else {
-        setFormError("Enter the password to test the changed details, or save first and test from the workbench.");
+        const secret = savedPassword ? "password" : "key passphrase";
+        setFormError(`Enter the ${secret} to test the changed details, or save first and test from the workbench.`);
       }
       return;
     }
@@ -235,6 +246,17 @@ export function ConnectionForm({ profile, submitLabel, onSaved, onCancel, autoFo
         register={register}
         hasSavedPassword={Boolean(profile?.hasPassword)}
       />
+
+      {sshCapable(values.engine) && (
+        <SshFields
+          values={values}
+          errorFor={visibleError}
+          onChange={change}
+          onBlur={blur}
+          register={register}
+          hasSavedPassphrase={Boolean(profile?.ssh?.hasPassphrase)}
+        />
+      )}
 
       <AdvancedFields
         values={values}

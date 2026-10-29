@@ -17,7 +17,7 @@ import (
 // them), and autonomous-transaction PL/SQL it can execute.
 func Test(ctx context.Context, p conn.Profile, password string) conn.TestResult {
 	res := conn.TestResult{Engine: conn.EngineOracle, Warnings: []string{}}
-	if (p.SSLMode == conn.SSLDisable || p.SSLMode == conn.SSLPrefer) && !loopback(p.Host) {
+	if (p.SSLMode == conn.SSLDisable || p.SSLMode == conn.SSLPrefer) && !loopback(p.Endpoint().Host) {
 		res.Warnings = append(res.Warnings, "The connection is not encrypted (Oracle's TLS listener is a port of its own, usually 2484), "+
 			"so the password exchange is protected by Oracle's own verifier but results travel in plain text; use sslMode require or verify-full against the TCPS port.")
 	}

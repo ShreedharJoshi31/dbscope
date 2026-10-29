@@ -25,7 +25,7 @@ var writePermissions = map[string]bool{
 // DEFINITION (the diagram then lacks defaults and expressions).
 func Test(ctx context.Context, p conn.Profile, password string) conn.TestResult {
 	res := conn.TestResult{Engine: conn.EngineSQLServer, Warnings: []string{}}
-	if p.SSLMode == conn.SSLDisable && !loopback(p.Host) {
+	if p.SSLMode == conn.SSLDisable && !loopback(p.Endpoint().Host) {
 		res.Warnings = append(res.Warnings, "sslMode is disable on a non-loopback host: the login is encrypted, but query results travel unencrypted.")
 	}
 	db, err := Open(p, password)

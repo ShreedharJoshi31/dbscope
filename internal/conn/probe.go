@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/dbscope/dbscope/internal/awsauth"
+	"github.com/dbscope/dbscope/internal/sshtunnel"
 )
 
 type TestError struct {
@@ -49,7 +50,7 @@ const notSystemSchema = `n.nspname NOT IN ('pg_catalog', 'information_schema') A
 // reported in the result, not as an error.
 func Test(ctx context.Context, p Profile, password string) TestResult {
 	res := TestResult{Warnings: []string{}}
-	if p.SSLMode == SSLDisable && !isLoopback(p.Host) {
+	if p.SSLMode == SSLDisable && !isLoopback(p.Endpoint().Host) {
 		res.Warnings = append(res.Warnings, "sslMode is disable on a non-loopback host, so the password and query results travel unencrypted.")
 	}
 	if awsauth.FromOptions(p.Options).Auth == "rds-iam" {
@@ -199,6 +200,9 @@ func pgStatStatements(ctx context.Context, c *pgx.Conn) (bool, error) {
 func classify(err error) *TestError {
 	if errors.Is(err, awsauth.ErrCredentials) {
 		return &TestError{Kind: "aws", Message: err.Error()}
+	}
+	if errors.Is(err, sshtunnel.ErrTunnel) {
+		return &TestError{Kind: "ssh", Message: strings.TrimPrefix(err.Error(), sshtunnel.ErrTunnel.Error()+": ")}
 	}
 	msg := err.Error()
 	var ce *pgconn.ConnectError

@@ -19,6 +19,7 @@ import (
 	"github.com/dbscope/dbscope/internal/redis"
 	"github.com/dbscope/dbscope/internal/secrets"
 	"github.com/dbscope/dbscope/internal/sqlite"
+	"github.com/dbscope/dbscope/internal/sshtunnel"
 	"github.com/dbscope/dbscope/internal/store"
 )
 
@@ -75,10 +76,14 @@ func (s *server) storeError(w http.ResponseWriter, r *http.Request, err error) {
 
 func (s *server) createProfile(w http.ResponseWriter, r *http.Request) {
 	in, p, ok := profileInput(w, r)
-	// Only a password needs the vault; a SQLite file or a passwordless role does not.
+	// Only secrets need the vault; a SQLite file or a passwordless role does not.
 	p.HasPassword = in.Password != nil && *in.Password != ""
-	if !ok || (p.HasPassword && s.locked(w)) {
+	hasPassphrase := p.SSH != nil && in.SSHPassphrase != nil && *in.SSHPassphrase != ""
+	if !ok || ((p.HasPassword || hasPassphrase) && s.locked(w)) {
 		return
+	}
+	if hasPassphrase {
+		p.SSH.HasPassphrase = true
 	}
 	p, err := s.store.CreateProfile(r.Context(), p)
 	if err != nil {
@@ -86,14 +91,21 @@ func (s *server) createProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if p.HasPassword {
-		if err := s.vault.Set(p.ID, *in.Password); err != nil {
-			// Don't leave a profile that claims a password it doesn't have.
-			if delErr := s.store.DeleteProfile(context.WithoutCancel(r.Context()), p.ID); delErr != nil {
-				s.log.Error("roll back profile create", "id", p.ID, "err", delErr)
-			}
-			s.secretError(w, r, err)
-			return
+		err = s.vault.Set(p.ID, *in.Password)
+	}
+	if err == nil && hasPassphrase {
+		err = s.vault.Set(sshVaultKey(p.ID), *in.SSHPassphrase)
+	}
+	if err != nil {
+		// Don't leave a profile that claims secrets it doesn't have.
+		if delErr := s.store.DeleteProfile(context.WithoutCancel(r.Context()), p.ID); delErr != nil {
+			s.log.Error("roll back profile create", "id", p.ID, "err", delErr)
 		}
+		if delErr := s.vault.Delete(p.ID); delErr != nil {
+			s.log.Error("roll back profile password", "id", p.ID, "err", delErr)
+		}
+		s.secretError(w, r, err)
+		return
 	}
 	writeJSON(w, http.StatusCreated, p)
 }
@@ -121,16 +133,35 @@ func (s *server) updateProfile(w http.ResponseWriter, r *http.Request) {
 		empty := ""
 		in.Password, p.HasPassword = &empty, false
 	}
+	// The passphrase follows the password's rules, and goes with the tunnel or its key file.
+	oldPassphrase := old.SSH != nil && old.SSH.HasPassphrase
+	passphrase := in.SSHPassphrase
+	if p.SSH == nil || p.SSH.KeyFile == "" {
+		if oldPassphrase {
+			empty := ""
+			passphrase = &empty
+		} else {
+			passphrase = nil
+		}
+	}
+	if p.SSH != nil {
+		p.SSH.HasPassphrase = oldPassphrase && p.SSH.KeyFile != ""
+		if passphrase != nil {
+			p.SSH.HasPassphrase = *passphrase != ""
+		}
+	}
+	if passphrase != nil && s.locked(w) {
+		return
+	}
 	updated, err := s.store.UpdateProfile(r.Context(), p)
 	if err != nil {
 		s.storeError(w, r, err)
 		return
 	}
-	if in.Password != nil {
-		if *in.Password == "" {
-			err = s.vault.Delete(p.ID)
-		} else {
-			err = s.vault.Set(p.ID, *in.Password)
+	if in.Password != nil || passphrase != nil {
+		err = setSecret(s.vault, p.ID, in.Password)
+		if err == nil {
+			err = setSecret(s.vault, sshVaultKey(p.ID), passphrase)
 		}
 		if err != nil {
 			if _, rbErr := s.store.UpdateProfile(context.WithoutCancel(r.Context()), old); rbErr != nil {
@@ -141,7 +172,19 @@ func (s *server) updateProfile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.source.Forget(p.ID)
+	s.tunnels.Forget(p.ID)
 	writeJSON(w, http.StatusOK, updated)
+}
+
+// setSecret stores a secret, deletes it when empty, and keeps it when nil.
+func setSecret(v *secrets.Vault, key string, secret *string) error {
+	switch {
+	case secret == nil:
+		return nil
+	case *secret == "":
+		return v.Delete(key)
+	}
+	return v.Set(key, *secret)
 }
 
 func (s *server) deleteProfile(w http.ResponseWriter, r *http.Request) {
@@ -150,8 +193,13 @@ func (s *server) deleteProfile(w http.ResponseWriter, r *http.Request) {
 		s.storeError(w, r, err)
 		return
 	}
-	// A profile without a password can be deleted while the vault is locked.
-	if err := s.vault.Delete(p.ID); err != nil && !(errors.Is(err, secrets.ErrLocked) && !p.HasPassword) {
+	// A profile without secrets can be deleted while the vault is locked.
+	hasPassphrase := p.SSH != nil && p.SSH.HasPassphrase
+	err = s.vault.Delete(p.ID)
+	if err == nil {
+		err = s.vault.Delete(sshVaultKey(p.ID))
+	}
+	if err != nil && !(errors.Is(err, secrets.ErrLocked) && !p.HasPassword && !hasPassphrase) {
 		s.secretError(w, r, err)
 		return
 	}
@@ -160,6 +208,7 @@ func (s *server) deleteProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.source.Forget(p.ID)
+	s.tunnels.Forget(p.ID)
 	s.convs.Forget(p.ID)
 	s.rowsConfirmed.Delete(p.ID)
 	w.WriteHeader(http.StatusNoContent)
@@ -197,19 +246,47 @@ func (s *server) testUnsaved(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var password string
+	var password, passphrase string
 	if in.Password != nil {
 		password = *in.Password
+	}
+	if in.SSHPassphrase != nil {
+		passphrase = *in.SSHPassphrase
+	}
+	if p.SSH == nil {
+		writeJSON(w, http.StatusOK, testProfile(r.Context(), p, password))
+		return
+	}
+	// A tunnel of its own, so testing a draft never disturbs a saved profile's.
+	t, err := sshtunnel.Open(r.Context(), tunnelConfig(p.SSH, passphrase), tunnelTarget(p))
+	if err != nil {
+		writeJSON(w, http.StatusOK, tunnelFailed(p, err))
+		return
+	}
+	defer t.Close()
+	writeJSON(w, http.StatusOK, testProfile(r.Context(), p.ViaTunnel(t.Port()), password))
+}
+
+func (s *server) testSaved(w http.ResponseWriter, r *http.Request) {
+	p, password, passphrase, ok := s.profileSecrets(w, r)
+	if !ok {
+		return
+	}
+	p, err := s.tunnels.reach(r.Context(), p, passphrase)
+	if err != nil {
+		writeJSON(w, http.StatusOK, tunnelFailed(p, err))
+		return
 	}
 	writeJSON(w, http.StatusOK, testProfile(r.Context(), p, password))
 }
 
-func (s *server) testSaved(w http.ResponseWriter, r *http.Request) {
-	p, password, ok := s.profileWithSecret(w, r)
-	if !ok {
-		return
+// tunnelFailed is the test result when the SSH tunnel could not be opened.
+func tunnelFailed(p conn.Profile, err error) conn.TestResult {
+	res := conn.TestResult{Engine: p.Engine, Warnings: []string{}, Error: conn.Classify(err)}
+	if p.Engine == conn.EnginePostgres {
+		res.Engine = "" // as conn.Test reports PostgreSQL
 	}
-	writeJSON(w, http.StatusOK, testProfile(r.Context(), p, password))
+	return res
 }
 
 func testProfile(ctx context.Context, p conn.Profile, password string) conn.TestResult {

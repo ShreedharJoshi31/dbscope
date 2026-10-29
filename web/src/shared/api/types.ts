@@ -54,14 +54,28 @@ export interface Profile {
    */
   maxCost?: number;
   hasPassword: boolean;
+  /** The SSH server the database is reached through. */
+  ssh?: SSHTunnel;
   capabilities: Capabilities;
   createdAt: string;
   updatedAt: string;
 }
 
-/** Body for create, update and unsaved test. Omitting `password` on update keeps the stored one. */
-export type ProfileInput = Omit<Profile, "id" | "hasPassword" | "capabilities" | "createdAt" | "updatedAt"> & {
+/** An SSH tunnel: keys come from ssh-agent and the key file, and the host key must be in ~/.ssh/known_hosts. */
+export interface SSHTunnel {
+  host: string;
+  port: number;
+  user: string;
+  /** A private key tried after ssh-agent's; omitted means the default ~/.ssh/id_* keys. */
+  keyFile?: string;
+  hasPassphrase: boolean;
+}
+
+/** Body for create, update and unsaved test. Omitting `password` or `sshPassphrase` on update keeps the stored one. */
+export type ProfileInput = Omit<Profile, "id" | "hasPassword" | "ssh" | "capabilities" | "createdAt" | "updatedAt"> & {
   password?: string;
+  ssh?: Omit<SSHTunnel, "hasPassphrase">;
+  sshPassphrase?: string;
 };
 
 export interface ParsedConnectionUrl {
@@ -77,7 +91,7 @@ export interface ParsedConnectionUrl {
   notes?: string[];
 }
 
-export type TestErrorKind = "auth" | "network" | "tls" | "timeout" | "database" | "aws" | "other";
+export type TestErrorKind = "auth" | "network" | "tls" | "timeout" | "database" | "aws" | "ssh" | "other";
 
 export interface TestResult {
   ok: boolean;
