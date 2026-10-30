@@ -32,7 +32,7 @@ func FuzzGuard(f *testing.F) {
 			return
 		}
 		assertSafe(t, p)
-		fns, err := checkText(p.Deparsed)
+		fns, _, err := checkText(p.Deparsed)
 		if err != nil {
 			t.Fatalf("deparsed %q of accepted %q is rejected: %v", p.Deparsed, sql, err)
 		}

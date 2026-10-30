@@ -26,11 +26,16 @@ export function explainQuery(profileId: string, body: ExplainRequest, signal?: A
   return apiFetch<ExplainResult>(`${profilePath(profileId)}/explain`, { method: "POST", body, signal });
 }
 
-/** POST /graph/expand: up to `limit` (1..200) neighbours of a node, read with fixed Cypher. */
-export function expandGraphNode(profileId: string, nodeId: string, limit: number): Promise<GraphExpansion> {
+/** POST /graph/expand: up to `limit` (1..200) neighbours of a node, read with fixed Cypher; `graph` names an AGE graph. */
+export function expandGraphNode(
+  profileId: string,
+  nodeId: string,
+  limit: number,
+  graph?: string,
+): Promise<GraphExpansion> {
   return apiFetch<GraphExpansion>(`${profilePath(profileId)}/graph/expand`, {
     method: "POST",
-    body: { nodeId, limit },
+    body: graph ? { nodeId, limit, graph } : { nodeId, limit },
   });
 }
 

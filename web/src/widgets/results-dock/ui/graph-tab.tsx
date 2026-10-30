@@ -34,7 +34,8 @@ export function GraphTab() {
         key={output.meta.id}
         initial={graph}
         profileId={profile.id}
-        canExpand={Boolean(profile.capabilities.graph)}
+        // Graph databases expand any node; PostgreSQL expands vertices of the Apache AGE graph the result read.
+        canExpand={Boolean(profile.capabilities.graph || graph.source)}
       />
     </Suspense>
   );

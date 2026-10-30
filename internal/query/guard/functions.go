@@ -113,6 +113,10 @@ func overloadProblem(name, nsp, sig, volatile string, ext bool) string {
 	if r, ok := denied[name]; ok {
 		return r
 	}
+	// Apache AGE's cypher() is VOLATILE; Check has refused any whose Cypher writes or is not a constant.
+	if name == "cypher" && nsp == "ag_catalog" && ext {
+		return ""
+	}
 	if volatile == "v" && !volatileAllowed[name] {
 		return fmt.Sprintf("%s.%s is VOLATILE, so it may change data or wait", nsp, sig)
 	}

@@ -20,6 +20,8 @@ import (
 	pgquery "github.com/wasilibs/go-pgquery"
 	"github.com/wasilibs/go-pgquery/parser"
 	"google.golang.org/protobuf/reflect/protoreflect"
+
+	"github.com/dbscope/dbscope/internal/cypherscan"
 )
 
 // Reason is the machine-readable cause of a rejection, as sent in the API
@@ -85,7 +87,7 @@ func Check(sql string) (*Parsed, error) {
 	if err != nil {
 		return nil, err
 	}
-	fns, err := checkTree(tree)
+	fns, cyphers, err := checkTree(tree)
 	if err != nil {
 		return nil, err
 	}
@@ -93,11 +95,35 @@ func Check(sql string) (*Parsed, error) {
 	if err != nil {
 		return nil, err
 	}
-	again, err := checkText(deparsed)
-	if err != nil || !slices.Equal(fns, again) {
+	// Apache AGE takes cypher()'s query only as a dollar-quoted constant, which deparsing
+	// turns into an ordinary one; quote it back, then check the result says the same.
+	deparsed, ok := dollarQuote(deparsed, cyphers)
+	again, againCyphers, err := checkText(deparsed)
+	if !ok || err != nil || !slices.Equal(fns, again) || !slices.Equal(cyphers, againCyphers) {
 		return nil, reject(Syntax, "dbscope could not re-create this statement exactly; please simplify it")
 	}
 	return &Parsed{SQL: sql, Deparsed: deparsed, Functions: fns}, nil
+}
+
+// dollarQuote rewrites each cypher() query, in order, from a quoted
+// string to a dollar-quoted one with a tag the query does not contain.
+func dollarQuote(sql string, cyphers []string) (string, bool) {
+	from := 0
+	for _, q := range cyphers {
+		lit := "'" + strings.ReplaceAll(q, "'", "''") + "'"
+		i := strings.Index(sql[from:], lit)
+		if i < 0 {
+			return sql, false
+		}
+		tag := "$cypher$"
+		for n := 1; strings.Contains(q, tag); n++ {
+			tag = fmt.Sprintf("$cypher%d$", n)
+		}
+		quoted := tag + q + tag
+		sql = sql[:from+i] + quoted + sql[from+i+len(lit):]
+		from += i + len(quoted)
+	}
+	return sql, true
 }
 
 var warmOnce sync.Once
@@ -110,35 +136,36 @@ func Warm() {
 
 // checkText parses sql and runs the structural checks, returning the
 // functions it calls.
-func checkText(sql string) ([]FuncName, error) {
+func checkText(sql string) ([]FuncName, []string, error) {
 	tree, err := parse(sql)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	return checkTree(tree)
 }
 
-func checkTree(tree *pg_query.ParseResult) ([]FuncName, error) {
+// checkTree also returns the Cypher of each cypher() call, in order.
+func checkTree(tree *pg_query.ParseResult) ([]FuncName, []string, error) {
 	switch n := len(tree.Stmts); {
 	case n == 0:
-		return nil, reject(NotSelect, "the query is empty")
+		return nil, nil, reject(NotSelect, "the query is empty")
 	case n > 1:
-		return nil, reject(MultipleStatements, "only one statement can run at a time; this has %d", n)
+		return nil, nil, reject(MultipleStatements, "only one statement can run at a time; this has %d", n)
 	}
 	stmt := tree.Stmts[0].GetStmt()
 	if stmt.GetSelectStmt() == nil {
-		return nil, notSelect(nodeName(stmt))
+		return nil, nil, notSelect(nodeName(stmt))
 	}
 	w := walker{fns: map[FuncName]bool{}}
 	if err := w.walk(stmt.ProtoReflect()); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	out := make([]FuncName, 0, len(w.fns))
 	for f := range w.fns {
 		out = append(out, f)
 	}
 	slices.SortFunc(out, func(a, b FuncName) int { return strings.Compare(a.String(), b.String()) })
-	return out, nil
+	return out, w.cyphers, nil
 }
 
 // parse wraps the WebAssembly parser, turning its errors (and any panic
@@ -229,7 +256,8 @@ func camelWords(s string) string {
 // walker visits every message in the tree through protobuf reflection, so
 // a node type added to a future grammar is still visited.
 type walker struct {
-	fns map[FuncName]bool
+	fns     map[FuncName]bool
+	cyphers []string
 }
 
 func (w *walker) walk(m protoreflect.Message) error {
@@ -244,7 +272,15 @@ func (w *walker) walk(m protoreflect.Message) error {
 			return reject(LockingClause, "%s locks rows; remove the locking clause", lockingLabel(s.LockingClause[0]))
 		}
 	case name == "FuncCall":
-		w.addFunc(m.Interface().(*pg_query.FuncCall).Funcname)
+		fc := m.Interface().(*pg_query.FuncCall)
+		w.addFunc(fc.Funcname)
+		q, err := checkCypherCall(fc)
+		if err != nil {
+			return err
+		}
+		if q != nil {
+			w.cyphers = append(w.cyphers, *q)
+		}
 	case strings.HasSuffix(name, "Stmt"):
 		// Any statement nested in a SELECT (e.g. a data-modifying CTE).
 		return notSelect(name)
@@ -286,6 +322,31 @@ func lockingLabel(n *pg_query.Node) string {
 	default:
 		return "FOR UPDATE"
 	}
+}
+
+// checkCypherCall vets Apache AGE's cypher(graph, query): it runs Cypher
+// that the SQL parser sees only as a string, so the string must be a
+// constant and must not write. The read-only transaction refuses AGE's
+// writes too (verified on AGE 1.8); this keeps the check before the run,
+// as for every other function. AllowFunctions then admits only the
+// extension's own ag_catalog.cypher, which is VOLATILE.
+func checkCypherCall(fc *pg_query.FuncCall) (*string, error) {
+	parts := fc.Funcname
+	if len(parts) == 0 || parts[len(parts)-1].GetString_().GetSval() != "cypher" {
+		return nil, nil
+	}
+	if len(fc.Args) < 2 {
+		return nil, reject(FunctionNotAllowed, "cypher() needs a graph name and its Cypher query as string constants")
+	}
+	query := fc.Args[1].GetAConst().GetSval()
+	if query == nil || fc.Args[0].GetAConst().GetSval() == nil {
+		return nil, reject(FunctionNotAllowed, "cypher() runs only with the graph name and query written as string constants, such as $$ MATCH (n) RETURN n $$")
+	}
+	if clause := cypherscan.WriteClause(cypherscan.Tokens(query.GetSval())); clause != "" {
+		return nil, reject(WritesData, "the Cypher in cypher() uses %s, which changes the graph; only reading Cypher runs here", clause)
+	}
+	q := query.GetSval()
+	return &q, nil
 }
 
 // addFunc records a FuncCall's name. Names arrive as String nodes, already

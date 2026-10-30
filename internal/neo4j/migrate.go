@@ -109,7 +109,7 @@ func Analyze(ctx context.Context, base *MigrationBase, files []ingest.Input) *mi
 }
 
 type cypherPiece struct {
-	text          string
+	Text          string
 	toks          []token
 	line, endLine int
 }
@@ -122,13 +122,13 @@ func splitCypher(s string) []cypherPiece {
 	flush := func() {
 		if len(cur) > 0 {
 			first, last := cur[0], cur[len(cur)-1]
-			end := last.pos + len(last.text)
-			out = append(out, cypherPiece{text: s[first.pos:end], toks: cur, line: lineAt(first.pos), endLine: lineAt(end)})
+			end := last.Pos + len(last.Text)
+			out = append(out, cypherPiece{Text: s[first.Pos:end], toks: cur, line: lineAt(first.Pos), endLine: lineAt(end)})
 		}
 		cur = nil
 	}
 	for _, t := range tokens(s) {
-		if t.text == ";" {
+		if t.Text == ";" {
 			flush()
 			continue
 		}
@@ -144,7 +144,7 @@ type cypherAnalysis struct {
 }
 
 func (a *cypherAnalysis) statement(ctx context.Context, file string, p cypherPiece) (out migrate.Statement) {
-	out = migrate.Statement{File: file, Line: p.line, Column: 1, EndLine: p.endLine, SQL: p.text,
+	out = migrate.Statement{File: file, Line: p.line, Column: 1, EndLine: p.endLine, SQL: p.Text,
 		Tx: "none", Locks: []migrate.Lock{}, Work: "none", Rating: score.Low, Findings: []migrate.Finding{}}
 	add := func(id string, r score.Rating, msg, alt string) {
 		out.Findings = append(out.Findings, migrate.Finding{RuleID: id, Rating: r, Message: msg, SafeAlternative: alt})
@@ -156,7 +156,7 @@ func (a *cypherAnalysis) statement(ctx context.Context, file string, p cypherPie
 	toks := p.toks
 	at := func(i int) string {
 		if i < len(toks) {
-			return toks[i].word
+			return toks[i].Word
 		}
 		return ""
 	}
@@ -188,7 +188,7 @@ func (a *cypherAnalysis) statement(ctx context.Context, file string, p cypherPie
 	case at(0) == "drop" && (at(1) == "constraint" || at(1) == "index"):
 		name := ""
 		if len(toks) > 2 {
-			name = strings.Trim(toks[2].text, "`")
+			name = strings.Trim(toks[2].Text, "`")
 		}
 		known := a.base.Constraints
 		if at(1) == "index" {
@@ -225,7 +225,7 @@ func (a *cypherAnalysis) constraint(ctx context.Context, toks []token, ifNot boo
 	label := patternName(toks, forAt)
 	rel := false
 	for _, t := range toks[forAt:req] {
-		rel = rel || t.text == "["
+		rel = rel || t.Text == "["
 	}
 	props := requiredProps(toks[req+1:])
 	is := wordIndex(toks, "is", req)
@@ -299,13 +299,13 @@ func (a *cypherAnalysis) constraint(ctx context.Context, toks []token, ifNot boo
 func (a *cypherAnalysis) dataChange(toks []token, add func(string, score.Rating, string, string)) {
 	write := ""
 	for i, t := range toks {
-		if i > 0 && toks[i-1].text == "." {
+		if i > 0 && toks[i-1].Text == "." {
 			continue
 		}
-		switch t.word {
+		switch t.Word {
 		case "set", "remove", "delete", "merge", "create", "foreach":
-			if write == "" || t.word == "delete" || t.word == "remove" {
-				write = t.word
+			if write == "" || t.Word == "delete" || t.Word == "remove" {
+				write = t.Word
 			}
 		}
 	}
@@ -314,15 +314,15 @@ func (a *cypherAnalysis) dataChange(toks []token, add func(string, score.Rating,
 	}
 	batched := false
 	for i := 0; i+1 < len(toks); i++ {
-		batched = batched || toks[i].word == "in" && toks[i+1].word == "transactions"
+		batched = batched || toks[i].Word == "in" && toks[i+1].Word == "transactions"
 	}
 	// The entries a statement touches: the largest label or type it matches.
 	touched, over := int64(0), ""
 	for i := 0; i+1 < len(toks); i++ {
-		if toks[i].text != ":" {
+		if toks[i].Text != ":" {
 			continue
 		}
-		name := strings.Trim(toks[i+1].text, "`")
+		name := strings.Trim(toks[i+1].Text, "`")
 		if n := max(a.base.Labels[name], a.base.Types[name]); n > touched {
 			touched, over = n, name
 		}
@@ -362,7 +362,7 @@ func wordIndex(toks []token, w string, from int) int {
 		return -1
 	}
 	for i := from; i < len(toks); i++ {
-		if toks[i].word == w {
+		if toks[i].Word == w {
 			return i
 		}
 	}
@@ -379,10 +379,10 @@ func schemaName(toks []token) string {
 		return ""
 	}
 	n := toks[i+1]
-	if n.word == "if" || n.word == "for" || n.word == "on" {
+	if n.Word == "if" || n.Word == "for" || n.Word == "on" {
 		return ""
 	}
-	return strings.Trim(n.text, "`")
+	return strings.Trim(n.Text, "`")
 }
 
 // patternName is the label or type in FOR (n:Label) or FOR ()-[r:TYPE]-().
@@ -391,10 +391,10 @@ func patternName(toks []token, from int) string {
 		return ""
 	}
 	for i := from; i+1 < len(toks); i++ {
-		if toks[i].text == ":" {
-			return strings.Trim(toks[i+1].text, "`")
+		if toks[i].Text == ":" {
+			return strings.Trim(toks[i+1].Text, "`")
 		}
-		if toks[i].word == "require" || toks[i].word == "options" {
+		if toks[i].Word == "require" || toks[i].Word == "options" {
 			break
 		}
 	}
@@ -404,9 +404,9 @@ func patternName(toks []token, from int) string {
 // requiredProps reads n.p or (n.a, n.b) after REQUIRE.
 func requiredProps(toks []token) []string {
 	var out []string
-	for i := 0; i+2 < len(toks) && toks[i].word != "is"; i++ {
-		if toks[i+1].text == "." {
-			out = append(out, strings.Trim(toks[i+2].text, "`"))
+	for i := 0; i+2 < len(toks) && toks[i].Word != "is"; i++ {
+		if toks[i+1].Text == "." {
+			out = append(out, strings.Trim(toks[i+2].Text, "`"))
 			i += 2
 		}
 	}

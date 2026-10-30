@@ -207,3 +207,39 @@ func forbidden(sql string) string {
 	}
 	return ""
 }
+
+func TestCypherCalls(t *testing.T) {
+	p, err := Check(`SELECT * FROM ag_catalog.cypher('g', $$ MATCH (n {name: 'O''Brien'}) RETURN n $$) AS (n ag_catalog.agtype)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(p.Deparsed, "$cypher$ MATCH (n {name: 'O''Brien'}) RETURN n $cypher$") {
+		t.Errorf("deparsed %s", p.Deparsed)
+	}
+	// A query holding the tag gets another.
+	if p, err := Check(`SELECT * FROM cypher('g', $q$ RETURN '$cypher$' $q$) AS (n agtype)`); err != nil || !strings.Contains(p.Deparsed, "$cypher1$") {
+		t.Errorf("tag %v %v", p, err)
+	}
+	for sql, want := range map[string]Reason{
+		`SELECT * FROM cypher('g', $$ MATCH (n) SET n.x = 1 $$) AS (n agtype)`:                       WritesData,
+		`SELECT * FROM cypher('g', $$ CREATE (:A) $$) AS (n agtype)`:                                 WritesData,
+		`SELECT * FROM cypher('g', $$ MATCH (n) CALL { DELETE n } IN TRANSACTIONS $$) AS (n agtype)`: WritesData,
+		`SELECT * FROM cypher('g', current_setting('x')) AS (n agtype)`:                              FunctionNotAllowed,
+		`SELECT * FROM cypher(current_user, $$ MATCH (n) RETURN n $$) AS (n agtype)`:                 FunctionNotAllowed,
+		`SELECT * FROM cypher('g') AS (n agtype)`:                                                    FunctionNotAllowed,
+	} {
+		var ge *Error
+		if _, err := Check(sql); !errors.As(err, &ge) || ge.Reason != want {
+			t.Errorf("%s: %v, want %s", sql, err, want)
+		}
+	}
+	// Property names that are clause words are not clauses.
+	if _, err := Check(`SELECT * FROM cypher('g', $$ MATCH (n) RETURN n.set, n.create $$) AS (n agtype)`); err != nil {
+		t.Errorf("property names: %v", err)
+	}
+	if overloadProblem("cypher", "ag_catalog", "ag_catalog.cypher(name,cstring,agtype)", "v", true) != "" ||
+		overloadProblem("cypher", "public", "public.cypher(text,text)", "v", false) == "" ||
+		overloadProblem("cypher", "ag_catalog", "ag_catalog.cypher(name,cstring,agtype)", "v", false) == "" {
+		t.Error("only the extension's ag_catalog.cypher is admitted")
+	}
+}

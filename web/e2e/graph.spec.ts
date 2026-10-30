@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { openApp, stubAgent, stubProfile } from "./support/agent-stub";
+import { newSqlTab } from "./support/query";
 
 const person = (id: string, name: string) => ({ id, labels: ["Person"], props: { name, age: 30 } });
 const company = { id: "4:db:9", labels: ["Company"], props: { name: "Acme" } };
@@ -88,4 +89,26 @@ test("a Cypher result is drawn as a graph, and a double-click expands a node", a
 
   await page.getByRole("tab", { name: "Results" }).click();
   await expect(page.getByTestId("result-summary")).toContainText("1 rows");
+});
+
+test("an Apache AGE result in PostgreSQL gets the Graph tab and expands within its graph", async ({ page }) => {
+  await stubAgent(page, { profiles: [stubProfile({})] });
+  const expansions: unknown[] = [];
+  await page.route("**/api/profiles/*/query", (route) =>
+    route.fulfill({ json: { ...result, graph: { ...result.graph, source: "social" } } }),
+  );
+  await page.route("**/api/profiles/*/graph/expand", async (route) => {
+    expansions.push(route.request().postDataJSON());
+    await route.fulfill({
+      json: { degree: 1, shown: 1, graph: { nodes: [person("4:db:2", "Bob")], relationships: [], truncated: false } },
+    });
+  });
+  await openApp(page);
+  await expect(page.getByRole("tab", { name: "Graph" })).toHaveCount(0);
+  await newSqlTab(page, "SELECT * FROM ag_catalog.cypher('social', $$ MATCH p = ()-[]->() RETURN p $$) AS (p agtype)");
+  await page.keyboard.press("ControlOrMeta+Enter");
+  await expect(page.getByRole("tab", { name: "Graph" })).toHaveAttribute("aria-selected", "true");
+  await page.getByTestId("graph-view").getByText("Bob").dblclick();
+  await expect(page.getByTestId("graph-view")).toContainText("All 1 relationships shown");
+  expect(expansions[0]).toEqual({ nodeId: "4:db:2", limit: 50, graph: "social" });
 });

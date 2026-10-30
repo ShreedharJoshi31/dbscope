@@ -121,12 +121,7 @@ func (b *graphBuilder) graph() *exec.Graph {
 }
 
 // Expansion is a node with some of its neighbours.
-type Expansion struct {
-	Graph *exec.Graph `json:"graph"`
-	// Degree is how many relationships the node has; Shown how many are drawn.
-	Degree int64 `json:"degree"`
-	Shown  int   `json:"shown"`
-}
+type Expansion = exec.Expansion
 
 // MaxExpand caps the neighbours one expansion returns: a supernode can have millions.
 const MaxExpand = 200

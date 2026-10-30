@@ -10,7 +10,6 @@ import (
 	"github.com/dbscope/dbscope/internal/health"
 	"github.com/dbscope/dbscope/internal/introspect"
 	"github.com/dbscope/dbscope/internal/migrate"
-	"github.com/dbscope/dbscope/internal/neo4j"
 	"github.com/dbscope/dbscope/internal/query/exec"
 	"github.com/dbscope/dbscope/internal/schema"
 	"github.com/dbscope/dbscope/internal/workload"
@@ -104,11 +103,12 @@ func (e engineSource) Health(ctx context.Context, p conn.Profile, password strin
 
 // graphSource is a source that expands graph nodes by their neighbours.
 type graphSource interface {
-	Expand(ctx context.Context, p conn.Profile, password, nodeID string, limit int) (*neo4j.Expansion, error)
+	// Expand reads a node's neighbours; graph names the Apache AGE graph, and Neo4j ignores it.
+	Expand(ctx context.Context, p conn.Profile, password, graph, nodeID string, limit int) (*exec.Expansion, error)
 }
 
-// Expand reads a node's neighbours, when the profile's engine is a graph database.
-func (e engineSource) Expand(ctx context.Context, p conn.Profile, password, nodeID string, limit int) (*neo4j.Expansion, error) {
+// Expand reads a node's neighbours, when the profile's engine holds graphs.
+func (e engineSource) Expand(ctx context.Context, p conn.Profile, password, graph, nodeID string, limit int) (*exec.Expansion, error) {
 	src, err := e.of(p)
 	if err != nil {
 		return nil, err
@@ -117,7 +117,7 @@ func (e engineSource) Expand(ctx context.Context, p conn.Profile, password, node
 	if !ok {
 		return nil, errUnsupported
 	}
-	return gs.Expand(ctx, p, password, nodeID, limit)
+	return gs.Expand(ctx, p, password, graph, nodeID, limit)
 }
 
 func supports(w http.ResponseWriter, p conn.Profile, has bool, mode string) bool {

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/dbscope/dbscope/internal/age"
+	"github.com/dbscope/dbscope/internal/conn"
 	"github.com/dbscope/dbscope/internal/neo4j"
 )
 
@@ -12,6 +14,8 @@ func (s *server) expandNode(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		NodeID string `json:"nodeId"`
 		Limit  int    `json:"limit"`
+		// Graph is the Apache AGE graph the node belongs to (the result's graph.source).
+		Graph string `json:"graph"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -28,7 +32,12 @@ func (s *server) expandNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, password, ok := s.profileWithSecret(w, r)
-	if !ok || !supports(w, p, p.Capabilities.Graph, "Graph exploration") {
+	// PostgreSQL holds graphs when Apache AGE is installed; age.Expand says when it is not.
+	if !ok || !supports(w, p, p.Capabilities.Graph || p.Engine == conn.EnginePostgres, "Graph exploration") {
+		return
+	}
+	if p.Engine == conn.EnginePostgres && body.Graph == "" {
+		writeError(w, http.StatusBadRequest, "validation", "graph is required: the Apache AGE graph the node belongs to")
 		return
 	}
 	src, ok := s.source.(engineSource)
@@ -36,8 +45,8 @@ func (s *server) expandNode(w http.ResponseWriter, r *http.Request) {
 		s.upstreamError(w, r, errUnsupported)
 		return
 	}
-	x, err := src.Expand(r.Context(), p, password, body.NodeID, body.Limit)
-	if errors.Is(err, neo4j.ErrNoNode) {
+	x, err := src.Expand(r.Context(), p, password, body.Graph, body.NodeID, body.Limit)
+	if errors.Is(err, neo4j.ErrNoNode) || errors.Is(err, age.ErrNoVertex) || errors.Is(err, age.ErrNoGraph) {
 		writeError(w, http.StatusNotFound, "not_found", err.Error())
 		return
 	}

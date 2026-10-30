@@ -111,6 +111,8 @@ export interface ResultGraph {
   relationships: GraphRelationship[];
   /** More came back than is drawn (500 nodes, 1,000 relationships). */
   truncated: boolean;
+  /** The Apache AGE graph a PostgreSQL result came from; expanding its vertices needs it. */
+  source?: string;
 }
 
 export interface GraphNode {

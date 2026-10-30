@@ -215,7 +215,7 @@ function GraphViewInner({ initial, profileId, canExpand }: GraphViewProps) {
     setLoading(id);
     setNote(null);
     try {
-      const x = await expandGraphNode(profileId, id, EXPAND_LIMIT);
+      const x = await expandGraphNode(profileId, id, EXPAND_LIMIT, initial.source);
       const next = mergeGraph(graph, x.graph);
       const added = next.nodes.length - graph.nodes.length;
       setGraph(next);

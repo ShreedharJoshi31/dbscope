@@ -14,7 +14,7 @@ import (
 
 func TestSplitCypher(t *testing.T) {
 	ps := splitCypher("// header\nCREATE INDEX a FOR (n:A) ON (n.x);\n\nMATCH (n) WHERE n.s = 'a;b' // c;\nSET n.y = 1;  ")
-	if len(ps) != 2 || ps[0].line != 2 || ps[1].line != 4 || ps[1].endLine != 5 || !strings.HasPrefix(ps[1].text, "MATCH") || !strings.HasSuffix(ps[1].text, "1") {
+	if len(ps) != 2 || ps[0].line != 2 || ps[1].line != 4 || ps[1].endLine != 5 || !strings.HasPrefix(ps[1].Text, "MATCH") || !strings.HasSuffix(ps[1].Text, "1") {
 		t.Fatalf("pieces %+v", ps)
 	}
 }

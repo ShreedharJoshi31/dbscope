@@ -49,6 +49,18 @@ pinned `search_path`) satisfies:
    Other user-defined functions are rejected with a message naming them: a STABLE label is
    not proof that a function does not write (e.g. via `dblink_exec`).
 
+One VOLATILE function is admitted by name: Apache AGE's `ag_catalog.cypher(graph, query)`,
+and only the extension's own (not a user function called `cypher`). The parser sees its
+Cypher only as a string, so the AST check also requires the graph name and query to be
+string constants and refuses Cypher with a write clause (`CREATE`, `MERGE`, `SET`,
+`DELETE`, `REMOVE`, `FOREACH`, `LOAD CSV`, `CALL { } IN TRANSACTIONS`, the same scan as
+for Neo4j, `internal/cypherscan`). The READ ONLY transaction refuses AGE's writes as well
+(verified on AGE 1.8 with PostgreSQL 18: creating a label, inserting, `SET` and `DELETE`
+all fail). AGE takes the query only as a dollar-quoted constant, which deparsing turns
+into an ordinary one, so the deparsed text quotes each `cypher()` query back with a tag
+it does not contain, and is parsed and checked again: the same functions and the same
+Cypher, or it is refused.
+
 ## Execution sequence
 
 ```

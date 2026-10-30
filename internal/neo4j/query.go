@@ -9,80 +9,29 @@ import (
 	"sort"
 	"strings"
 	"time"
-	"unicode"
 
 	drv "github.com/neo4j/neo4j-go-driver/v6/neo4j"
 	"github.com/neo4j/neo4j-go-driver/v6/neo4j/dbtype"
 
+	"github.com/dbscope/dbscope/internal/cypherscan"
 	"github.com/dbscope/dbscope/internal/query/exec"
 	"github.com/dbscope/dbscope/internal/query/guard"
 	"github.com/dbscope/dbscope/internal/query/plan"
 )
 
-type token struct {
-	text string
-	word string // lowercased unquoted word; "" for literals, quoted names and punctuation
-	pos  int    // byte offset in the source
-}
+type token = cypherscan.Token
 
-// tokens splits Cypher into words, literals and punctuation, dropping
-// comments; backquoted names and strings are never words.
-func tokens(s string) []token {
-	var out []token
-	for i := 0; i < len(s); {
-		c := s[i]
-		switch {
-		case unicode.IsSpace(rune(c)):
-			i++
-		case strings.HasPrefix(s[i:], "//"):
-			for i < len(s) && s[i] != '\n' {
-				i++
-			}
-		case strings.HasPrefix(s[i:], "/*"):
-			end := strings.Index(s[i+2:], "*/")
-			if end < 0 {
-				i = len(s)
-			} else {
-				i += end + 4
-			}
-		case c == '\'' || c == '"' || c == '`':
-			j := i + 1
-			for j < len(s) && s[j] != c {
-				if s[j] == '\\' && c != '`' {
-					j++
-				}
-				j++
-			}
-			j = min(j+1, len(s))
-			out = append(out, token{text: s[i:j], pos: i})
-			i = j
-		case c == '_' || unicode.IsLetter(rune(c)):
-			j := i
-			for j < len(s) && (s[j] == '_' || unicode.IsLetter(rune(s[j])) || unicode.IsDigit(rune(s[j]))) {
-				j++
-			}
-			out = append(out, token{text: s[i:j], word: strings.ToLower(s[i:j]), pos: i})
-			i = j
-		default:
-			out = append(out, token{text: string(c), pos: i})
-			i++
-		}
-	}
-	return out
-}
+func tokens(s string) []token { return cypherscan.Tokens(s) }
 
-// writing are clauses and commands that change data, schema, users or
-// databases, or run outside a single read transaction.
-var writing = map[string]string{"create": "CREATE", "merge": "MERGE", "delete": "DELETE", "detach": "DETACH DELETE", "set": "SET",
-	"remove": "REMOVE", "foreach": "FOREACH", "drop": "DROP", "alter": "ALTER", "grant": "GRANT", "revoke": "REVOKE", "deny": "DENY",
-	"rename": "RENAME", "terminate": "TERMINATE", "enable": "ENABLE", "deallocate": "DEALLOCATE", "reallocate": "REALLOCATE"}
+// writing are the clauses and commands that change data, schema, users or databases.
+var writing = cypherscan.Writing
 
 // Check refuses Cypher that writes or leaves the read transaction before it
 // is sent: write clauses, LOAD CSV, CALL { } IN TRANSACTIONS, USE, EXPLAIN
 // and PROFILE (which runs the query). The plan's query type checks again.
 func Check(stmt string) error {
 	toks := tokens(stmt)
-	for len(toks) > 0 && toks[len(toks)-1].text == ";" {
+	for len(toks) > 0 && toks[len(toks)-1].Text == ";" {
 		toks = toks[:len(toks)-1]
 	}
 	if len(toks) == 0 {
@@ -90,17 +39,17 @@ func Check(stmt string) error {
 	}
 	for i, t := range toks {
 		switch {
-		case t.text == ";":
+		case t.Text == ";":
 			return &guard.Error{Reason: guard.MultipleStatements, Message: "Run one statement at a time"}
-		case writing[t.word] != "" && !(i > 0 && toks[i-1].text == "."):
-			return &guard.Error{Reason: guard.WritesData, Message: fmt.Sprintf("Only reading Cypher runs here; %s changes the database", writing[t.word])}
-		case t.word == "load" && i+1 < len(toks) && toks[i+1].word == "csv":
+		case writing[t.Word] != "" && !(i > 0 && toks[i-1].Text == "."):
+			return &guard.Error{Reason: guard.WritesData, Message: fmt.Sprintf("Only reading Cypher runs here; %s changes the database", writing[t.Word])}
+		case t.Word == "load" && i+1 < len(toks) && toks[i+1].Word == "csv":
 			return &guard.Error{Reason: guard.NotSelect, Message: "LOAD CSV is not run through dbscope"}
-		case t.word == "in" && i+1 < len(toks) && toks[i+1].word == "transactions":
+		case t.Word == "in" && i+1 < len(toks) && toks[i+1].Word == "transactions":
 			return &guard.Error{Reason: guard.WritesData, Message: "CALL { } IN TRANSACTIONS commits batches of its own; it is not run through dbscope"}
-		case t.word == "use" && (i == 0 || toks[i-1].text != "."):
+		case t.Word == "use" && (i == 0 || toks[i-1].Text != "."):
 			return &guard.Error{Reason: guard.NotSelect, Message: "USE switches databases; the profile names the database"}
-		case (t.word == "explain" || t.word == "profile") && i == 0:
+		case (t.Word == "explain" || t.Word == "profile") && i == 0:
 			return &guard.Error{Reason: guard.NotSelect, Message: "Use the Explain button; PROFILE runs the query"}
 		}
 	}
@@ -111,12 +60,12 @@ func Check(stmt string) error {
 func procedures(toks []token) []string {
 	var out []string
 	for i, t := range toks {
-		if t.word != "call" || i+1 >= len(toks) || toks[i+1].word == "" {
+		if t.Word != "call" || i+1 >= len(toks) || toks[i+1].Word == "" {
 			continue
 		}
-		name := toks[i+1].text
-		for j := i + 2; j+1 < len(toks) && toks[j].text == "." && toks[j+1].word != ""; j += 2 {
-			name += "." + toks[j+1].text
+		name := toks[i+1].Text
+		for j := i + 2; j+1 < len(toks) && toks[j].Text == "." && toks[j+1].Word != ""; j += 2 {
+			name += "." + toks[j+1].Text
 		}
 		out = append(out, name)
 	}

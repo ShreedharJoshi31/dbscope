@@ -150,6 +150,24 @@ logins, encrypted keys, unknown and changed host keys, and a dropped session.
 | SQL Server / Azure SQL | tables, views, keys, indexes | SELECT behind a plan gate | not yet | not yet | not yet |
 | Oracle | tables, views, materialized views, keys, indexes | SELECT in a READ ONLY transaction | not yet | not yet | not yet |
 
+### Apache AGE (graphs in PostgreSQL)
+
+A PostgreSQL profile whose database has the Apache AGE extension can run
+read-only `cypher()` queries in the editor, such as
+`SELECT * FROM ag_catalog.cypher('social', $$ MATCH p = ()-[]->() RETURN p $$) AS (p ag_catalog.agtype)`
+(docs/QUERY-SAFETY.md says how they are checked). A result holding AGE
+vertices, edges or paths opens on the dock's Graph tab, as Neo4j's do; ids
+stay exact past 2^53. When every `cypher()` call in the statement reads the
+same graph, its vertices can be expanded by double-click: dbscope checks
+the graph name against `ag_catalog.ag_graph`, requires an integer id, and
+reads the degree and up to 50 neighbours with Cypher of its own in a READ
+ONLY transaction under the profile's timeout. Verified on
+`apache/age:release_PG18_1.8.0`.
+
+Not yet: a label-level map of AGE graphs (the map shows AGE's storage
+tables, one per label, as PostgreSQL tables), and AGE findings or
+migration rules.
+
 ### SQLite
 
 A profile names an absolute file path; there is no host, user or password, so

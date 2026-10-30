@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/dbscope/dbscope/internal/age"
 	"github.com/dbscope/dbscope/internal/conn"
 	"github.com/dbscope/dbscope/internal/health"
 	"github.com/dbscope/dbscope/internal/introspect"
@@ -165,7 +166,22 @@ func (ps *pools) Query(ctx context.Context, p conn.Profile, password string, req
 	if err != nil {
 		return nil, err
 	}
-	return exec.Run(ctx, pool, req)
+	res, err := exec.Run(ctx, pool, req)
+	if err == nil && res != nil {
+		res.Graph = age.Graph(res)
+	}
+	return res, err
+}
+
+// Expand reads an Apache AGE vertex and some of its neighbours (internal/age.Expand).
+func (ps *pools) Expand(ctx context.Context, p conn.Profile, password, graph, nodeID string, limit int) (*exec.Expansion, error) {
+	ctx, cancel := context.WithTimeout(ctx, 2*statementTimeout(p)+connectSlack)
+	defer cancel()
+	pool, err := ps.get(ctx, p, password)
+	if err != nil {
+		return nil, err
+	}
+	return age.Expand(ctx, pool, graph, nodeID, limit, statementTimeout(p))
 }
 
 // Health reads the server's health checks (internal/health.Postgres).

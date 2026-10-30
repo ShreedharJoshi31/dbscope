@@ -71,6 +71,16 @@ type Graph struct {
 	Relationships []GraphRelationship `json:"relationships"`
 	// Truncated means the result held more than the drawing limits.
 	Truncated bool `json:"truncated"`
+	// Source is the Apache AGE graph the result came from, which expanding a vertex needs.
+	Source string `json:"source,omitempty"`
+}
+
+// Expansion is a node with some of its neighbours: Degree counts all its
+// relationships, Shown those drawn.
+type Expansion struct {
+	Graph  *Graph `json:"graph"`
+	Degree int64  `json:"degree"`
+	Shown  int    `json:"shown"`
 }
 
 type GraphNode struct {

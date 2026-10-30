@@ -93,7 +93,7 @@ func (ns *neo4jSource) Health(ctx context.Context, p conn.Profile, password stri
 }
 
 // Expand reads a node and some of its neighbours (internal/neo4j.Expand).
-func (ns *neo4jSource) Expand(ctx context.Context, p conn.Profile, password, nodeID string, limit int) (*neo4j.Expansion, error) {
+func (ns *neo4jSource) Expand(ctx context.Context, p conn.Profile, password, _, nodeID string, limit int) (*exec.Expansion, error) {
 	c, err := ns.get(p, password)
 	if err != nil {
 		return nil, err
