@@ -299,6 +299,28 @@ foreign keys and primary key. The CLI takes a live base (`--mysql URL` or
 `DBSCOPE_MYSQL_DSN`) or only a version (`--mysql-version 8.4`, `mariadb-11.8`),
 which assumes type changes copy the table.
 
+**Workload.** The map's Workload view reads performance_schema and never
+changes its setup or truncates its tables. Calls and query time come from
+`events_statements_summary_by_digest` for statements whose default database
+is shown on the map (the 2,000 digests with the most total time), each
+counted for the tables its normalized text names in table positions,
+qualified or resolved in the statement's default database, as the server
+resolved it. Statements run as server-side prepared statements have no
+digest row on MySQL 8.4 or MariaDB 11.8 (Go's database/sql with query
+arguments is one, unless the DSN sets `interpolateParams=true`), so they
+show only in the row counters. Session and transaction statements, `SHOW`,
+`EXPLAIN`, reads of the server's own schemas and `SELECT`s without a table
+are left out; DDL and `CALL` count as not tied to a table. Scans and writes
+come from `table_io_waits_summary_by_index_usage` and count **rows, not
+scans**: full-scan reads are rows fetched without an index, index reads rows
+fetched through one, writes rows inserted, updated and deleted. Counts start
+with the server; performance_schema keeps no reset time, so "since" is the
+earliest digest it still holds. MySQL 8.4 has performance_schema on;
+MariaDB has it off (`performance_schema=ON` under `[mysqld]`, then a
+restart), and the view says so. The user needs
+`GRANT SELECT ON performance_schema.* TO 'user'@'host'`. Verified on MySQL
+8.4 and MariaDB 11.8, on and off.
+
 ### MongoDB
 
 Research with sources: [research-mongodb.md](research-mongodb.md). Tested
@@ -357,6 +379,28 @@ within a minute), validators added with `collMod` (existing documents that
 break them fail on their next update), `updateMany` by size, renames, capped
 conversions, sharding, and drops and deletes. Other engines' analyses skip
 `.js` files and say how many.
+
+**Workload.** dbscope changes neither source. Per-collection numbers come
+from `$collStats` and `$indexStats`, counted since mongod started: calls are
+read plus write operations from `latencyStats` and query time their total
+latency; writes are write operations, not documents (an `insertMany` of 50
+counts once); index scans are accesses of every index but `_id_`; live rows
+are `storageStats.count`. MongoDB keeps no collection-scan counter, so scans
+stay 0. These counters include every client, dbscope too: on 8.0 each
+reading adds three reads per collection, and the schema sample before it a
+few more. Statements and top queries come from the database profiler only
+if an admin has already turned it on (otherwise the view gives the command,
+such as `db.getSiblingDB("app").setProfilingLevel(1, { slowms: 100 })`):
+the 2,000 most recent entries, grouped by the server's shape hash, tied to
+collections from structured fields (`ns`, and the collections `$lookup`,
+`$graphLookup`, `$unionWith`, `$out` and `$merge` name), never from text,
+leaving out dbscope's own operations, catalog commands and `system.*`.
+Level 1 records only slow operations, and profiler times are whole
+milliseconds. A user with only the `read` role gets the collection counters
+but not index use, the profiler or the start time; `clusterMonitor` adds
+them without access to documents, and the view gives the
+`grantRolesToUser` command. On a replica set the counters are the member
+read (secondary preferred), marked as a replica. Verified on MongoDB 8.0.
 
 ### Redis and Valkey
 

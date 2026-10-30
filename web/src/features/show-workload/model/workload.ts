@@ -146,6 +146,8 @@ export function workloadSummary(
     parts.push(st.message ?? "per-query statistics are not available");
     return `${parts.join(" · ")}.`;
   }
+  // Other engines also explain partial readings (a privilege some counters need) with the status ok.
+  if (!postgres && st.message) parts.push(st.message);
   switch (st.status) {
     case "not_installed":
       parts.push("pg_stat_statements is not installed in this database, so only scans and writes are shown");

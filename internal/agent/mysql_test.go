@@ -61,7 +61,11 @@ func TestMySQLProfile(t *testing.T) {
 	}
 	expect(t, e.do("POST", "/api/profiles/"+p.ID+"/query", `{"sql":"SELECT * FROM users INTO OUTFILE '/tmp/x'"}`), 422, "rejected")
 	expect(t, e.do("POST", "/api/profiles/"+p.ID+"/query", `{"sql":"SELECT * FROM nope"}`), 400, "database")
-	expect(t, e.do("GET", "/api/profiles/"+p.ID+"/workload", ""), 501, "unsupported")
+	w = e.do("GET", "/api/profiles/"+p.ID+"/workload", "")
+	expect(t, w, 200, "")
+	if !strings.Contains(w.Body.String(), `"app.users"`) {
+		t.Errorf("workload %s", w.Body.String())
+	}
 	w = e.do("GET", "/api/profiles/"+p.ID+"/health", "")
 	expect(t, w, 200, "")
 	if !strings.Contains(w.Body.String(), `"id":"mysql.connections"`) {

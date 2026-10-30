@@ -70,7 +70,7 @@ func (e Engine) Capabilities() Capabilities {
 	case EngineSQLite:
 		return Capabilities{Query: true, Migrations: true}
 	case EngineMySQL:
-		return Capabilities{Query: true, Migrations: true, Health: true}
+		return Capabilities{Query: true, Migrations: true, Workload: true, Health: true}
 	case EngineElasticsearch:
 		return Capabilities{Query: true, Migrations: true, Health: true}
 	case EngineClickHouse:
@@ -78,7 +78,7 @@ func (e Engine) Capabilities() Capabilities {
 	case EngineCassandra:
 		return Capabilities{Query: true, Migrations: true, Health: true}
 	case EngineMongoDB:
-		return Capabilities{Query: true, Migrations: true, Health: true}
+		return Capabilities{Query: true, Migrations: true, Workload: true, Health: true}
 	case EngineRedis:
 		return Capabilities{Keyspace: true}
 	case EngineSQLServer, EngineOracle:
