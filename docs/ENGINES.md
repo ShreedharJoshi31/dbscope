@@ -148,7 +148,7 @@ logins, encrypted keys, unknown and changed host keys, and a dropped session.
 | Elasticsearch / OpenSearch | indices, aliases, data streams | search JSON and SQL | not yet | console-format requests | yes |
 | ClickHouse | tables, keys, parts | SQL under readonly | not yet | ALTER mutations | yes |
 | SQL Server / Azure SQL | tables, views, keys, indexes | SELECT behind a plan gate | not yet | T-SQL schema changes | yes |
-| Oracle | tables, views, materialized views, keys, indexes | SELECT in a READ ONLY transaction | not yet | not yet | yes |
+| Oracle | tables, views, materialized views, keys, indexes | SELECT in a READ ONLY transaction | not yet | SQL and PL/SQL scripts | yes |
 
 ### Apache AGE (graphs in PostgreSQL)
 
@@ -1278,9 +1278,35 @@ which applies to new sessions; without it the view says which `GRANT` to
 run and still shows rows written. AWR and ASH are never read: they need the
 paid Diagnostics Pack. Verified on Oracle AI Database 26ai Free (23.26).
 
-Not yet: wallets and Oracle native network encryption, `DBA_` views for
-users who have them, and migration risk of DDL (online operations,
-`DDL_LOCK_TIMEOUT`).
+**Migrations.** `oracle.Analyze` rates each statement of a migration script against the live server. Scripts are
+split the way SQL*Plus and Flyway split them: on `;` and on a line holding only `/`, with PL/SQL units kept whole and
+SQL*Plus commands such as SET DEFINE OFF ending at the end of their line. For every DDL it names the table lock held
+while the work runs, whether writes continue, whether it scans the table, builds an index or rewrites rows, and which
+data makes it fail (ORA-01758, ORA-02296, ORA-01441, ORA-01439, ORA-01440, ORA-02293, ORA-02298, ORA-01452,
+ORA-02299). Oracle commits before and after every DDL, so a failed statement leaves the earlier ones applied.
+
+On Oracle AI Database 26ai (23.26), DDL on a table with uncommitted changes behaves in one of three ways
+(`DBS-ORA-DDL-LOCK`): most DDL fails at once with ORA-00054 while ddl_lock_timeout is 0 (its default); with a
+ddl_lock_timeout it waits that long while DML arriving meanwhile queues behind it; and ADD COLUMN, NOVALIDATE
+constraints and ONLINE operations wait for those transactions whatever ddl_lock_timeout is, while writes continue.
+Work under a blocking lock is `DBS-ORA-BLOCKS-DML` (rated by size, as for MySQL), the same work with writes
+continuing is `DBS-ORA-TABLE-WORK`, and data-dependent failures have their own rules (`-ADD-NOT-NULL`, `-NOT-NULL`,
+`-VALIDATE`, `-UNIQUE-DATA`, `-NARROW`, `-TYPE-CHANGE`). `DBS-ORA-DROPS-DATA` is high for DROP COLUMN, SET UNUSED,
+TRUNCATE, DROP PARTITION and DROP TABLE ... PURGE, and medium for DROP TABLE without PURGE while the recycle bin is
+on, since FLASHBACK TABLE ... TO BEFORE DROP restores it. MOVE without ONLINE or UPDATE INDEXES leaves indexes
+unusable (`DBS-ORA-UNUSABLE-INDEXES`).
+
+ONLINE index builds, rebuilds and moves let writes continue; they need "Online Index Build" in v$option, which
+Enterprise Edition and Free have and Standard Edition 2 lacks (`DBS-ORA-ONLINE-EDITION` otherwise). The safer rewrites
+offered are the ONLINE form, ENABLE NOVALIDATE followed by VALIDATE for constraints, SET UNUSED ONLINE for DROP COLUMN
+and MOVE ONLINE, each run on the server in the tests. Duration estimates use rates measured at 35, 151 and 294 MB.
+Sessions with open transactions on the migration's tables are named as blockers. `TestDDLPredictions` checks every
+prediction on the Free 23.26 image (errors, session statistics, data object ids, and the behavior next to an open
+transaction); behavior on releases before 23 is not verified, and the report warns on them. The user needs
+SELECT_CATALOG_ROLE for ddl_lock_timeout, segment sizes and blockers; without it the analysis still runs and names
+what it skipped. Not covered: Oracle migration-history reading (pending files) and a CLI base flag.
+
+Not yet: wallets and Oracle native network encryption, and `DBA_` views for users who have them.
 
 ## Next engines
 

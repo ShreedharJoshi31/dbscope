@@ -145,6 +145,19 @@ func (s *server) analyzeFor(ctx context.Context, w http.ResponseWriter, r *http.
 		}
 		return respond(rep)
 	}
+	if p.Engine == conn.EngineOracle {
+		src, _ := s.source.(engineSource)[conn.EngineOracle].(*oracleSource)
+		if src == nil {
+			s.upstreamError(w, r, errUnsupported)
+			return nil
+		}
+		rep, err := src.Analyze(ctx, p, password, req.Files)
+		if err != nil {
+			s.upstreamError(w, r, err)
+			return nil
+		}
+		return respond(rep)
+	}
 	if p.Engine == conn.EngineElasticsearch {
 		src, _ := s.source.(engineSource)[conn.EngineElasticsearch].(*elasticSource)
 		if src == nil {

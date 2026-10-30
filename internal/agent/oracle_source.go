@@ -9,6 +9,7 @@ import (
 	"github.com/dbscope/dbscope/internal/health"
 	"github.com/dbscope/dbscope/internal/introspect"
 	"github.com/dbscope/dbscope/internal/migrate"
+	"github.com/dbscope/dbscope/internal/migrate/ingest"
 	"github.com/dbscope/dbscope/internal/oracle"
 	"github.com/dbscope/dbscope/internal/query/exec"
 	"github.com/dbscope/dbscope/internal/schema"
@@ -81,6 +82,21 @@ func (ms *oracleSource) Run(ctx context.Context, p conn.Profile, password, stmt 
 		return nil, err
 	}
 	return oracle.Run(ctx, db, stmt, maxRows, explainOnly)
+}
+
+// Analyze checks migration files against the profile's server (internal/oracle.Analyze).
+func (ms *oracleSource) Analyze(ctx context.Context, p conn.Profile, password string, files []ingest.Input) (*migrate.Report, error) {
+	db, err := ms.get(p, password)
+	if err != nil {
+		return nil, err
+	}
+	base, err := oracle.ReadBase(ctx, db, p.Schemas)
+	if err != nil {
+		return nil, err
+	}
+	rep := oracle.Analyze(base, files)
+	oracle.ReadBlockers(ctx, db, base, rep)
+	return rep, nil
 }
 
 // Health reads the server's health checks (internal/oracle.Health).

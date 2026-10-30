@@ -29,6 +29,12 @@ const BY_ENGINE: Partial<Record<Engine, PasteCopy>> = {
     field: "Migration T-SQL",
     placeholder: "ALTER TABLE dbo.orders ADD note nvarchar(200) NULL;\nGO",
   },
+  oracle: {
+    ...SQL,
+    title: "Paste an Oracle migration",
+    placeholder: "ALTER TABLE app.orders ADD (note VARCHAR2(200));",
+    nameHelp: `The name picks the migration tool's rules, e.g. V42__orders.sql (Flyway). Scripts split on ; and on a / line.`,
+  },
   cassandra: {
     title: "Paste a CQL migration",
     field: "Migration CQL",

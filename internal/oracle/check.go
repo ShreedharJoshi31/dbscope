@@ -15,6 +15,8 @@ type Token struct {
 	// strings and "quoted" names.
 	Word string
 	Semi bool
+	// Pos is the byte offset of Text in the input.
+	Pos int
 }
 
 // Tokens splits Oracle SQL into tokens, dropping whitespace and comments.
@@ -50,7 +52,7 @@ func Tokens(s string) []Token {
 			if end >= 0 {
 				j = i + 3 + end + 2
 			}
-			out = append(out, Token{Text: s[i:j]})
+			out = append(out, Token{Text: s[i:j], Pos: i})
 			i = j
 		case c == '\'' || c == '"':
 			j := i + 1
@@ -65,20 +67,20 @@ func Tokens(s string) []Token {
 				j++
 			}
 			j = min(j+1, len(s))
-			out = append(out, Token{Text: s[i:j]})
+			out = append(out, Token{Text: s[i:j], Pos: i})
 			i = j
 		case c == ';':
-			out = append(out, Token{Text: ";", Semi: true})
+			out = append(out, Token{Text: ";", Semi: true, Pos: i})
 			i++
 		case isWord(rune(c)):
 			j := i
 			for j < len(s) && (isWord(rune(s[j])) || s[j] == '.' && j+1 < len(s) && isWord(rune(s[j+1]))) {
 				j++
 			}
-			out = append(out, Token{Text: s[i:j], Word: strings.ToLower(s[i:j])})
+			out = append(out, Token{Text: s[i:j], Word: strings.ToLower(s[i:j]), Pos: i})
 			i = j
 		default:
-			out = append(out, Token{Text: s[i : i+1]})
+			out = append(out, Token{Text: s[i : i+1], Pos: i})
 			i++
 		}
 	}
