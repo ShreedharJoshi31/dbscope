@@ -8,6 +8,7 @@ import (
 	"github.com/dbscope/dbscope/internal/migrate/apply"
 	"github.com/dbscope/dbscope/internal/migrate/impact"
 	"github.com/dbscope/dbscope/internal/migrate/score"
+	"slices"
 )
 
 // Rating re-exports score.Rating.
@@ -47,6 +48,16 @@ type Statement struct {
 	Score       int       `json:"score"`
 	Rating      Rating    `json:"rating"`
 	Findings    []Finding `json:"findings"`
+	// Relations are the tables, collections, indices or labels the statement
+	// acts on, for engines whose statements take no table lock to name them.
+	Relations []string `json:"relations,omitempty"`
+}
+
+// Touch records a relation the statement acts on, once.
+func (s *Statement) Touch(name string) {
+	if name != "" && !slices.Contains(s.Relations, name) {
+		s.Relations = append(s.Relations, name)
+	}
 }
 
 // Lock is a lock on one relation ("schema.name", PostgreSQL lock mode name).

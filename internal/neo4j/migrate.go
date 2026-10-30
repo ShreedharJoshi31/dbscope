@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -165,6 +166,7 @@ func (a *cypherAnalysis) statement(ctx context.Context, file string, p cypherPie
 	ifNot := has("if") && has("not") && has("exists")
 	ifExists := has("if") && has("exists") && !has("not")
 	out.Kind = strings.ToUpper(strings.TrimSpace(at(0) + " " + at(1)))
+	out.Relations = a.namedLabels(toks)
 
 	switch {
 	case at(0) == "create" && at(1) == "constraint":
@@ -338,11 +340,15 @@ func (a *cypherAnalysis) dataChange(toks []token, add func(string, score.Rating,
 	if touched >= bulkHigh {
 		r = score.High
 	}
-	limit := ""
-	if a.base.TxMemoryMax != "" {
-		limit = fmt.Sprintf(" (db.memory.transaction.max is %s here)", a.base.TxMemoryMax)
+	// Neo4j documents 0 as "largest possible value": no per-transaction cap.
+	limit := "and fails past the server's transaction memory limit, if one is set"
+	switch v := a.base.TxMemoryMax; {
+	case strings.TrimRight(v, "BbKkMmGgiI") == "0":
+		limit = "and nothing caps it here (db.memory.transaction.max is 0), so it can use up the server's heap"
+	case v != "":
+		limit = fmt.Sprintf("and fails past the server's transaction memory limit (db.memory.transaction.max is %s here)", v)
 	}
-	add("DBS-NEO4J-UNBATCHED", r, fmt.Sprintf("Writes up to %d %s entries in one transaction, which holds every change in memory until it commits and fails past the server's transaction memory limit%s",
+	add("DBS-NEO4J-UNBATCHED", r, fmt.Sprintf("Writes up to %d %s entries in one transaction, which holds every change in memory until it commits %s",
 		touched, over, limit), "Batch it: CALL { ... } IN TRANSACTIONS OF 10000 ROWS (it must run in an implicit, auto-commit transaction)")
 }
 
@@ -386,6 +392,24 @@ func schemaName(toks []token) string {
 }
 
 // patternName is the label or type in FOR (n:Label) or FOR ()-[r:TYPE]-().
+// namedLabels lists the database's labels and relationship types the
+// statement names after a colon; map keys ({id: 1}) are not among them.
+func (a *cypherAnalysis) namedLabels(toks []token) []string {
+	var out []string
+	for i := 0; i+1 < len(toks); i++ {
+		if toks[i].Text != ":" {
+			continue
+		}
+		name := strings.Trim(toks[i+1].Text, "`")
+		_, label := a.base.Labels[name]
+		_, typ := a.base.Types[name]
+		if (label || typ) && !slices.Contains(out, name) {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
 func patternName(toks []token, from int) string {
 	if from < 0 {
 		return ""

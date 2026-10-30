@@ -134,3 +134,29 @@ func TestPlural(t *testing.T) {
 		t.Error(plural(3, "value"), plural(2, "User entry"))
 	}
 }
+
+// A zero db.memory.transaction.max means no limit, not a zero-byte one.
+func TestUnbatchedLimitWords(t *testing.T) {
+	for limit, want := range map[string]string{
+		"0B":  "nothing caps it here",
+		"8m":  "(db.memory.transaction.max is 8m here)",
+		"":    "if one is set",
+		"0":   "nothing caps it here",
+		"10k": "(db.memory.transaction.max is 10k here)",
+	} {
+		a := &cypherAnalysis{base: &MigrationBase{Labels: map[string]int64{"Person": 30000}, Types: map[string]int64{}, TxMemoryMax: limit}}
+		st := a.statement(context.Background(), "1.cypher", splitCypher("MATCH (p:Person) SET p.active = true;")[0])
+		msg := ""
+		for _, f := range st.Findings {
+			if f.RuleID == "DBS-NEO4J-UNBATCHED" {
+				msg = f.Message
+			}
+		}
+		if !strings.Contains(msg, want) {
+			t.Errorf("limit %q: %q, want it to contain %q", limit, msg, want)
+		}
+		if len(st.Relations) != 1 || st.Relations[0] != "Person" {
+			t.Errorf("relations %v", st.Relations)
+		}
+	}
+}

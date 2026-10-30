@@ -225,6 +225,7 @@ what depends on data:
 | `DBS-SQLITE-VERSION` | RENAME COLUMN (3.25.0), DROP COLUMN (3.35.0, 3.35.5 for the corruption fixes), ALTER COLUMN and ADD/DROP CONSTRAINT (3.53.0) |
 | `DBS-SQLITE-FK-PRAGMA-IN-TX` | `PRAGMA foreign_keys=OFF` inside BEGIN (high: a silent no-op), or outside one (medium: a no-op if the runner wraps files) |
 | `DBS-SQLITE-DROP-CASCADE` / `-DROP-REFERENCED` | DROP TABLE of a parent while foreign keys may be on |
+| `DBS-SQLITE-DROPS-DATA` | DROP TABLE or DROP COLUMN on a table that may have rows (high), except a table whose rows an earlier INSERT ... SELECT copied, as the 12-step rebuild does |
 | `DBS-SQLITE-RENAME-FIRST` | a table renamed away and created again in the same file |
 | `DBS-SQLITE-UNSAFE-PRAGMA` | `writable_schema`, `schema_version=`, `journal_mode=OFF/MEMORY`, `defer_foreign_keys=0` |
 | `DBS-SQLITE-VACUUM` | VACUUM (twice the file size in free disk, no transaction, may renumber rowids) |
@@ -312,6 +313,7 @@ come from the manuals and are not checked against a server.
 | `DBS-MYSQL-ALGORITHM` / `-LOCK-NONE` | an explicit ALGORITHM or LOCK=NONE the operation cannot honour, so the statement fails (ALGORITHM is exact on MySQL, a floor on MariaDB) |
 | `DBS-MYSQL-NOT-NULL` / `-NULLABLE` | NOT NULL that fails on existing NULLs, or a MODIFY that drops NOT NULL by restating the column |
 | `DBS-MYSQL-UNIQUE-DATA`, `-FK-UNCHECKED`, `-PARTITION-DATA`, `-TRUNCATE`, `-ROW-VERSIONS` | data-dependent failures, unchecked foreign keys, partition and table data loss, INSTANT's row-version limit |
+| `DBS-MYSQL-DROPS-DATA` | DROP COLUMN, or DROP TABLE of a table in the base (high) |
 
 The safe alternative names gh-ost or pt-online-schema-change by the table's
 foreign keys and primary key. The CLI takes a live base (`--mysql URL` or
@@ -1030,7 +1032,8 @@ key column fails. `TestMigratePredictions` checks dbscope's prediction
 (mutation or not, fails or not) for 22 ALTERs against both servers.
 Rewrites are rated by the compressed bytes involved (a column's for a type
 change, the table's for whole-part rewrites): low under 1 GiB, medium
-under 50 GiB, high above. Also flagged: dropped data, mutations already
+under 50 GiB, high above. Also flagged: dropped data (high, including the
+rows `ALTER DELETE` and `DELETE FROM` remove), mutations already
 queued on the table (a new one waits behind them), an ALTER without
 `mutations_sync` (the migration tool reports success while parts are still
 being rewritten), replicated tables, `OPTIMIZE ... FINAL`, and

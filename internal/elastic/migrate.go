@@ -286,6 +286,9 @@ func (a *esAnalysis) statement(file string, r request) (out migrate.Statement) {
 		return out
 	}
 	indices := a.targets(target)
+	for _, i := range indices {
+		out.Touch(i)
+	}
 	sizeOf := func(ix []string) string {
 		n, known := a.bytes(ix)
 		if !known {

@@ -182,7 +182,7 @@ func analyzeStatement(st *apply.State, tm *timeouts.Machine, b *Base, f ingest.F
 		}
 		best = max(best, score.Score(score.Inputs{L: L, W: w, Z: z, LockTimeout: ts.LockTimeout, Held: isHeld, Hot: h.hot}))
 		if L >= 2 && !ts.LockTimeout {
-			exposed = append(exposed, fmt.Sprintf("%s on %s", l.Mode, l.Relation))
+			exposed = append(exposed, l.Mode.String()+"\x00"+l.Relation.String())
 		}
 		if !l.Index {
 			if n, ok := b.size(l.Relation, true, false, "", st); ok && n > largest {
@@ -246,7 +246,7 @@ func analyzeStatement(st *apply.State, tm *timeouts.Machine, b *Base, f ingest.F
 	}
 	if len(exposed) > 0 {
 		p.findings = append(p.findings, rules.Finding{ID: "DBS-NO-LOCK-TIMEOUT", Class: rules.Risk,
-			Message: fmt.Sprintf("requests %s without a lock_timeout; while it waits, later queries on the table queue behind it", strings.Join(exposed, ", ")),
+			Message: fmt.Sprintf("requests %s without a lock_timeout; while it waits, later queries on the table queue behind it", lockList(exposed)),
 			Safe:    "SET lock_timeout = '2s' before it (SET LOCAL inside the transaction) and retry the migration on timeout"})
 	}
 	for _, q := range eff.Unknown {
@@ -413,4 +413,27 @@ func activitySince(b *Base) string {
 		return " since the statistics were last reset"
 	}
 	return " since " + b.ActivitySince.UTC().Format("2006-01-02")
+}
+
+// lockList words "mode\x00relation" pairs per mode, naming at most three
+// relations each, so a partitioned table's locks stay one short line.
+func lockList(pairs []string) string {
+	var modes []string
+	rels := map[string][]string{}
+	for _, p := range pairs {
+		mode, rel, _ := strings.Cut(p, "\x00")
+		if _, ok := rels[mode]; !ok {
+			modes = append(modes, mode)
+		}
+		rels[mode] = append(rels[mode], rel)
+	}
+	parts := make([]string, len(modes))
+	for i, m := range modes {
+		rs := rels[m]
+		parts[i] = m + " on " + strings.Join(rs, ", ")
+		if len(rs) > 3 {
+			parts[i] = fmt.Sprintf("%s on %s and %d more", m, strings.Join(rs[:2], ", "), len(rs)-2)
+		}
+	}
+	return strings.Join(parts, "; ")
 }

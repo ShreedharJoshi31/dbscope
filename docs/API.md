@@ -355,6 +355,7 @@ interface AnalyzeReport {
     lockTimeout: boolean;                   // a lock_timeout is in effect for this statement
     score: number; rating: Rating;
     findings: { ruleId: string; rating: Rating; message: string; safeAlternative?: string }[];
+    relations?: string[];                   // tables, collections, indices or labels acted on (engines without table locks; SQLite)
   }[];
   diff: { added: string[]; dropped: string[]; altered: string[];   // relation keys
           columns: { relation: string; column: string; change: "added" | "dropped" | "altered" | "renamed" }[] };

@@ -48,7 +48,9 @@ ALTER TABLE orders ADD FULLTEXT INDEX ft (note), LOCK=NONE;
 SET foreign_key_checks = 0;
 ALTER TABLE tiny ADD CONSTRAINT fk FOREIGN KEY (id) REFERENCES orders (id);
 ALTER TABLE orders DROP PARTITION p0;
-ALTER TABLE ` + "`app`.`orders`" + ` ADD COLUMN z INT FIRST, ALGORITHM=INPLACE;`}}
+ALTER TABLE ` + "`app`.`orders`" + ` ADD COLUMN z INT FIRST, ALGORITHM=INPLACE;
+ALTER TABLE orders DROP COLUMN note;
+DROP TABLE tiny, made_here;`}}
 	rep := Analyze(ddlBase("mysql", 80413), files)
 	got := ddlFindings(rep)
 	want := map[string][]string{
@@ -64,6 +66,9 @@ ALTER TABLE ` + "`app`.`orders`" + ` ADD COLUMN z INT FIRST, ALGORITHM=INPLACE;`
 		"1.sql:10": {"DBS-MYSQL-PARTITION-DATA/high"},
 		// MySQL does exactly what ALGORITHM asks: INPLACE for an instant ADD COLUMN rebuilds
 		"1.sql:11": {"DBS-MYSQL-ROW-VERSIONS/low", "DBS-MYSQL-TABLE-WORK/high"},
+		"1.sql:12": {"DBS-MYSQL-DROPS-DATA/high"},
+		// made_here is not in the base, so only tiny's data is lost
+		"1.sql:13": {"DBS-MYSQL-DROPS-DATA/high"},
 	}
 	for k, v := range want {
 		if !slices.Equal(got[k], v) {
@@ -79,8 +84,8 @@ ALTER TABLE ` + "`app`.`orders`" + ` ADD COLUMN z INT FIRST, ALGORITHM=INPLACE;`
 	if s.Work != "rewrite" || s.Locks[0].Mode != "SHARED (BLOCKS WRITES)" || s.Locks[0].Relation != "app.orders" || *s.SizeBytes != 2<<30 {
 		t.Errorf("type change %+v", s)
 	}
-	if rep.Engine != "mysql" || rep.Rating != "critical" || len(rep.Diff.Columns) != 4 {
-		t.Errorf("report %s %s %+v", rep.Engine, rep.Rating, rep.Diff.Columns)
+	if rep.Engine != "mysql" || rep.Rating != "critical" || len(rep.Diff.Columns) != 5 || !slices.Equal(rep.Diff.Dropped, []string{"app.made_here", "app.tiny"}) {
+		t.Errorf("report %s %s %+v %v", rep.Engine, rep.Rating, rep.Diff.Columns, rep.Diff.Dropped)
 	}
 }
 

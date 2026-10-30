@@ -140,6 +140,7 @@ func (a *mongoAnalysis) statement(file string, c call) (out migrate.Statement) {
 	}
 	if c.Collection != "" {
 		a.altered[c.Collection] = true
+		out.Touch(c.Collection)
 	}
 
 	switch c.Method {
@@ -265,6 +266,7 @@ func (a *mongoAnalysis) command(out *migrate.Statement, add func(string, score.R
 	case "collMod":
 		coll, _ := o[0].Value.(string)
 		a.altered[coll] = true
+		out.Touch(coll)
 		if o.get("validator") != nil {
 			level, _ := o.get("validationLevel").(string)
 			action, _ := o.get("validationAction").(string)

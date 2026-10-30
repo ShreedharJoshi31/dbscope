@@ -272,7 +272,9 @@ func (a *ddlAnalysis) statement(file string, p Piece) migrate.Statement {
 				display, key, next := a.tableName(toks, i)
 				a.rep.Diff.Dropped = append(a.rep.Diff.Dropped, display)
 				out.Locks = append(out.Locks, migrate.Lock{Relation: display, Mode: "METADATA EXCLUSIVE"})
-				_ = key
+				if a.base.Tables[key] != nil {
+					add("DBS-MYSQL-DROPS-DATA", score.High, "DROP TABLE removes "+display+" and its data", "Take a backup first, or rename the table and drop it once nothing misses it")
+				}
 				i = next
 				if i < len(toks) && toks[i].Text == "," {
 					i++
@@ -359,7 +361,7 @@ func (a *ddlAnalysis) alter(out *migrate.Statement, add func(string, score.Ratin
 	plan := Plan{Algo: Instant, DML: true}
 	reqAlgo, reqLock := "", ""
 	fails := false // the server will reject the statement, so it does no work
-	var whats []string
+	var whats, drops []string
 	for i, c := range clauses {
 		if len(c) == 0 {
 			continue
@@ -377,6 +379,11 @@ func (a *ddlAnalysis) alter(out *migrate.Statement, add func(string, score.Ratin
 		}
 		p := planClause(srv, tbl, a.sess, k, c, kinds)
 		a.diff(display, k, c)
+		// DROP PARTITION has its own rule (DBS-MYSQL-PARTITION-DATA).
+		if k == "drop column" {
+			col, _, _ := columnOf(k, c)
+			drops = append(drops, "DROP COLUMN "+col+" removes the column and its data")
+		}
 		for _, n := range p.Notes {
 			r := score.Medium
 			switch {
@@ -426,6 +433,9 @@ func (a *ddlAnalysis) alter(out *migrate.Statement, add func(string, score.Ratin
 	if fails {
 		a.mdl(out, add, wait)
 		return
+	}
+	for _, d := range drops {
+		add("DBS-MYSQL-DROPS-DATA", score.High, d+" from "+display, "Take a backup first; stop using it in one release and drop it in a later one")
 	}
 	mode := "METADATA EXCLUSIVE"
 	if !plan.DML {

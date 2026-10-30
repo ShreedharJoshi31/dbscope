@@ -68,11 +68,11 @@ VACUUM;`},
 	got := findings(rep)
 	want := map[string][]string{
 		"1_alter.sql:ALTER:1":    {"DBS-SQLITE-NOT-NULL-NO-DEFAULT/high"},
-		"1_alter.sql:ALTER:3":    {"DBS-SQLITE-VERSION/medium", "DBS-SQLITE-TABLE-WORK/high"},
+		"1_alter.sql:ALTER:3":    {"DBS-SQLITE-DROPS-DATA/high", "DBS-SQLITE-VERSION/medium", "DBS-SQLITE-TABLE-WORK/high"},
 		"1_alter.sql:CREATE:4":   {"DBS-SQLITE-TABLE-WORK/high"},
 		"1_alter.sql:ALTER:5":    {"DBS-SQLITE-VERSION/low"},
 		"2_drop.sql:PRAGMA:2":    {"DBS-SQLITE-FK-PRAGMA-IN-TX/high"},
-		"2_drop.sql:DROP:3":      {"DBS-SQLITE-DROP-CASCADE/high"},
+		"2_drop.sql:DROP:3":      {"DBS-SQLITE-DROP-CASCADE/high", "DBS-SQLITE-DROPS-DATA/high"},
 		"3_rebuild.sql:CREATE:2": {"DBS-SQLITE-RENAME-FIRST/high"},
 		"3_rebuild.sql:INSERT:3": {"DBS-SQLITE-TABLE-WORK/low"}, // the copy reads the renamed 50,000-row orders
 		"4_risky.sql:PRAGMA:1":   {"DBS-SQLITE-UNSAFE-PRAGMA/high"},
@@ -122,7 +122,8 @@ PRAGMA foreign_keys = ON;`}})
 		t.Fatal(err)
 	}
 	got := findings(rep)
-	if !slices.Equal(got["1.sql:PRAGMA:1"], []string{"DBS-SQLITE-FK-PRAGMA-IN-TX/medium"}) || got["1.sql:DROP:3"] != nil {
+	// Foreign keys are off, so no cascade: dropping the table loses only its own rows.
+	if !slices.Equal(got["1.sql:PRAGMA:1"], []string{"DBS-SQLITE-FK-PRAGMA-IN-TX/medium"}) || !slices.Equal(got["1.sql:DROP:3"], []string{"DBS-SQLITE-DROPS-DATA/high"}) {
 		t.Fatalf("%v", got)
 	}
 }
@@ -152,7 +153,7 @@ func TestBaseFromLiveFile(t *testing.T) {
 	if !slices.Equal(got["1.sql:ALTER:1"], []string{"DBS-SQLITE-REJECTED/high", "DBS-SQLITE-VERSION/medium"}) {
 		t.Errorf("indexed column: %v", got["1.sql:ALTER:1"])
 	}
-	if !slices.Equal(got["1.sql:ALTER:2"], []string{"DBS-SQLITE-VERSION/medium", "DBS-SQLITE-TABLE-WORK/low"}) {
+	if !slices.Equal(got["1.sql:ALTER:2"], []string{"DBS-SQLITE-DROPS-DATA/high", "DBS-SQLITE-VERSION/medium", "DBS-SQLITE-TABLE-WORK/low"}) {
 		t.Errorf("plain column: %v", got["1.sql:ALTER:2"])
 	}
 }
@@ -171,10 +172,14 @@ func TestAnalyzeReviewedCases(t *testing.T) {
 		}},
 		"foreign keys back on": {"PRAGMA foreign_keys = OFF;\nPRAGMA foreign_keys = ON;\nDROP TABLE users;", map[string][]string{
 			"1.sql:PRAGMA:1": {"DBS-SQLITE-FK-PRAGMA-IN-TX/medium"},
-			"1.sql:DROP:3":   {"DBS-SQLITE-DROP-CASCADE/high"},
+			"1.sql:DROP:3":   {"DBS-SQLITE-DROP-CASCADE/high", "DBS-SQLITE-DROPS-DATA/high"},
 		}},
 		"cte-led update": {"WITH s AS (SELECT id FROM orders WHERE total > 1) UPDATE users SET name = (SELECT 'x' WHERE 1);", map[string][]string{
 			"1.sql:WITH:1": {"DBS-SQLITE-TABLE-WORK/high"},
+		}},
+		// The checking SQLite has ALTER COLUMN, so its rejection is the statement's own error, not the version.
+		"alter column form rejected": {"ALTER TABLE users ALTER COLUMN name TYPE varchar(200);", map[string][]string{
+			"1.sql:ALTER:1": {"DBS-SQLITE-REJECTED/high"},
 		}},
 		"savepoint released": {"SAVEPOINT a;\nRELEASE a;\nPRAGMA foreign_keys = OFF;", map[string][]string{
 			"1.sql:PRAGMA:3": {"DBS-SQLITE-FK-PRAGMA-IN-TX/medium"},
@@ -231,5 +236,15 @@ func TestAnalyzeReviewedCases(t *testing.T) {
 	}
 	if got := findings(rep)["2.sql:CREATE:1"]; !slices.Equal(got, []string{"DBS-SQLITE-RENAME-FIRST/high"}) {
 		t.Errorf("rename across files: %v", got)
+	}
+}
+
+func TestAnalyzeRelations(t *testing.T) {
+	rep, err := Analyze(context.Background(), analyzeBase(), []ingest.Input{{Name: "1.sql", SQL: "CREATE INDEX orders_total ON orders (total);"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := rep.Statements[0]; !slices.Equal(s.Relations, []string{"orders"}) || len(s.Locks) != 1 || s.Locks[0].Relation != "main" {
+		t.Errorf("relations %v, locks %v", s.Relations, s.Locks)
 	}
 }

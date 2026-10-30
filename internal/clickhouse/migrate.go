@@ -266,7 +266,9 @@ func (a *chAnalysis) statement(file string, p piece) (out migrate.Statement) {
 		display, key, _ := a.tableName(toks, 2)
 		out.Kind, out.Work = "DELETE", "rewrite"
 		a.altered[display] = true
+		out.Touch(display)
 		tbl := a.base.Tables[key]
+		add("DBS-CH-DROPS-DATA", score.High, "DELETE removes the matching rows of "+display+"; only a backup brings them back", "")
 		add("DBS-CH-LIGHTWEIGHT-DELETE", a.tier(tableBytes(tbl), tbl != nil), fmt.Sprintf("Lightweight DELETE masks matching rows in %s (%s); the rows still occupy disk until merges drop them, "+
 			"and every query filters the mask until then", display, sizeText(tableBytes(tbl), tbl != nil)), "")
 	case at(0) == "truncate":
@@ -338,6 +340,7 @@ func (a *chAnalysis) clause(out *migrate.Statement, add func(string, score.Ratin
 		return col, ok
 	}
 	a.altered[display] = true
+	out.Touch(display)
 	rewrite := func(id, what string, bytes uint64, known bool, alt string) {
 		out.Work = "rewrite"
 		add(id, a.tier(bytes, known), fmt.Sprintf("%s: a mutation rewrites it in every part of %s (%s to rewrite)", what, display, sizeText(bytes, known)), alt)
@@ -414,6 +417,7 @@ func (a *chAnalysis) clause(out *migrate.Statement, add func(string, score.Ratin
 			"Prefer modelling updates as inserts (ReplacingMergeTree), or bound the WHERE to few partitions")
 		return true
 	case at(0) == "delete":
+		add("DBS-CH-DROPS-DATA", score.High, "ALTER DELETE removes the matching rows of "+display+"; only a backup brings them back", "")
 		rewrite("DBS-CH-ALTER-DELETE", "ALTER DELETE removes rows by rewriting whole parts", tableBytes(tbl), tbl != nil,
 			"Use lightweight DELETE FROM, which writes only a row mask, or DROP PARTITION when whole partitions go")
 		return true

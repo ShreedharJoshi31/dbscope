@@ -227,6 +227,7 @@ func (a *cqlAnalysis) statement(file string, p cqlPiece) (out migrate.Statement)
 		ks, t, next := a.qualified(toks, skipIf(toks, 2))
 		display, ti := ks+"."+t, a.base.Tables[strings.ToLower(ks+"."+t)]
 		a.altered[display] = true
+		out.Touch(display)
 		switch at(next) {
 		case "alter":
 			fails("Changing a column's type is refused (Cassandra no longer supports it; ScyllaDB only between compatible types)",

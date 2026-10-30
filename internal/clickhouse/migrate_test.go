@@ -42,7 +42,7 @@ DELETE FROM events WHERE id = 1;`}})
 	}{
 		{"ALTER TABLE", score.Low, ""}, {"ALTER TABLE", score.Medium, "DBS-CH-COLUMN-REWRITE"},
 		{"CREATE MATERIALIZED VIEW", score.High, "DBS-CH-POPULATE"}, {"ALTER TABLE", score.High, "DBS-CH-DROPS-DATA"},
-		{"DELETE", score.Medium, "DBS-CH-LIGHTWEIGHT-DELETE"},
+		{"DELETE", score.High, "DBS-CH-DROPS-DATA"},
 	}
 	if len(rep.Statements) != len(want) || rep.Base != "none" || rep.Rating != score.High {
 		t.Fatalf("report %+v", rep)

@@ -143,7 +143,7 @@ func Analyze(ctx context.Context, base *Base, files []ingest.Input) (*migrate.Re
 		rep.Warnings = append(rep.Warnings, "table sizes are unknown, so the cost of rewrites and index builds is not rated by size")
 	}
 
-	a := &analysis{base: base, before: before, scratch: scratch, ctx: ctx, origin: map[string]string{}, renamedAway: map[string]bool{}}
+	a := &analysis{base: base, before: before, scratch: scratch, ctx: ctx, origin: map[string]string{}, renamedAway: map[string]bool{}, copied: map[string]bool{}, version: rep.PGVersion}
 	for _, r := range before.Relations {
 		if r.Kind == schema.KindTable {
 			a.origin[strings.ToLower(r.Name)] = r.Name
@@ -173,6 +173,10 @@ func Analyze(ctx context.Context, base *Base, files []ingest.Input) (*migrate.Re
 
 type analysis struct {
 	ctx     context.Context
+	version int // SQLITE_VERSION_NUMBER of the checking SQLite, 0 when unknown
+	// copied are tables an INSERT ... SELECT read earlier, as the 12-step
+	// rebuild copies the old table before dropping it.
+	copied  map[string]bool
 	base    *Base
 	before  *schema.Model
 	scratch *scratchDB
@@ -254,6 +258,18 @@ func (a *analysis) check(st *statement) migrate.Statement {
 	if !rejected {
 		a.track(st)
 	}
+	if st.table != "" {
+		out.Relations = []string{st.table}
+	}
+	copiedOut := st.kind == "DROP TABLE" && a.copied[strings.ToLower(st.table)]
+	if !rejected && !copiedOut && (st.kind == "DROP TABLE" || st.kind == "ALTER TABLE DROP COLUMN") && existed && (!sized || rows > 0) {
+		what := "the table"
+		if st.kind == "ALTER TABLE DROP COLUMN" {
+			what = "the column"
+		}
+		add("DBS-SQLITE-DROPS-DATA", score.High, fmt.Sprintf("%s removes %s and its data from %s", strings.TrimPrefix(st.kind, "ALTER TABLE "), what, st.table),
+			"Copy the database file first; SQLite has no undo after COMMIT")
+	}
 	switch st.kind {
 	case "ALTER TABLE RENAME COLUMN":
 		add("DBS-SQLITE-VERSION", score.Low, "RENAME COLUMN needs SQLite 3.25.0 or later", "")
@@ -283,6 +299,9 @@ func (a *analysis) check(st *statement) migrate.Statement {
 		out.Work = "rewrite"
 		add("DBS-SQLITE-VERSION", score.Medium, "DROP COLUMN needs SQLite 3.35.0 or later, and 3.35.5 fixed bugs that could corrupt the database", "Make sure the SQLite your application links is 3.35.5 or newer")
 	case "ALTER TABLE ALTER COLUMN", "ALTER TABLE ADD CONSTRAINT", "ALTER TABLE DROP CONSTRAINT":
+		if rejected && a.version >= 3053000 {
+			break // the checking SQLite has this form, so the rejection is not about the version
+		}
 		add("DBS-SQLITE-VERSION", score.High, "this ALTER form arrived in SQLite 3.53.0 (April 2026); older versions reject it", "Check the SQLite version your application links, or use the 12-step table rebuild")
 	case "CREATE INDEX", "CREATE UNIQUE INDEX":
 		if existed {
@@ -293,6 +312,9 @@ func (a *analysis) check(st *statement) migrate.Statement {
 		}
 	case "INSERT", "REPLACE":
 		if src := selectSource(st); src != "" {
+			if !rejected {
+				a.copied[strings.ToLower(src)] = true
+			}
 			st.table = src
 			b, ok := a.baseName(src)
 			rows, sized, existed = a.base.Rows[b], ok && hasKey(a.base.Rows, b), ok
