@@ -112,3 +112,27 @@ statement, the up gets `DBS-DOWN-INCOMPLETE` (high). If the up drops a table, co
 file's first statement, so they count toward its rating and the CI exit code. Limits: column order is ignored on
 PostgreSQL (a re-added column always goes last); MySQL compares column types and nullability but not defaults or
 charsets; an up file sent alone from the browser, without its down beside it, is reported as missing a down.
+
+## Pending migrations and the migrations folder
+
+A connection can name its migrations folder (Advanced settings). dbscope then reads it directly, read only
+(`POST /api/profiles/{id}/migrations/analyze-folder`, the palette's "Check the migrations folder"), and with "only
+pending files" leaves out the files the migration tool has already applied. It finds the tool from the files' names
+and from which history it can read: Flyway's `flyway_schema_history`, golang-migrate's `schema_migrations` (a dirty
+version counts as not applied), goose's `goose_db_version` (the latest row per version), dbmate's or Rails'
+`schema_migrations`, Prisma's `_prisma_migrations` (finished and not rolled back), migrate-mongo's `changelog`
+collection, neo4j-migrations' `__Neo4jMigration` nodes and elasticsearch-evolution's `es_evolution` index, on
+PostgreSQL, MySQL and SQLite, and golang-migrate and goose also on ClickHouse. Applied files whose checksum no longer
+matches the history (Flyway, Prisma, migrate-mongo with file hashes, neo4j-migrations) are listed as changed and
+checked again. Only golang-migrate's table was produced by running the real tool in the tests; the other tables are
+created in the tests from each tool's source, which the tests cite. When no history is found, or it cannot be read,
+the report says so and every file is checked. A folder read holds at most 5,000 migration files and 64 MiB; at most
+200 files are analyzed at once, counted after applied files are left out.
+
+"Re-check on save" polls `GET /api/profiles/{id}/migrations/folder-state` every 2 seconds, a fingerprint of the
+migration files' names, sizes and modification times (no file is opened), and analyzes the folder again when it
+changes.
+
+On the command line, `dbscope migrate check --pending` does the same against the live base given with `--dsn`,
+`--mysql` or `--sqlite` and lists the skipped files on stderr, and `--since GIT-REF` checks only the files that differ
+from GIT-REF in the working tree or are untracked.

@@ -129,6 +129,8 @@ func New(cfg Config) (*Agent, error) {
 	mux.HandleFunc("POST /api/profiles/{id}/shared/import", s.importShared)
 	mux.HandleFunc("POST /api/profiles/{id}/ask", s.ask)
 	mux.HandleFunc("POST /api/profiles/{id}/migrations/analyze", s.analyzeMigrations)
+	mux.HandleFunc("POST /api/profiles/{id}/migrations/analyze-folder", s.analyzeMigrationFolder)
+	mux.HandleFunc("GET /api/profiles/{id}/migrations/folder-state", s.migrationFolderState)
 	mux.HandleFunc("POST /api/sample/migrations/analyze", s.analyzeSampleMigrations)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "no such API route")

@@ -71,6 +71,13 @@ func (s *server) analyzeMigrations(w http.ResponseWriter, r *http.Request) {
 	// Introspection, sizes and impact queries can each take a statement timeout.
 	ctx, cancel := context.WithTimeout(r.Context(), 3*statementTimeout(p)+connectSlack)
 	defer cancel()
+	if rep := s.analyzeFor(ctx, w, r, p, password, req); rep != nil {
+		writeJSON(w, http.StatusOK, rep)
+	}
+}
+
+// analyzeFor runs req against the profile's engine; it returns nil when it wrote an error response.
+func (s *server) analyzeFor(ctx context.Context, w http.ResponseWriter, r *http.Request, p conn.Profile, password string, req migrate.Request) *migrate.Report {
 	// Only MongoDB migrations are JavaScript; another engine's folder may hold .js build or tool files.
 	skipped := 0
 	if p.Engine != conn.EngineMongoDB {
@@ -86,9 +93,9 @@ func (s *server) analyzeMigrations(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(req.Files) == 0 {
 		writeError(w, http.StatusBadRequest, "validation", "no migration files: .js files are read only for MongoDB connections")
-		return
+		return nil
 	}
-	respond := func(rep *migrate.Report) {
+	respond := func(rep *migrate.Report) *migrate.Report {
 		usage.Apply(ctx, rep, p.ProjectDir, append(usage.Names(req.Files), p.MigrationsDir))
 		if skipped > 0 {
 			files := "files were"
@@ -97,112 +104,105 @@ func (s *server) analyzeMigrations(w http.ResponseWriter, r *http.Request) {
 			}
 			rep.Warnings = append(rep.Warnings, fmt.Sprintf("%d JavaScript %s skipped: only MongoDB connections read .js migrations", skipped, files))
 		}
-		writeJSON(w, http.StatusOK, rep)
+		return rep
 	}
 	if p.Engine == conn.EngineMongoDB {
 		src, _ := s.source.(engineSource)[conn.EngineMongoDB].(*mongoSource)
 		if src == nil {
 			s.upstreamError(w, r, errUnsupported)
-			return
+			return nil
 		}
 		rep, err := src.Analyze(ctx, p, password, req.Files)
 		if err != nil {
 			s.upstreamError(w, r, err)
-			return
+			return nil
 		}
-		respond(rep)
-		return
+		return respond(rep)
 	}
 	if p.Engine == conn.EngineMySQL {
 		src, _ := s.source.(engineSource)[conn.EngineMySQL].(*mysqlSource)
 		if src == nil {
 			s.upstreamError(w, r, errUnsupported)
-			return
+			return nil
 		}
 		rep, err := src.Analyze(ctx, p, password, req.Files)
 		if err != nil {
 			s.upstreamError(w, r, err)
-			return
+			return nil
 		}
-		respond(rep)
-		return
+		return respond(rep)
 	}
 	if p.Engine == conn.EngineElasticsearch {
 		src, _ := s.source.(engineSource)[conn.EngineElasticsearch].(*elasticSource)
 		if src == nil {
 			s.upstreamError(w, r, errUnsupported)
-			return
+			return nil
 		}
 		rep, err := src.Analyze(ctx, p, password, req.Files)
 		if err != nil {
 			s.upstreamError(w, r, err)
-			return
+			return nil
 		}
-		respond(rep)
-		return
+		return respond(rep)
 	}
 	if p.Engine == conn.EngineCassandra {
 		src, _ := s.source.(engineSource)[conn.EngineCassandra].(*cassandraSource)
 		if src == nil {
 			s.upstreamError(w, r, errUnsupported)
-			return
+			return nil
 		}
 		rep, err := src.Analyze(ctx, p, password, req.Files)
 		if err != nil {
 			s.upstreamError(w, r, err)
-			return
+			return nil
 		}
-		respond(rep)
-		return
+		return respond(rep)
 	}
 	if p.Engine == conn.EngineNeo4j {
 		src, _ := s.source.(engineSource)[conn.EngineNeo4j].(*neo4jSource)
 		if src == nil {
 			s.upstreamError(w, r, errUnsupported)
-			return
+			return nil
 		}
 		rep, err := src.Analyze(ctx, p, password, req.Files)
 		if err != nil {
 			s.upstreamError(w, r, err)
-			return
+			return nil
 		}
-		respond(rep)
-		return
+		return respond(rep)
 	}
 	if p.Engine == conn.EngineClickHouse {
 		src, _ := s.source.(engineSource)[conn.EngineClickHouse].(*clickhouseSource)
 		if src == nil {
 			s.upstreamError(w, r, errUnsupported)
-			return
+			return nil
 		}
 		rep, err := src.Analyze(ctx, p, password, req.Files)
 		if err != nil {
 			s.upstreamError(w, r, err)
-			return
+			return nil
 		}
-		respond(rep)
-		return
+		return respond(rep)
 	}
 	if p.Engine == conn.EngineSQLite {
 		rep, err := sqliteSource{}.Analyze(ctx, p, req.Files)
 		if err != nil {
 			s.upstreamError(w, r, err)
-			return
+			return nil
 		}
-		respond(rep)
-		return
+		return respond(rep)
 	}
 	base, err := s.source.MigrationBase(ctx, p, password)
 	if err != nil {
 		s.upstreamError(w, r, err)
-		return
+		return nil
 	}
 	rep, err := migrate.Analyze(ctx, base, req)
 	if err != nil {
 		s.upstreamError(w, r, err)
-		return
+		return nil
 	}
-	respond(rep)
+	return respond(rep)
 }
 
 func (s *server) analyzeSampleMigrations(w http.ResponseWriter, r *http.Request) {

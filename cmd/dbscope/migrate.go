@@ -20,6 +20,7 @@ import (
 	"github.com/dbscope/dbscope/internal/agent"
 	"github.com/dbscope/dbscope/internal/conn"
 	"github.com/dbscope/dbscope/internal/migrate"
+	"github.com/dbscope/dbscope/internal/migrate/history"
 	"github.com/dbscope/dbscope/internal/migrate/ingest"
 	"github.com/dbscope/dbscope/internal/migrate/report"
 	"github.com/dbscope/dbscope/internal/migrate/score"
@@ -40,11 +41,14 @@ const (
 const migrateUsage = `usage:
   dbscope migrate check PATH... [--dsn URL | --schema-dump FILE [--stats FILE]] [--pg-version N]
                         [--fail-on low|medium|high|critical] [--format text|json|sarif|github]
-                        [--tx-mode auto|file|statement|none] [--assume-lock-timeout] [--code DIR]
+                        [--tx-mode auto|file|statement|none] [--assume-lock-timeout]
+                        [--pending] [--since GIT-REF] [--code DIR]
   dbscope migrate check PATH... --sqlite FILE | --sqlite-schema FILE
-                        [--fail-on low|medium|high|critical] [--format text|json|sarif|github] [--code DIR]
+                        [--fail-on low|medium|high|critical] [--format text|json|sarif|github]
+                        [--pending] [--since GIT-REF] [--code DIR]
   dbscope migrate check PATH... --mysql URL | --mysql-version VERSION
-                        [--fail-on low|medium|high|critical] [--format text|json|sarif|github] [--code DIR]
+                        [--fail-on low|medium|high|critical] [--format text|json|sarif|github]
+                        [--pending] [--since GIT-REF] [--code DIR]
 
   dbscope migrate capture --shadow URL [--dsn URL] [--out DIR] [--url-env NAME]...
                           [--allow-nonempty-shadow] -- COMMAND [ARGS...]
@@ -61,6 +65,11 @@ environment variable), or only a server version with no sizes
 high), 2 on usage errors and 3 when the base schema cannot be read. With
 --code DIR, any engine also searches that application folder (read only) for
 lines that still name what the migration drops or renames.
+
+--pending leaves out files the migration tool's history (Flyway, golang-migrate,
+goose, dbmate, Rails or Prisma) shows applied in the live base (--dsn, --mysql
+or --sqlite) and lists them on stderr. --since GIT-REF keeps only files that
+differ from GIT-REF in the working tree (git diff --name-only) or are untracked.
 
 capture runs an ORM's migrate command (bin/rails db:migrate, python manage.py
 migrate, alembic upgrade head, ...) against an empty throwaway --shadow
@@ -153,6 +162,9 @@ func migrateCmd(args []string, stdout, stderr io.Writer) int {
 	mysqlURL := fs.String("mysql", "", "mysql:// URL of the base MySQL or MariaDB server (or DBSCOPE_MYSQL_DSN)")
 	mysqlVersion := fs.String("mysql-version", "", "check MySQL migrations without a server, as this version (8.4, mariadb-11.8)")
 	fs.StringVar(&codeDir, "code", "", "application folder to search for what the migration drops or renames")
+	var sel selection
+	fs.BoolVar(&sel.pending, "pending", false, "leave out files the migration tool's history in the live base shows applied")
+	fs.StringVar(&sel.since, "since", "", "check only files changed since this git ref, or untracked")
 	paths, err := parseInterleaved(fs, args[1:])
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -194,6 +206,9 @@ func migrateCmd(args []string, stdout, stderr io.Writer) int {
 			return usage("both DBSCOPE_DSN and DBSCOPE_MYSQL_DSN are set; pass --dsn or --mysql to choose")
 		}
 	}
+	if sel.pending && *dsnFlag == "" && os.Getenv("DBSCOPE_DSN") == "" && *mysqlURL == "" && *sqliteFile == "" {
+		return usage("--pending reads the migration history of a live base: --dsn, --mysql or --sqlite")
+	}
 	if *mysqlURL != "" || *mysqlVersion != "" {
 		switch {
 		case *mysqlURL != "" && *mysqlVersion != "":
@@ -201,7 +216,7 @@ func migrateCmd(args []string, stdout, stderr io.Writer) int {
 		case *dsnFlag != "" || *dumpPath != "" || *statsPath != "" || *pgVersion != "" || *txMode != "auto" || *assume || *sqliteFile != "" || *sqliteSchema != "":
 			return usage("--mysql and --mysql-version take no PostgreSQL or SQLite options")
 		}
-		return checkMySQL(stdout, stderr, paths, *mysqlURL, *mysqlVersion, *format, limit)
+		return checkMySQL(stdout, stderr, paths, *mysqlURL, *mysqlVersion, *format, limit, sel)
 	}
 	if *sqliteFile != "" || *sqliteSchema != "" {
 		switch {
@@ -210,7 +225,7 @@ func migrateCmd(args []string, stdout, stderr io.Writer) int {
 		case *dsnFlag != "" || *dumpPath != "" || *statsPath != "" || *pgVersion != "" || *txMode != "auto" || *assume:
 			return usage("--sqlite and --sqlite-schema take no PostgreSQL options (--dsn, --schema-dump, --stats, --pg-version, --tx-mode, --assume-lock-timeout)")
 		}
-		return checkSQLite(stdout, stderr, paths, *sqliteFile, *sqliteSchema, *format, limit)
+		return checkSQLite(stdout, stderr, paths, *sqliteFile, *sqliteSchema, *format, limit, sel)
 	}
 	dsn := dsnFrom(*dsnFlag)
 	switch {
@@ -220,9 +235,10 @@ func migrateCmd(args []string, stdout, stderr io.Writer) int {
 		return usage("--stats needs --schema-dump")
 	case *dumpPath == "" && dsn == "":
 		return usage("a base schema is required: --dsn URL (or DBSCOPE_DSN) or --schema-dump FILE")
+	case sel.pending && *dumpPath != "":
+		return usage("--pending reads the migration history of a live base: --dsn, not --schema-dump")
 	}
-	cwd, _ := os.Getwd()
-	inputs, err := ingest.ReadPaths(paths, ingest.RepoRoot(cwd))
+	inputs, err := sel.read(paths)
 	if err != nil {
 		return usage(err.Error())
 	}
@@ -242,11 +258,16 @@ func migrateCmd(args []string, stdout, stderr io.Writer) int {
 	if c, ok := base.Impact.(interface{ Close() }); ok {
 		defer c.Close()
 	}
+	var hist history.Result
+	if pb, ok := base.Impact.(poolBase); ok {
+		inputs, hist = sel.dropApplied(ctx, stderr, history.Pgx(pb.pool), history.Postgres, inputs)
+	}
 	rep, err := migrate.Analyze(ctx, base, migrate.Request{Files: inputs, TxMode: mode, AssumeLockTimeout: *assume, PGVersion: version})
 	if err != nil {
 		fmt.Fprintf(stderr, "dbscope migrate check: %v\n", err)
 		return exitUnavailable
 	}
+	noteHistory(rep, hist)
 	withUsages(rep, paths)
 	if err := report.Write(stdout, *format, rep, agent.Version); err != nil {
 		fmt.Fprintf(stderr, "dbscope migrate check: %v\n", err)
@@ -258,9 +279,8 @@ func migrateCmd(args []string, stdout, stderr io.Writer) int {
 	return exitOK
 }
 
-func checkSQLite(stdout, stderr io.Writer, paths []string, file, schemaPath, format string, limit score.Rating) int {
-	cwd, _ := os.Getwd()
-	inputs, err := ingest.ReadPaths(paths, ingest.RepoRoot(cwd))
+func checkSQLite(stdout, stderr io.Writer, paths []string, file, schemaPath, format string, limit score.Rating, sel selection) int {
+	inputs, err := sel.read(paths)
 	if err != nil {
 		fmt.Fprintf(stderr, "dbscope migrate check: %s\n%s", err, migrateUsage)
 		return exitUsage
@@ -268,10 +288,13 @@ func checkSQLite(stdout, stderr io.Writer, paths []string, file, schemaPath, for
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	var base *sqlite.Base
+	var hist history.Result
 	if file != "" {
 		var db *sqlite.DB
 		if db, err = sqlite.Open(file, 5*time.Second); err == nil {
-			base, err = sqlite.ReadBase(ctx, db.DB)
+			if base, err = sqlite.ReadBase(ctx, db.DB); err == nil {
+				inputs, hist = sel.dropApplied(ctx, stderr, history.DB(db.DB), history.SQLite, inputs)
+			}
 			db.Close()
 		}
 	} else {
@@ -289,6 +312,7 @@ func checkSQLite(stdout, stderr io.Writer, paths []string, file, schemaPath, for
 		fmt.Fprintf(stderr, "dbscope migrate check: %v\n", err)
 		return exitUnavailable
 	}
+	noteHistory(rep, hist)
 	withUsages(rep, paths)
 	if err := report.Write(stdout, format, rep, agent.Version); err != nil {
 		fmt.Fprintf(stderr, "dbscope migrate check: %v\n", err)
@@ -300,14 +324,14 @@ func checkSQLite(stdout, stderr io.Writer, paths []string, file, schemaPath, for
 	return exitOK
 }
 
-func checkMySQL(stdout, stderr io.Writer, paths []string, rawURL, version, format string, limit score.Rating) int {
-	cwd, _ := os.Getwd()
-	inputs, err := ingest.ReadPaths(paths, ingest.RepoRoot(cwd))
+func checkMySQL(stdout, stderr io.Writer, paths []string, rawURL, version, format string, limit score.Rating, sel selection) int {
+	inputs, err := sel.read(paths)
 	if err != nil {
 		fmt.Fprintf(stderr, "dbscope migrate check: %s\n%s", err, migrateUsage)
 		return exitUsage
 	}
 	var base *mysql.Base
+	var hist history.Result
 	if version != "" {
 		srv, err := mysql.ParseServer(version)
 		if err != nil {
@@ -327,7 +351,9 @@ func checkMySQL(stdout, stderr io.Writer, paths []string, rawURL, version, forma
 		defer cancel()
 		db, err := mysql.Open(p, password, 30*time.Second)
 		if err == nil {
-			base, err = mysql.ReadBase(ctx, db, nil, p.Database)
+			if base, err = mysql.ReadBase(ctx, db, nil, p.Database); err == nil {
+				inputs, hist = sel.dropApplied(ctx, stderr, history.DB(db), history.MySQL, inputs)
+			}
 			db.Close()
 		}
 		if err != nil {
@@ -336,6 +362,7 @@ func checkMySQL(stdout, stderr io.Writer, paths []string, rawURL, version, forma
 		}
 	}
 	rep := mysql.Analyze(base, inputs)
+	noteHistory(rep, hist)
 	withUsages(rep, paths)
 	if err := report.Write(stdout, format, rep, agent.Version); err != nil {
 		fmt.Fprintf(stderr, "dbscope migrate check: %v\n", err)
