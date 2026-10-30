@@ -133,6 +133,9 @@ func TestMemgraph(t *testing.T) {
 		rep.Checks[1].Value != "IN_MEMORY_TRANSACTIONAL" {
 		t.Errorf("health %+v %v", rep, err)
 	}
+	if _, err := Workload(ctx, c, m); !errors.Is(err, ErrMemgraphWorkload) {
+		t.Errorf("workload: %v", err)
+	}
 	if _, err := ReadBase(ctx, c, time.Second); !errors.Is(err, ErrMemgraphMigrations) {
 		t.Errorf("migrations: %v", err)
 	}

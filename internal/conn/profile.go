@@ -84,7 +84,7 @@ func (e Engine) Capabilities() Capabilities {
 	case EngineSQLServer, EngineOracle:
 		return Capabilities{Query: true, Health: true}
 	case EngineNeo4j:
-		return Capabilities{Query: true, Migrations: true, Health: true, Graph: true}
+		return Capabilities{Query: true, Migrations: true, Workload: true, Health: true, Graph: true}
 	case EngineDynamoDB:
 		return Capabilities{Query: true}
 	}

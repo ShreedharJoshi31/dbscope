@@ -249,6 +249,10 @@ func statementsError(info *Statements, err error) {
 	}
 }
 
+// AddTopQuery keeps a table's most time-consuming statements, most first,
+// for engines other than PostgreSQL that attribute their own statements.
+func AddTopQuery(t *Table, q Query) { addTopQuery(t, q) }
+
 // addTopQuery keeps a table's most time-consuming statements, most first.
 func addTopQuery(t *Table, q Query) {
 	i, _ := slices.BinarySearchFunc(t.TopQueries, q.TotalMs, func(a Query, ms float64) int {

@@ -125,8 +125,19 @@ func (ns *neo4jSource) MigrationBase(context.Context, conn.Profile, string) (*mi
 	return nil, errUnsupported
 }
 
-func (ns *neo4jSource) Workload(context.Context, conn.Profile, string, *schema.Model) (*workload.Snapshot, error) {
-	return nil, errUnsupported
+// Workload reads Neo4j's data collector (internal/neo4j.Workload).
+func (ns *neo4jSource) Workload(ctx context.Context, p conn.Profile, password string, m *schema.Model) (*workload.Snapshot, error) {
+	ctx, cancel := context.WithTimeout(ctx, statementTimeout(p)+connectSlack)
+	defer cancel()
+	c, err := ns.get(p, password)
+	if err != nil {
+		return nil, err
+	}
+	snap, err := neo4j.Workload(ctx, c, m)
+	if errors.Is(err, neo4j.ErrMemgraphWorkload) {
+		return nil, fmt.Errorf("%w: %w", errUnsupported, err)
+	}
+	return snap, err
 }
 
 func (ns *neo4jSource) Forget(profileID string) {

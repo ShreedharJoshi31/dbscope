@@ -651,6 +651,19 @@ checked against the live database. Each prediction is verified by
 | `DBS-NEO4J-CONSTRAINT-SCAN` | low, medium from 100,000 entries | a constraint the data satisfies still reads every entry to validate it |
 | `DBS-NEO4J-UNCHECKED` | medium | the duplicate or missing-value count did not finish in time |
 
+**Workload.** The map's Workload view reads Neo4j's data collector
+(`db.stats.retrieve('QUERIES')`): each collected query's invocation count
+and average execution time, attributed to every label its text names
+(`:Person`), with each label's top five queries by total time. Neo4j 5.26
+and 2026.10 collect from startup (seen on both); dbscope never starts,
+stops or clears the collector, so when an admin has stopped it the view
+says how to start it again (`CALL db.stats.collect('QUERIES', ...)`).
+Catalog calls (`CALL db.*`, `SHOW`, `EXPLAIN`), dbscope's own among them,
+are left out. The collector keeps a bounded number of queries; dbscope reads
+up to 2,000. Only the query time and call metrics apply: the overlay's
+scans and writes are PostgreSQL table counters Neo4j does not keep. Memgraph
+keeps no per-query statistics, so it has no workload.
+
 Not yet: lock behaviour of schema changes under concurrent writes (not
 measured, so not claimed), and relationship types between labels the count
 store does not connect.
