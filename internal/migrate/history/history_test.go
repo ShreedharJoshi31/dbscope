@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dbscope/dbscope/internal/migrate"
 	"github.com/dbscope/dbscope/internal/migrate/ingest"
 )
 
@@ -87,5 +88,19 @@ func TestKeepAndUnmatched(t *testing.T) {
 	}
 	if got := r.Keep(files); len(got) != len(files) {
 		t.Fatal("no history must keep every file")
+	}
+}
+
+// An applied migration's rollback file leaves with it; a pending one's stays.
+func TestKeepDropsAppliedDowns(t *testing.T) {
+	files := []ingest.Input{{Name: "m/1_a.up.sql", SQL: "CREATE TABLE a (id int);"}, {Name: "m/1_a.down.sql", SQL: "DROP TABLE a;"},
+		{Name: "m/2_b.up.sql", SQL: "CREATE TABLE b (id int);"}, {Name: "m/2_b.down.sql", SQL: "DROP TABLE b;"}}
+	r := Result{Pending: &migrate.Pending{Tool: "golang-migrate", Applied: []string{"m/1_a.up.sql"}}}
+	var names []string
+	for _, f := range r.Keep(files) {
+		names = append(names, f.Name)
+	}
+	if !slices.Equal(names, []string{"m/2_b.up.sql", "m/2_b.down.sql"}) {
+		t.Fatalf("kept %v", names)
 	}
 }

@@ -216,6 +216,10 @@ func TestBlockersPostgres(t *testing.T) {
 		if !strings.Contains(strings.Join(rep.Warnings, "\n"), "pg_read_all_stats") {
 			t.Errorf("warnings %v", rep.Warnings)
 		}
+		// Hidden is unknown: no "<insufficient privilege>" query and no age of 0 s.
+		if b := rep.Blockers[0]; b.Query != "" || b.AgeSeconds != -1 || !strings.Contains(blockedFinding(rep.Statements[0]).Message, "for an unknown time") {
+			t.Errorf("hidden blocker %+v: %s", b, blockedFinding(rep.Statements[0]).Message)
+		}
 	})
 }
 

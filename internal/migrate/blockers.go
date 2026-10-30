@@ -182,6 +182,9 @@ func joinBlockers(named []string) string {
 
 // AgeText renders seconds as "42 s" or "3 min 5 s".
 func AgeText(sec float64) string {
+	if sec < 0 {
+		return "an unknown time"
+	}
 	d := time.Duration(sec) * time.Second
 	if d < time.Minute {
 		return fmt.Sprintf("%d s", int(sec))
@@ -204,7 +207,7 @@ func queryLocks(ctx context.Context, b *Base, schemas, names []string) ([]pgLock
 	// users' state and query unless the role has pg_read_all_stats.
 	rows, err := tx.Query(ctx, `SELECT n.nspname || '.' || c.relname, l.pid, l.mode, l.granted,
 			coalesce(a.usename::text, ''), coalesce(a.state, ''), a.state IS NOT NULL,
-			coalesce(extract(epoch FROM now() - coalesce(a.xact_start, a.query_start))::float8, 0),
+			coalesce(extract(epoch FROM now() - coalesce(a.xact_start, a.query_start))::float8, -1),
 			coalesce(a.query, '')
 		FROM pg_locks l
 		JOIN pg_class c ON c.oid = l.relation
@@ -228,6 +231,9 @@ func queryLocks(ctx context.Context, b *Base, schemas, names []string) ([]pgLock
 			return nil, err
 		}
 		l.mode = rules.ModeFromLockName(mode)
+		if !l.visible || l.query == "<insufficient privilege>" {
+			l.query = "" // hidden from this role, not a statement
+		}
 		l.query = TruncateQuery(l.query)
 		if !l.granted && l.state != "" {
 			l.state += ", waiting for a lock"

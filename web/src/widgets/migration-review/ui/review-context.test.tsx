@@ -1,10 +1,18 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { Blockers, durationWords, Pending, Usages } from "@/widgets/migration-review/ui/review-context";
+import { estimateWords } from "@/widgets/migration-review/ui/statement-detail";
 
 describe("review context", () => {
   it("words durations in the unit that reads well", () => {
     expect([0.4, 45, 600, 7200].map(durationWords)).toEqual(["under a second", "45 s", "10 min", "2 h"]);
+  });
+
+  it("words estimate ranges", () => {
+    expect(estimateWords(0.01, 0.4)).toBe("under a second");
+    expect(estimateWords(0.2, 30)).toBe("under a second to 30 s");
+    expect(estimateWords(40.2, 40.4)).toBe("about 40 s");
+    expect(estimateWords(60, 3600)).toBe("60 s to 60 min");
   });
 
   it("lists blocking sessions with their age and query", () => {

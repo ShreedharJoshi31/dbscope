@@ -40,7 +40,14 @@ func (r Result) Keep(files []ingest.Input) []ingest.Input {
 	if r.Pending == nil || len(r.Pending.Applied) == 0 {
 		return files
 	}
-	return slices.DeleteFunc(slices.Clone(files), func(f ingest.Input) bool { return slices.Contains(r.Pending.Applied, f.Name) })
+	drop := slices.Clone(r.Pending.Applied)
+	// An applied migration's separate rollback file (golang-migrate .down.sql, Flyway U) goes with it.
+	for up, d := range ingest.Pair(files).Downs {
+		if d != nil && d.Name != up && slices.Contains(r.Pending.Applied, up) {
+			drop = append(drop, d.Name)
+		}
+	}
+	return slices.DeleteFunc(slices.Clone(files), func(f ingest.Input) bool { return slices.Contains(drop, f.Name) })
 }
 
 type state int

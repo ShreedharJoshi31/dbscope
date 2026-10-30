@@ -50,7 +50,7 @@ type Blocker struct {
 	Session    string  `json:"session"`
 	User       string  `json:"user,omitempty"`
 	State      string  `json:"state"`
-	AgeSeconds float64 `json:"ageSeconds"` // how long its transaction or operation has been open
+	AgeSeconds float64 `json:"ageSeconds"` // how long its transaction or operation has been open; -1 when hidden
 	Query      string  `json:"query,omitempty"`
 	Lock       string  `json:"lock,omitempty"`
 }

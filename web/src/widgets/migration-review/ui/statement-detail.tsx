@@ -263,7 +263,8 @@ export function StatementDetail({ review, statement: s, total, unanalyzable, hea
 }
 
 /** "about 40 s", "1 min to 5 min": the estimate's range in the largest unit that reads well. */
-function estimateWords(low: number, high: number): string {
+export function estimateWords(low: number, high: number): string {
+  if (high < 1) return "under a second";
   const lo = durationWords(low);
   const hi = durationWords(high);
   return lo === hi ? `about ${lo}` : `${lo} to ${hi}`;

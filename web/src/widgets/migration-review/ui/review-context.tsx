@@ -28,7 +28,8 @@ export function Blockers({ blockers, at }: { blockers: MigrationBlocker[]; at: s
         {blockers.map((b) => (
           <li key={`${b.session} ${b.relation}`} className="text-xs text-text-primary">
             <span className="font-mono">{b.relation}</span>: session <span className="font-mono">{b.session}</span>
-            {b.user && ` (${b.user})`}, {b.state}, open {durationWords(b.ageSeconds)}
+            {b.user && ` (${b.user})`}, {b.state || "state hidden"},{" "}
+            {b.ageSeconds < 0 ? "open for an unknown time" : `open ${durationWords(b.ageSeconds)}`}
             {b.lock && `, holds ${b.lock}`}
             {b.query && (
               <span className="block truncate font-mono text-2xs text-text-muted" title={b.query}>

@@ -83,7 +83,7 @@ export interface MigrationBlocker {
   session: string;
   user?: string;
   state: string;
-  /** How long its transaction or operation had been open. */
+  /** How long its transaction or operation had been open; -1 when the server hid it from this user. */
   ageSeconds: number;
   query?: string;
   lock?: string;
