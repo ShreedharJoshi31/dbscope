@@ -154,3 +154,21 @@ ClickHouse: an ALTER that starts a mutation gets `SETTINGS mutations_sync = 2`, 
 a lightweight DELETE FROM on MergeTree tables without projections (23.3 or later). No rewrite is offered when dbscope
 is unsure, or when it would change which rows or objects are affected. dbscope never edits the files: the rewrite is
 copied from the review.
+
+## Who would block it right now
+
+When a migration is checked against a live database, dbscope also reads which sessions would block it right now
+(`Report.Blockers`, with the time they were read in `BlockersAt`), and each statement that would wait gets
+`DBS-BLOCKED-NOW` (high) naming the session, its state, how long it has been open and what it holds.
+PostgreSQL: pg_locks and pg_stat_activity, keeping every other session holding or queued for a lock that conflicts
+with the statement's, per the conflict table in the PostgreSQL documentation ("Table-Level Lock Modes"); `idle in
+transaction` sessions are named as such, and a role without pg_read_all_stats still sees the blocker but not its state
+or query. MySQL and MariaDB: performance_schema.metadata_locks with information_schema.INNODB_TRX for the transaction's
+age; any other metadata lock on the table blocks DDL, which needs an exclusive one. MariaDB leaves performance_schema
+off by default: without it, or without the privilege, dbscope warns and lists the open InnoDB transactions, since it
+cannot tell which tables they used. MongoDB: $currentOp and lockInfo (the inprog and serverStatus privileges), naming
+operations and open transactions on a collection that an index build, drop, rename or collMod would wait for. Neo4j:
+SHOW TRANSACTIONS, naming transactions that hold locks and whose current query names a label the schema command or
+large write uses; this is a heuristic, because Neo4j does not list the locks themselves, and transactions holding
+locks between queries are listed only in a warning. dbscope's own sessions are left out, every read is bounded, and a
+read that fails becomes a warning. It is a snapshot: a blocker can finish before the deploy, or a new one start.

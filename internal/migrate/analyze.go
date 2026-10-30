@@ -118,6 +118,9 @@ func Analyze(ctx context.Context, b *Base, req Request) (*Report, error) {
 	for _, d := range downs {
 		AttachDown(rep, d.file, d.findings)
 	}
+	if b.live != nil {
+		readBlockers(ctx, b, rep)
+	}
 	return rep, nil
 }
 

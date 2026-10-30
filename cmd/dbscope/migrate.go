@@ -332,6 +332,8 @@ func checkMySQL(stdout, stderr io.Writer, paths []string, rawURL, version, forma
 	}
 	var base *mysql.Base
 	var hist history.Result
+	// blockers reads the live server's sessions once the report exists; a no-op without a server.
+	blockers := func(*migrate.Report) {}
 	if version != "" {
 		srv, err := mysql.ParseServer(version)
 		if err != nil {
@@ -351,10 +353,11 @@ func checkMySQL(stdout, stderr io.Writer, paths []string, rawURL, version, forma
 		defer cancel()
 		db, err := mysql.Open(p, password, 30*time.Second)
 		if err == nil {
+			defer db.Close()
 			if base, err = mysql.ReadBase(ctx, db, nil, p.Database); err == nil {
 				inputs, hist = sel.dropApplied(ctx, stderr, history.DB(db), history.MySQL, inputs)
+				blockers = func(rep *migrate.Report) { mysql.ReadBlockers(ctx, db, base, rep) }
 			}
-			db.Close()
 		}
 		if err != nil {
 			fmt.Fprintf(stderr, "dbscope migrate check: base schema unavailable: %v\n", err)
@@ -362,6 +365,7 @@ func checkMySQL(stdout, stderr io.Writer, paths []string, rawURL, version, forma
 		}
 	}
 	rep := mysql.Analyze(base, inputs)
+	blockers(rep)
 	noteHistory(rep, hist)
 	withUsages(rep, paths)
 	if err := report.Write(stdout, format, rep, agent.Version); err != nil {

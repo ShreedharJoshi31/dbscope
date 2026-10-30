@@ -53,6 +53,9 @@ type Base struct {
 	DatabaseTotals          bool
 	ActivitySince           *time.Time
 	InRecovery              bool
+	// live and timeout let Analyze read the sessions that would block the migration (blockers.go).
+	live    introspect.DB
+	timeout time.Duration
 }
 
 // Hot tables: at least this share of the database's activity, and at least
@@ -121,6 +124,7 @@ func LiveBase(ctx context.Context, db introspect.DB, schemas []string, timeout t
 	b.Source = "live"
 	b.Warnings = append(b.Warnings, warnings...)
 	b.Impact = &impact.Live{DB: db, Timeout: timeout, StatStatements: true}
+	b.live, b.timeout = db, timeout
 	return b, nil
 }
 

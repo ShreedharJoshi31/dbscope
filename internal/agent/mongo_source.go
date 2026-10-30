@@ -112,7 +112,9 @@ func (ms *mongoSource) Analyze(ctx context.Context, p conn.Profile, password str
 	if err != nil {
 		return nil, err
 	}
-	return mongo.Analyze(base, files), nil
+	rep := mongo.Analyze(base, files)
+	mongo.ReadBlockers(ctx, c, p.Database, rep)
+	return rep, nil
 }
 
 func (ms *mongoSource) MigrationBase(context.Context, conn.Profile, string) (*migrate.Base, error) {

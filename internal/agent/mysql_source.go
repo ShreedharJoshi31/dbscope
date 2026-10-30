@@ -95,7 +95,9 @@ func (ms *mysqlSource) Analyze(ctx context.Context, p conn.Profile, password str
 	if err != nil {
 		return nil, err
 	}
-	return mysql.Analyze(base, files), nil
+	rep := mysql.Analyze(base, files)
+	mysql.ReadBlockers(ctx, db, base, rep)
+	return rep, nil
 }
 
 // Health reads the server's health checks (internal/mysql.Health).

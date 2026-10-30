@@ -106,6 +106,9 @@ func Analyze(ctx context.Context, base *MigrationBase, files []ingest.Input) *mi
 	}
 	sort.Strings(rep.Diff.Added)
 	sort.Strings(rep.Diff.Dropped)
+	if base.client != nil {
+		readBlockers(ctx, base, rep)
+	}
 	return rep
 }
 
