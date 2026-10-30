@@ -267,7 +267,9 @@ func memgraphPlan(ctx context.Context, c *Client, stmt string, timeout time.Dura
 			return nil, &guard.Error{Reason: guard.WritesData, Message: "Memgraph plans this with " + op + ", which changes data; only read-only Cypher runs here"}
 		}
 		n := &plan.Node{NodeType: op, Condition: details, Flags: []plan.Flag{}, Children: []*plan.Node{}}
-		flag := func(level, code, msg string) { n.Flags = append(n.Flags, plan.Flag{Level: level, Code: code, Message: msg}) }
+		flag := func(level, code, msg string) {
+			n.Flags = append(n.Flags, plan.Flag{Level: level, Code: code, Message: msg})
+		}
 		switch {
 		case op == "ScanAll":
 			flag("danger", "all_nodes_scan", "Reads every node in the database; start from a label and an indexed property")
