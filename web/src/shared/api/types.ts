@@ -98,7 +98,7 @@ export type TestErrorKind = "auth" | "network" | "tls" | "timeout" | "database" 
 export interface TestResult {
   ok: boolean;
   /** The server reached; omitted for PostgreSQL. */
-  engine?: Engine | "mariadb" | "valkey" | "scylladb" | "opensearch";
+  engine?: Engine | "mariadb" | "valkey" | "scylladb" | "opensearch" | "memgraph";
   latencyMs?: number;
   serverVersion?: string;
   serverVersionNum?: number;

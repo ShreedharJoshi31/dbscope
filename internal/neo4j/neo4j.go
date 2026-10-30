@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	drv "github.com/neo4j/neo4j-go-driver/v6/neo4j"
@@ -25,6 +26,45 @@ import (
 type Client struct {
 	Driver   drv.Driver
 	Database string
+
+	mu       sync.Mutex
+	known    bool // whether the flavor below has been asked
+	memgraph bool
+}
+
+// Memgraph reports whether the server is Memgraph, which speaks Bolt and
+// Cypher with a catalog of its own. It asks the server's agent string once
+// (Memgraph's dbms.components() imitates Neo4j 5.9).
+func (c *Client) Memgraph(ctx context.Context) (bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.known {
+		si, err := c.Driver.GetServerInfo(ctx)
+		if err != nil {
+			return false, err
+		}
+		c.memgraph, c.known = strings.Contains(si.Agent(), "Memgraph"), true
+	}
+	return c.memgraph, nil
+}
+
+// sessionDB is the database sessions name. Memgraph Community has one database,
+// so the profile's default name ("neo4j") means its default.
+func (c *Client) sessionDB() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.memgraph && c.Database == "neo4j" {
+		return ""
+	}
+	return c.Database
+}
+
+// displayDB names the database in the model and the UI.
+func (c *Client) displayDB() string {
+	if db := c.sessionDB(); db != "" {
+		return db
+	}
+	return "memgraph"
 }
 
 // Close releases the driver's connections.
@@ -88,7 +128,10 @@ func Connect(p conn.Profile, password string) (*Client, error) {
 // read runs one statement in a read transaction that is always rolled back,
 // and returns its records and summary.
 func (c *Client) read(ctx context.Context, timeout time.Duration, cypher string, params map[string]any) ([]*drv.Record, drv.ResultSummary, error) {
-	s := c.Driver.NewSession(ctx, drv.SessionConfig{AccessMode: drv.AccessModeRead, DatabaseName: c.Database})
+	if _, err := c.Memgraph(ctx); err != nil {
+		return nil, nil, err
+	}
+	s := c.Driver.NewSession(ctx, drv.SessionConfig{AccessMode: drv.AccessModeRead, DatabaseName: c.sessionDB()})
 	defer s.Close(ctx)
 	tx, err := s.BeginTransaction(ctx, drv.WithTxTimeout(timeout))
 	if err != nil {
@@ -107,14 +150,20 @@ func (c *Client) read(ctx context.Context, timeout time.Duration, cypher string,
 	return recs, sum, err
 }
 
-// Server is the Neo4j version and edition.
+// Server is the Neo4j version and edition, or Memgraph's version.
 type Server struct {
 	Version   string
-	Edition   string // community, enterprise
+	Edition   string // community, enterprise; "" for Memgraph
 	Community bool
+	Memgraph  bool
 }
 
 func describe(ctx context.Context, c *Client) (Server, error) {
+	if mg, err := c.Memgraph(ctx); err != nil {
+		return Server{}, err
+	} else if mg {
+		return describeMemgraph(ctx, c)
+	}
 	recs, _, err := c.read(ctx, 10*time.Second, "CALL dbms.components() YIELD name, versions, edition RETURN versions[0] AS v, edition", nil)
 	if err != nil {
 		return Server{}, err
@@ -160,6 +209,11 @@ func Test(ctx context.Context, p conn.Profile, password string) conn.TestResult 
 		return res
 	}
 	ms := time.Since(start).Milliseconds()
+	if srv.Memgraph {
+		res.OK, res.LatencyMs, res.ServerVersion, res.Engine = true, &ms, srv.Version, conn.EngineMemgraph
+		res.Warnings = append(res.Warnings, testMemgraph(ctx, c)...)
+		return res
+	}
 	res.OK, res.LatencyMs, res.ServerVersion = true, &ms, srv.Version+" "+srv.Edition
 	recs, _, err := c.read(ctx, 10*time.Second, "SHOW CURRENT USER YIELD roles", nil)
 	switch {
@@ -212,6 +266,9 @@ func Introspect(ctx context.Context, c *Client) (*schema.Model, error) {
 	srv, err := describe(ctx, c)
 	if err != nil {
 		return nil, err
+	}
+	if mg, _ := c.Memgraph(ctx); mg {
+		return introspectMemgraph(ctx, c, start, srv)
 	}
 	m := &schema.Model{Engine: "neo4j", Schemas: []string{c.Database}, Relations: []schema.Relation{}, Enums: []schema.Enum{}}
 	labels, err := c.strings(ctx, "CALL db.labels() YIELD label RETURN label ORDER BY label")

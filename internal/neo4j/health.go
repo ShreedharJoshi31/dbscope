@@ -23,6 +23,13 @@ func Health(ctx context.Context, c *Client) (*health.Report, error) {
 	if err != nil {
 		return nil, err
 	}
+	if srv.Memgraph {
+		r, err := memgraphHealth(ctx, c, srv)
+		if r != nil {
+			r.TookMs = time.Since(start).Milliseconds()
+		}
+		return r, err
+	}
 	r := &health.Report{Engine: "neo4j", Server: fmt.Sprintf("Neo4j %s %s", srv.Version, srv.Edition), Checks: []health.Check{}}
 	system := &Client{Driver: c.Driver, Database: "system"}
 	why := func(err error) string {

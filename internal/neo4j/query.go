@@ -126,6 +126,11 @@ func procedures(toks []token) []string {
 // checkProcedures allows only procedures whose mode is READ; DBMS-mode
 // procedures include admin ones such as db.clearQueryCaches.
 func (c *Client) checkProcedures(ctx context.Context, names []string) error {
+	if mg, err := c.Memgraph(ctx); err != nil {
+		return err
+	} else if mg {
+		return c.checkMemgraphProcedures(ctx, names)
+	}
 	for _, n := range names {
 		recs, _, err := c.read(ctx, 10*time.Second, "SHOW PROCEDURES YIELD name, mode WHERE toLower(name) = toLower($n) RETURN mode", map[string]any{"n": n})
 		if err != nil {
@@ -151,20 +156,31 @@ func Run(ctx context.Context, c *Client, stmt string, maxRows int, explainOnly b
 	if err := c.checkProcedures(ctx, procedures(tokens(stmt))); err != nil {
 		return nil, err
 	}
-	_, sum, err := c.read(ctx, timeout, "EXPLAIN "+stmt, nil)
+	mg, err := c.Memgraph(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if qt := sum.QueryType(); qt != drv.StatementTypeReadOnly {
-		return nil, &guard.Error{Reason: guard.WritesData, Message: fmt.Sprintf("Neo4j plans this as a %s statement; only read-only Cypher runs here", queryTypeName(qt))}
+	if mg {
+		// Memgraph's EXPLAIN calls every query read-write and returns the plan as text rows.
+		if res.Plan, err = memgraphPlan(ctx, c, stmt, timeout); err != nil {
+			return nil, err
+		}
+	} else {
+		_, sum, err := c.read(ctx, timeout, "EXPLAIN "+stmt, nil)
+		if err != nil {
+			return nil, err
+		}
+		if qt := sum.QueryType(); qt != drv.StatementTypeReadOnly {
+			return nil, &guard.Error{Reason: guard.WritesData, Message: fmt.Sprintf("Neo4j plans this as a %s statement; only read-only Cypher runs here", queryTypeName(qt))}
+		}
+		res.Plan = planFor(sum)
 	}
-	res.Plan = planFor(sum)
 	if explainOnly {
 		return res, nil
 	}
 
 	start := time.Now()
-	s := c.Driver.NewSession(ctx, drv.SessionConfig{AccessMode: drv.AccessModeRead, DatabaseName: c.Database, FetchSize: min(maxRows+1, 1000)})
+	s := c.Driver.NewSession(ctx, drv.SessionConfig{AccessMode: drv.AccessModeRead, DatabaseName: c.sessionDB(), FetchSize: min(maxRows+1, 1000)})
 	defer s.Close(ctx)
 	tx, err := s.BeginTransaction(ctx, drv.WithTxTimeout(timeout))
 	if err != nil {

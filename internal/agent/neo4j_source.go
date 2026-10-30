@@ -2,6 +2,8 @@ package agent
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/dbscope/dbscope/internal/conn"
@@ -106,6 +108,9 @@ func (ns *neo4jSource) Analyze(ctx context.Context, p conn.Profile, password str
 		return nil, err
 	}
 	base, err := neo4j.ReadBase(ctx, c, statementTimeout(p))
+	if errors.Is(err, neo4j.ErrMemgraphMigrations) {
+		return nil, fmt.Errorf("%w: %w", errUnsupported, err)
+	}
 	if err != nil {
 		return nil, err
 	}

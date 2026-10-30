@@ -77,7 +77,7 @@ export const ENGINE_META: Record<Engine, EngineMeta> = {
     queryLanguage: "Cypher",
     label: "Neo4j",
     description:
-      "A map of node labels and the relationships between them, and read-only Cypher whose plan flags full scans, cartesian products and unbounded paths.",
+      "Neo4j or Memgraph: a map of node labels and the relationships between them, read-only Cypher drawn as a graph you can expand, and a plan that flags full scans, cartesian products and unbounded paths.",
     defaultPort: 7687,
     urlExample: "neo4j+s://user:password@host:7687",
   },
@@ -136,6 +136,8 @@ export function engineLabel(engine: TestResult["engine"]): string {
       return "ScyllaDB";
     case "opensearch":
       return "OpenSearch";
+    case "memgraph":
+      return "Memgraph";
     case undefined:
       return "PostgreSQL";
   }

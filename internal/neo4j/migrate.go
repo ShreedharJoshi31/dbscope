@@ -2,6 +2,7 @@ package neo4j
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -29,6 +30,10 @@ type MigrationBase struct {
 	timeout     time.Duration
 }
 
+// ErrMemgraphMigrations means the rules, written and verified for Neo4j's
+// schema commands, do not cover Memgraph's (CREATE INDEX ON :Label(p), ASSERT).
+var ErrMemgraphMigrations = errors.New("migration risk for Memgraph is not available yet: the rules are written and verified for Neo4j's schema commands")
+
 // Bulk-write thresholds: nodes or relationships one unbatched statement touches.
 const (
 	bulkMedium = 10_000
@@ -41,6 +46,9 @@ func ReadBase(ctx context.Context, c *Client, timeout time.Duration) (*Migration
 	srv, err := describe(ctx, c)
 	if err != nil {
 		return nil, err
+	}
+	if srv.Memgraph {
+		return nil, ErrMemgraphMigrations
 	}
 	b := &MigrationBase{Server: srv, Labels: map[string]int64{}, Types: map[string]int64{}, Constraints: map[string]bool{},
 		Indexes: map[string]bool{}, client: c, timeout: timeout}

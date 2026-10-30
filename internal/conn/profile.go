@@ -34,8 +34,10 @@ const (
 	// EngineCassandra covers Cassandra and ScyllaDB; EngineScylla appears only in test results.
 	EngineCassandra Engine = "cassandra"
 	EngineScylla    Engine = "scylladb"
-	// EngineNeo4j reaches one Neo4j server (bolt) or a cluster (options routing=true).
-	EngineNeo4j Engine = "neo4j"
+	// EngineNeo4j reaches one Neo4j server (bolt) or a cluster (options routing=true),
+	// or a Memgraph server; EngineMemgraph appears only in test results.
+	EngineNeo4j    Engine = "neo4j"
+	EngineMemgraph Engine = "memgraph"
 	// EngineElasticsearch covers Elasticsearch and OpenSearch; EngineOpenSearch appears only in test results.
 	EngineElasticsearch Engine = "elasticsearch"
 	EngineOpenSearch    Engine = "opensearch"

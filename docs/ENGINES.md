@@ -637,6 +637,42 @@ Not yet: lock behaviour of schema changes under concurrent writes (not
 measured, so not claimed), and relationship types between labels the count
 store does not connect.
 
+#### Memgraph
+
+Memgraph speaks Bolt and Cypher, so a Neo4j profile pointed at it works;
+dbscope tells it apart by the server's agent string (its
+`dbms.components()` imitates Neo4j 5.9) and reports it as Memgraph.
+Verified on Memgraph 3.13.2. What differs:
+
+- **Reading safely.** Memgraph refuses writes inside an explicit READ
+  transaction ("Accessor type READ and query type WRITE are misaligned"),
+  which is how dbscope runs every query, and the transaction is still
+  rolled back. An auto-commit READ session does not refuse them, so only
+  dbscope's own `SHOW ... INFO` commands, which Memgraph refuses inside
+  transactions, run that way. Memgraph's `EXPLAIN` calls every query
+  read-write, so instead of the query type, dbscope refuses a plan with a
+  write operator (`CreateNode`, `SetProperty`, `Delete`, `Merge` and the
+  rest). Procedures must not be marked `is_write` by `mg.procedures()`, and
+  of the `mg.*` procedures only the read-only ones run: Memgraph marks
+  `mg.create_module_file` and its kin as not writing, though they write
+  query modules (code) to the server. In `IN_MEMORY_ANALYTICAL` storage mode
+  there are no transactions to roll back, which the connection test and
+  health say.
+- **Map.** Labels come from a sample of 100,000 nodes, properties and
+  their types from the `schema` module, label pairs a relationship type
+  joins from a sample of 100,000 relationships (a type seen only beyond it
+  is missed), and indexes and constraints from `SHOW INDEX INFO` and
+  `SHOW CONSTRAINT INFO`. Counts are exact. The findings are Neo4j's.
+- **Plans.** The text plan becomes the tree; `ScanAll` is flagged as a
+  full scan, `ScanAllByLabel` as a label scan, `Cartesian`, and a
+  variable-length expand whose pattern in the query has no upper bound
+  (the plan omits the bounds).
+- **Health.** Resident memory against `--memory-limit` (warn from 80%,
+  danger from 95%) and the storage mode, from `SHOW STORAGE INFO`.
+- **Not available:** migration risk (Memgraph's schema commands, such as
+  `CREATE INDEX ON :Label(p)`, differ from Neo4j's and are not covered;
+  the analysis says so rather than guessing).
+
 ### Elasticsearch and OpenSearch
 
 Research with sources: [research-elasticsearch.md](research-elasticsearch.md).

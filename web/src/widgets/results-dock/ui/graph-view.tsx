@@ -174,6 +174,27 @@ function GraphViewInner({ initial, profileId, canExpand }: GraphViewProps) {
       clearTimeout(later);
     };
   }, [expanded, graph, fitView]);
+
+  // The tab can mount while the dock is still sizing it, so fit again whenever the
+  // canvas changes size, until the user pans or zooms it themselves.
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const userMoved = useRef(false);
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        if (!userMoved.current && el.clientWidth > 0 && el.clientHeight > 0) void fitView(FIT);
+      });
+    });
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+    };
+  }, [fitView]);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(clickTimer.current), []);
   const onNodeClick = (id: string) => {
@@ -216,7 +237,7 @@ function GraphViewInner({ initial, profileId, canExpand }: GraphViewProps) {
 
   return (
     <div className="relative h-full min-h-0">
-      <div className="h-full min-h-0" data-testid="graph-view">
+      <div ref={canvasRef} className="h-full min-h-0" data-testid="graph-view">
         <ReactFlow<DrawnNode, Edge>
           nodes={flow.nodes}
           edges={flow.edges}
@@ -227,6 +248,10 @@ function GraphViewInner({ initial, profileId, canExpand }: GraphViewProps) {
           onNodeClick={(_, n) => onNodeClick(n.id)}
           onNodeDoubleClick={(_, n) => onNodeDoubleClick(n.id)}
           onPaneClick={() => setSelected(null)}
+          onMoveStart={(event) => {
+            // Programmatic fits have no event; a wheel, drag or pinch does.
+            if (event) userMoved.current = true;
+          }}
           nodesConnectable={false}
           colorMode={theme}
           minZoom={0.05}
