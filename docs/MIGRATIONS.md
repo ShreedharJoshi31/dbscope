@@ -83,3 +83,17 @@ because one looks at the lock and the other at the rewrite; both facts are shown
 `dbscope migrate check` exits 1 when any statement's rating ≥ `--fail-on` (default `high`).
 SARIF levels: Critical/High → error, Medium → warning, Low → note. Columns are UTF-16 code units.
 One rule per finding type (`DBS-…`), repo-relative URIs, stable `partialFingerprints`.
+
+## Code that still uses what a migration drops
+
+When a connection has a project folder, or the CLI is given `--code DIR`, dbscope reads that folder after the
+analysis and lists every line that still names a table, collection, index or column the migration drops or renames
+(`Report.Usages`), for every engine. It only reads the folder: it follows no symlinks and runs nothing found there. It
+skips .git, node_modules, vendor, dist, build, target, .next, .venv, __pycache__, coverage, the migrations folder and
+the analyzed files, binary files and files over 1 MiB, and stops after 50,000 files or 5 seconds (a warning says so).
+Names match case-insensitively and only as whole identifiers, so `email` matches `user.email` but not
+`email_address`. Common column names appear everywhere, so a column is reported only in files that also name its
+table or model (`customers`, `customer`, `Customer`). The statement that drops or renames the name gets
+`DBS-STILL-USED` (high) with up to 20 example lines and the total count. Generated schema files kept in the project,
+such as Rails' `db/schema.rb`, are reported too. The safe path is expand and contract: stop using the name in one
+release and drop it in the next.

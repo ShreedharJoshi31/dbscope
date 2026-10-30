@@ -9,6 +9,7 @@ import (
 	"github.com/dbscope/dbscope/internal/conn"
 	"github.com/dbscope/dbscope/internal/migrate"
 	"github.com/dbscope/dbscope/internal/migrate/ingest"
+	"github.com/dbscope/dbscope/internal/migrate/usage"
 	"github.com/dbscope/dbscope/internal/sample"
 )
 
@@ -88,6 +89,7 @@ func (s *server) analyzeMigrations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respond := func(rep *migrate.Report) {
+		usage.Apply(ctx, rep, p.ProjectDir, append(usage.Names(req.Files), p.MigrationsDir))
 		if skipped > 0 {
 			files := "files were"
 			if skipped == 1 {

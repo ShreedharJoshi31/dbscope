@@ -40,11 +40,11 @@ const (
 const migrateUsage = `usage:
   dbscope migrate check PATH... [--dsn URL | --schema-dump FILE [--stats FILE]] [--pg-version N]
                         [--fail-on low|medium|high|critical] [--format text|json|sarif|github]
-                        [--tx-mode auto|file|statement|none] [--assume-lock-timeout]
+                        [--tx-mode auto|file|statement|none] [--assume-lock-timeout] [--code DIR]
   dbscope migrate check PATH... --sqlite FILE | --sqlite-schema FILE
-                        [--fail-on low|medium|high|critical] [--format text|json|sarif|github]
+                        [--fail-on low|medium|high|critical] [--format text|json|sarif|github] [--code DIR]
   dbscope migrate check PATH... --mysql URL | --mysql-version VERSION
-                        [--fail-on low|medium|high|critical] [--format text|json|sarif|github]
+                        [--fail-on low|medium|high|critical] [--format text|json|sarif|github] [--code DIR]
 
   dbscope migrate capture --shadow URL [--dsn URL] [--out DIR] [--url-env NAME]...
                           [--allow-nonempty-shadow] -- COMMAND [ARGS...]
@@ -58,7 +58,9 @@ see docs/ENGINES.md. For MySQL and MariaDB the base is a live server
 (--mysql mysql://user:password@host:3306/db, or the DBSCOPE_MYSQL_DSN
 environment variable), or only a server version with no sizes
 (--mysql-version 8.4, or mariadb-11.8). Exits 1 when any statement is rated at or above --fail-on (default
-high), 2 on usage errors and 3 when the base schema cannot be read.
+high), 2 on usage errors and 3 when the base schema cannot be read. With
+--code DIR, any engine also searches that application folder (read only) for
+lines that still name what the migration drops or renames.
 
 capture runs an ORM's migrate command (bin/rails db:migrate, python manage.py
 migrate, alembic upgrade head, ...) against an empty throwaway --shadow
@@ -150,6 +152,7 @@ func migrateCmd(args []string, stdout, stderr io.Writer) int {
 	sqliteSchema := fs.String("sqlite-schema", "", "SQLite schema script (sqlite3 FILE .schema) to use as the base schema")
 	mysqlURL := fs.String("mysql", "", "mysql:// URL of the base MySQL or MariaDB server (or DBSCOPE_MYSQL_DSN)")
 	mysqlVersion := fs.String("mysql-version", "", "check MySQL migrations without a server, as this version (8.4, mariadb-11.8)")
+	fs.StringVar(&codeDir, "code", "", "application folder to search for what the migration drops or renames")
 	paths, err := parseInterleaved(fs, args[1:])
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -181,6 +184,10 @@ func migrateCmd(args []string, stdout, stderr io.Writer) int {
 	if len(paths) == 0 {
 		return usage("at least one migration file or directory is required")
 	}
+	if st, err := os.Stat(codeDir); codeDir != "" && (err != nil || !st.IsDir()) {
+		return usage("--code must be a folder")
+	}
+	codeSkip = []string{*dumpPath, *statsPath, *sqliteSchema}
 	if *mysqlURL == "" && *mysqlVersion == "" && *dsnFlag == "" && *dumpPath == "" && *sqliteFile == "" && *sqliteSchema == "" {
 		*mysqlURL = os.Getenv("DBSCOPE_MYSQL_DSN")
 		if *mysqlURL != "" && os.Getenv("DBSCOPE_DSN") != "" {
@@ -240,6 +247,7 @@ func migrateCmd(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "dbscope migrate check: %v\n", err)
 		return exitUnavailable
 	}
+	withUsages(rep, paths)
 	if err := report.Write(stdout, *format, rep, agent.Version); err != nil {
 		fmt.Fprintf(stderr, "dbscope migrate check: %v\n", err)
 		return exitUsage
@@ -281,6 +289,7 @@ func checkSQLite(stdout, stderr io.Writer, paths []string, file, schemaPath, for
 		fmt.Fprintf(stderr, "dbscope migrate check: %v\n", err)
 		return exitUnavailable
 	}
+	withUsages(rep, paths)
 	if err := report.Write(stdout, format, rep, agent.Version); err != nil {
 		fmt.Fprintf(stderr, "dbscope migrate check: %v\n", err)
 		return exitUsage
@@ -327,6 +336,7 @@ func checkMySQL(stdout, stderr io.Writer, paths []string, rawURL, version, forma
 		}
 	}
 	rep := mysql.Analyze(base, inputs)
+	withUsages(rep, paths)
 	if err := report.Write(stdout, format, rep, agent.Version); err != nil {
 		fmt.Fprintf(stderr, "dbscope migrate check: %v\n", err)
 		return exitUsage
