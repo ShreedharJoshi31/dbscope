@@ -33,6 +33,8 @@ type Pattern struct {
 	// them. Equal to Bytes after a complete scan; 0 when it cannot be estimated.
 	EstimatedBytes int64 `json:"estimatedBytes"`
 	NoTTL          int   `json:"noTtl"` // keys without an expiry
+	// BytesApprox is set when some key's bytes are a sampled estimate.
+	BytesApprox bool `json:"bytesApprox,omitempty"`
 	// Largest is the group's largest key by memory.
 	Largest *Key `json:"largest,omitempty"`
 }
@@ -228,7 +230,11 @@ func Analyze(ctx context.Context, c *goredis.Client, budget Budget) (*Report, er
 		r.Warnings = append(r.Warnings, fmt.Sprintf("the scan stopped at its budget after %d keys of an unknown total; pattern figures cover the scanned keys only", r.Scanned))
 	}
 	if r.approx > 0 {
-		r.Warnings = append(r.Warnings, fmt.Sprintf("%s with %d or more elements were measured from MEMORY USAGE's default 5 samples, so their bytes are estimates", plural(int64(r.approx), "key"), samplesAllBelow))
+		verb := "were"
+		if r.approx == 1 {
+			verb = "was"
+		}
+		r.Warnings = append(r.Warnings, fmt.Sprintf("%s with %d or more elements %s measured from MEMORY USAGE's default 5 samples, so their bytes are estimates", plural(int64(r.approx), "key"), samplesAllBelow, verb))
 	}
 	r.rate(info)
 	r.TookMs = time.Since(start).Milliseconds()
@@ -336,6 +342,7 @@ func (r *Report) inspect(ctx context.Context, c *goredis.Client, keys []string, 
 		g.Keys++
 		g.Types[typ]++
 		g.Bytes += key.Bytes
+		g.BytesApprox = g.BytesApprox || key.BytesApprox
 		if key.TTLms < 0 {
 			g.NoTTL++
 		}

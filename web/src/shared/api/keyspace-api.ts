@@ -13,6 +13,8 @@ export interface KeyPattern {
   estimatedBytes: number;
   noTtl: number;
   largest?: KeyInfo;
+  /** Some key's bytes are MEMORY USAGE's sampled estimate. */
+  bytesApprox?: boolean;
 }
 
 export interface KeyInfo {

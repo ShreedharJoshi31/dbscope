@@ -94,13 +94,15 @@ function Patterns({ report }: { report: KeyspaceReport }) {
                 ? "not measured"
                 : !report.complete && p.estimatedBytes > 0
                   ? `≈ ${formatBytes(p.estimatedBytes)}`
-                  : formatBytes(p.bytes)}
+                  : `${p.bytesApprox ? "≈ " : ""}${formatBytes(p.bytes)}`}
             </td>
             <td className="px-2 py-1 text-right font-mono tabular-nums">
               {p.keys > 0 ? `${Math.round((100 * p.noTtl) / p.keys)}%` : ""}
             </td>
             <td className="truncate px-3 py-1 font-mono text-text-muted" title={p.largest?.name}>
-              {p.largest ? `${p.largest.name} (${formatBytes(p.largest.bytes)})` : ""}
+              {p.largest
+                ? `${p.largest.name} (${p.largest.bytesApprox ? "≈ " : ""}${formatBytes(p.largest.bytes)})`
+                : ""}
             </td>
           </tr>
         ))}

@@ -198,8 +198,12 @@ func slowlogCheck(ctx context.Context, c *goredis.Client, r *health.Report) {
 		r.Unavailable("redis.slowlog", "Slow log", why)
 		return
 	}
+	entries := fmt.Sprintf("%d entries", n)
+	if n == 1 {
+		entries = "1 entry"
+	}
 	// Defaults from redis.conf: slowlog-log-slower-than 10000 microseconds, slowlog-max-len 128.
-	ch := health.Check{ID: "redis.slowlog", Title: "Slow log", Status: health.OK, Value: fmt.Sprintf("%d entries", n),
+	ch := health.Check{ID: "redis.slowlog", Title: "Slow log", Status: health.OK, Value: entries,
 		Detail: "Commands that ran longer than slowlog-log-slower-than (10 ms by default) since the log was last cleared; it keeps the latest slowlog-max-len (128 by default)."}
 	if n > 0 {
 		ch.Status = health.Warn

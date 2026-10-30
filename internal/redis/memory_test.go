@@ -103,6 +103,9 @@ func TestKeyspaceMemory(t *testing.T) {
 				if pat.Bytes != wantPattern[pat.Pattern] || pat.EstimatedBytes != pat.Bytes {
 					t.Errorf("pattern %s: bytes %d estimated %d, admin measured %d", pat.Pattern, pat.Bytes, pat.EstimatedBytes, wantPattern[pat.Pattern])
 				}
+				if pat.BytesApprox != (pat.Pattern == "queue:jobs") {
+					t.Errorf("pattern %s: bytesApprox %v", pat.Pattern, pat.BytesApprox)
+				}
 			}
 			if !slices.Equal(r.LargestByMemory, wantByMemory) {
 				t.Errorf("largest by memory\n got %+v\nwant %+v", r.LargestByMemory, wantByMemory)
@@ -110,7 +113,7 @@ func TestKeyspaceMemory(t *testing.T) {
 			if !slices.Equal(r.LargestByElements, wantByElements) {
 				t.Errorf("largest by elements\n got %+v\nwant %+v", r.LargestByElements, wantByElements)
 			}
-			if !slices.ContainsFunc(r.Warnings, func(w string) bool { return strings.Contains(w, "1 key with 10000 or more elements") }) {
+			if !slices.ContainsFunc(r.Warnings, func(w string) bool { return strings.Contains(w, "1 key with 10000 or more elements was measured") }) {
 				t.Errorf("no warning about the sampled key: %v", r.Warnings)
 			}
 			t.Logf("%s: queue:jobs %d bytes (default samples, %d elements), stats:daily %d bytes (SAMPLES 0, %d fields), blob:report %d bytes",
