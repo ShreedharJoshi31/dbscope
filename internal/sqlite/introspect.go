@@ -69,7 +69,9 @@ func Introspect(ctx context.Context, db Beginner) (*schema.Model, error) {
 	if err != nil {
 		return nil, err
 	}
+	strict := map[string]bool{}
 	for _, o := range objects {
+		strict[o.name] = o.strict
 		r := schema.Relation{Schema: Schema, Name: o.name, Kind: schema.KindTable}
 		if o.kind == "view" {
 			r.Kind = schema.KindView
@@ -105,6 +107,7 @@ func Introspect(ctx context.Context, db Beginner) (*schema.Model, error) {
 		m.Relations = append(m.Relations, r)
 	}
 	fillReferencedColumns(m)
+	addFindings(ctx, tx, m, strict)
 	m.IntrospectedAt = time.Now().UTC()
 	m.DurationMs = time.Since(start).Milliseconds()
 	return m, nil
