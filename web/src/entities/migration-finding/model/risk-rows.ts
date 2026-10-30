@@ -26,18 +26,28 @@ export interface RiskRow {
   relation: string;
   message: string;
   safeAlternative: string | undefined;
+  /** Lines of later statements in the same file with this exact finding, merged into this row. */
+  moreLines: number[];
 }
 
 function findingRelation(statement: ReviewStatement, message: string): string {
   return statement.relations.find((r) => message.includes(r)) ?? statement.relations[0] ?? "";
 }
 
-/** One row per finding, in report order. */
+/** One row per finding, in report order; a finding repeated word for word on the same relation in one file is one row. */
 export function riskRows(model: Pick<ReviewModel, "statements">): RiskRow[] {
   const rows: RiskRow[] = [];
+  const seen = new Map<string, RiskRow>();
   for (const s of model.statements) {
     s.findings.forEach((f, findingIndex) => {
-      rows.push({
+      const relation = findingRelation(s, f.message);
+      const key = [s.file, f.ruleId, f.rating, relation, f.message].join("\u0000");
+      const first = seen.get(key);
+      if (first) {
+        first.moreLines.push(s.line);
+        return;
+      }
+      const row: RiskRow = {
         id: `${s.index}:${findingIndex}`,
         statementIndex: s.index,
         findingIndex,
@@ -46,10 +56,13 @@ export function riskRows(model: Pick<ReviewModel, "statements">): RiskRow[] {
         file: s.file,
         fileIndex: s.fileIndex,
         line: s.line,
-        relation: findingRelation(s, f.message),
+        relation,
         message: f.message,
         safeAlternative: f.safeAlternative,
-      });
+        moreLines: [],
+      };
+      seen.set(key, row);
+      rows.push(row);
     });
   }
   return rows;

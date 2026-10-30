@@ -25,7 +25,7 @@ export interface ReviewStatement extends AnalyzedStatement {
   /** Position in report order (execution order after framework ordering). */
   index: number;
   fileIndex: number;
-  /** Locked relations, first occurrence order. */
+  /** Relations the statement acts on, then its locked ones, first occurrence order. */
   relations: string[];
   /** The PostgreSQL 17 grammar could not parse it (DBS-PARSE). */
   unparseable: boolean;
@@ -125,7 +125,8 @@ export function toReviewModel(report: AnalyzeReport, sources: readonly Migration
     findings: s.findings ?? [],
     index,
     fileIndex: fileIndex.get(s.file) ?? 0,
-    relations: [...new Set((s.locks ?? []).map((l) => l.relation))],
+    // Named relations first: SQLite's lock is on "main", the database, not the table.
+    relations: [...new Set([...(s.relations ?? []), ...(s.locks ?? []).map((l) => l.relation)])],
     unparseable: s.kind === "unparseable",
   }));
 

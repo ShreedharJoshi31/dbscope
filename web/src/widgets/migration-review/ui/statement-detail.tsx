@@ -36,16 +36,33 @@ const LOCK_TONE = {
   danger: "text-status-danger-fg",
 } as const;
 
+/** One entry per lock, except that more than three relations under one mode (a partitioned table) share an entry. */
+function lockGroups(locks: ReviewStatement["locks"]): { mode: string; relations: string[] }[] {
+  const byMode = new Map<string, string[]>();
+  for (const l of locks) byMode.set(l.mode, [...(byMode.get(l.mode) ?? []), l.relation]);
+  return locks.flatMap((l) => {
+    const relations = byMode.get(l.mode) ?? [];
+    if (relations.length <= 3) return [{ mode: l.mode, relations: [l.relation] }];
+    return relations[0] === l.relation ? [{ mode: l.mode, relations }] : [];
+  });
+}
+
 function Locks({ statement }: { statement: ReviewStatement }) {
   if (statement.locks.length === 0) return <span className="text-text-muted">No table locks</span>;
   return (
     <ul className="flex flex-col gap-1">
-      {statement.locks.map((l) => (
-        <li key={`${l.relation} ${l.mode}`} data-testid="statement-lock" className="flex items-start gap-1.5">
-          <Lock aria-hidden className={`mt-px size-3.5 shrink-0 ${LOCK_TONE[lockModeTone(l.mode)]}`} />
+      {lockGroups(statement.locks).map(({ mode, relations }) => (
+        <li
+          key={`${relations[0]} ${mode}`}
+          data-testid="statement-lock"
+          className="flex items-start gap-1.5"
+          title={relations.length > 1 ? relations.join("\n") : undefined}
+        >
+          <Lock aria-hidden className={`mt-px size-3.5 shrink-0 ${LOCK_TONE[lockModeTone(mode)]}`} />
           <span className="min-w-0">
-            <span className="font-mono">{l.relation}</span>: <span className="font-semibold">{l.mode}</span> —{" "}
-            {lockModeWords(l.mode)}
+            <span className="font-mono">{relations[0]}</span>
+            {relations.length > 1 && ` and ${relations.length - 1} more`}: <span className="font-semibold">{mode}</span>{" "}
+            — {lockModeWords(mode)}
           </span>
         </li>
       ))}

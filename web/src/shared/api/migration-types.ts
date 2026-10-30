@@ -55,6 +55,8 @@ export interface AnalyzedStatement {
   score: number;
   rating: Rating;
   findings: MigrationFinding[];
+  /** Tables, collections, indices or labels acted on, for engines whose statements take no table lock. */
+  relations?: string[];
 }
 
 export type ColumnChangeKind = "added" | "dropped" | "altered" | "renamed";

@@ -4,6 +4,7 @@ import type { ClientProblem, MigrationSource, ReviewOptions } from "@/entities/m
 import { lastReviewOptions, startAnalysis, useMigrationTarget } from "@/features/analyze-migration/model/analyze";
 import { describeReviewError } from "@/features/analyze-migration/model/describe-error";
 import { type AnalyzeDialogMode, useAnalyzeDialog } from "@/features/analyze-migration/model/dialog-store";
+import { type PasteCopy, pasteCopy } from "@/features/analyze-migration/model/paste-copy";
 import {
   type CollectedFiles,
   collectDirectory,
@@ -24,7 +25,7 @@ import { Textarea } from "@/shared/ui/textarea";
 
 const MODE_OPTIONS: { value: AnalyzeDialogMode; label: string }[] = [
   { value: "files", label: "Files" },
-  { value: "paste", label: "Paste SQL" },
+  { value: "paste", label: "Paste" },
 ];
 
 const ACCEPT = ".sql,.conf,.sum";
@@ -164,13 +165,13 @@ function PasteMode({
   sql,
   onName,
   onSql,
-  placeholder,
+  copy,
 }: {
   name: string;
   sql: string;
   onName: (v: string) => void;
   onSql: (v: string) => void;
-  placeholder: string;
+  copy: PasteCopy;
 }) {
   const id = useId();
   return (
@@ -188,13 +189,12 @@ function PasteMode({
           spellCheck={false}
         />
         <p id={`${id}-name-help`} className="text-xs text-text-muted">
-          The name picks the migration tool's rules, e.g. V42__orders.sql (Flyway) or 0042_orders.up.sql
-          (golang-migrate).
+          {copy.nameHelp}
         </p>
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor={`${id}-sql`} className="text-xs font-medium text-text-primary">
-          Migration SQL
+          {copy.field}
         </label>
         <Textarea
           id={`${id}-sql`}
@@ -202,7 +202,7 @@ function PasteMode({
           value={sql}
           onChange={(e) => onSql(e.target.value)}
           spellCheck={false}
-          placeholder={placeholder}
+          placeholder={copy.placeholder}
           className="max-h-72 min-h-40 font-mono text-xs"
         />
       </div>
@@ -210,9 +210,9 @@ function PasteMode({
   );
 }
 
-function withSqlExtension(name: string): string {
-  const trimmed = name.trim() || "pasted.sql";
-  return isSqlFile(trimmed) ? trimmed : `${trimmed}.sql`;
+function withExtension(name: string, fallback: string): string {
+  const trimmed = name.trim() || fallback;
+  return isSqlFile(trimmed) ? trimmed : `${trimmed}${fallback.slice(fallback.lastIndexOf("."))}`;
 }
 
 function AnalyzeForm({ onDone }: { onDone: () => void }) {
@@ -220,7 +220,8 @@ function AnalyzeForm({ onDone }: { onDone: () => void }) {
   const { target, label, profile } = useMigrationTarget();
   const [options, setOptions] = useState<ReviewOptions>(lastReviewOptions);
   const [picked, setPicked] = useState<CollectedFiles | null>(null);
-  const [name, setName] = useState("pasted.sql");
+  const copy = pasteCopy(profile?.engine);
+  const [name, setName] = useState(copy.defaultName);
   const [sql, setSql] = useState("");
   const [problem, setProblem] = useState<ClientProblem | null>(null);
   const [busy, setBusy] = useState(false);
@@ -234,7 +235,7 @@ function AnalyzeForm({ onDone }: { onDone: () => void }) {
     let sources: MigrationSource[];
     let ignored: string[] = [];
     if (mode === "paste") {
-      sources = [{ name: withSqlExtension(name), sql }];
+      sources = [{ name: withExtension(name, copy.defaultName), sql }];
       if (!sql.trim()) {
         setProblem({ code: "no_files", ignored: [] });
         return;
@@ -284,17 +285,7 @@ function AnalyzeForm({ onDone }: { onDone: () => void }) {
           }}
         />
       ) : (
-        <PasteMode
-          name={name}
-          sql={sql}
-          onName={setName}
-          onSql={setSql}
-          placeholder={
-            profile?.engine === "neo4j"
-              ? "CREATE CONSTRAINT person_email FOR (p:Person) REQUIRE p.email IS UNIQUE;"
-              : "ALTER TABLE shop.orders ADD COLUMN note text;"
-          }
-        />
+        <PasteMode name={name} sql={sql} onName={setName} onSql={setSql} copy={copy} />
       )}
       {/* Transaction mode and lock_timeout are PostgreSQL options; other engines read the files as written. */}
       {(!profile || profile.engine === "postgres") && <ReviewOptionsFields value={options} onChange={setOptions} />}
@@ -316,7 +307,7 @@ function AnalyzeForm({ onDone }: { onDone: () => void }) {
         {target
           ? profile?.engine === "neo4j"
             ? `Checked against ${label}. dbscope reads counts and, to check a new constraint, the values it covers; nothing is written.`
-            : `Checked against ${label}. dbscope only reads the catalog; nothing runs against your tables.`
+            : `Checked against ${label}. dbscope reads only the schema and its statistics; nothing in the migration runs against your database.`
           : "Add a connection or open the sample schema first: migrations are checked against a schema."}
       </p>
     </form>
@@ -325,6 +316,7 @@ function AnalyzeForm({ onDone }: { onDone: () => void }) {
 
 export function AnalyzeMigrationDialog() {
   const { open, setOpen, mode } = useAnalyzeDialog();
+  const { profile } = useMigrationTarget();
   // A new key on each open starts the form fresh.
   const [formKey, setFormKey] = useState(0);
   const [wasOpen, setWasOpen] = useState(open);
@@ -336,7 +328,7 @@ export function AnalyzeMigrationDialog() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{mode === "paste" ? "Paste migration SQL" : "Analyze migration files"}</DialogTitle>
+          <DialogTitle>{mode === "paste" ? pasteCopy(profile?.engine).title : "Analyze migration files"}</DialogTitle>
           <DialogDescription>
             dbscope reports the locks, rewrites and breaking changes each statement causes, with a safer way to write
             it. Deterministic, no LLM.

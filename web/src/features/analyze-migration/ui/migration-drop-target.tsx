@@ -74,7 +74,7 @@ export function MigrationDropTarget() {
         </p>
         <p className="text-xs text-text-muted">
           {target
-            ? ".sql files or a folder. dbscope reads the catalog only; nothing runs against your tables."
+            ? "Migration files or a folder. dbscope reads only the schema and its statistics; nothing in the migration runs against your database."
             : "Add a connection or open the sample schema first: migrations are checked against a schema."}
         </p>
       </div>

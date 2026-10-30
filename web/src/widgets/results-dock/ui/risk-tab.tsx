@@ -155,6 +155,11 @@ export function RiskTab() {
                     >
                       {`${r.file}:${r.line}`}
                     </button>
+                    {r.moreLines.length > 0 && (
+                      <span className="block text-text-muted" title={`Also at lines ${r.moreLines.join(", ")}`}>
+                        and {r.moreLines.length} more
+                      </span>
+                    )}
                   </td>
                   <td className="truncate px-2 py-1 align-top font-mono" title={r.relation}>
                     {r.relation}

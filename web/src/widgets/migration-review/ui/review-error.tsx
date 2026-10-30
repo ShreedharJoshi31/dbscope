@@ -4,7 +4,13 @@ import { useEffect, useState } from "react";
 import type { MigrationReview, ReviewError } from "@/entities/migration-finding";
 import { openSampleWorkspace } from "@/entities/schema";
 import { useConnectionDialog } from "@/features/add-connection";
-import { cancelAnalysis, describeReviewError, openAnalyzeFiles, reanalyze } from "@/features/analyze-migration";
+import {
+  cancelAnalysis,
+  describeReviewError,
+  isSqlFile,
+  openAnalyzeFiles,
+  reanalyze,
+} from "@/features/analyze-migration";
 import { useUnlockPrompt } from "@/features/unlock-secrets";
 import { queryKeys } from "@/shared/api";
 import { Button } from "@/shared/ui/button";
@@ -16,7 +22,7 @@ export function ReviewRunning({ review }: { review: MigrationReview }) {
     return () => clearInterval(t);
   }, []);
   const seconds = Math.max(0, Math.floor((now - review.startedAt) / 1000));
-  const files = review.sources.filter((s) => s.name.toLowerCase().endsWith(".sql")).length;
+  const files = review.sources.filter((s) => isSqlFile(s.name)).length;
   return (
     <div role="status" className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
       <p className="flex items-center gap-2 text-sm text-text-primary">

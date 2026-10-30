@@ -6,12 +6,55 @@ import { migrationReport, migrationSources } from "@/test/fixtures";
 const rows = riskRows(toReviewModel(migrationReport(), migrationSources()));
 const ids = (list: typeof rows) => list.map((r) => `${r.ruleId}@${r.line}`);
 
+function fixtureStatement() {
+  const s = migrationReport().statements[0];
+  if (!s) throw new Error("the fixture report has no statements");
+  return s;
+}
+
 describe("risk rows", () => {
   it("has one row per finding with the relation it names", () => {
     expect(rows).toHaveLength(10);
     expect(rows.find((r) => r.ruleId === "DBS-RENAME")?.relation).toBe("shop.customers");
     expect(rows.find((r) => r.ruleId === "DBS-DROP-TABLE")?.relation).toBe("shop.shipments");
     expect(rows.find((r) => r.ruleId === "DBS-PARSE")?.relation).toBe("");
+  });
+
+  it("merges a finding repeated word for word on the same relation in one file", () => {
+    const report = migrationReport();
+    const statement = (line: number, relation: string) => ({
+      ...fixtureStatement(),
+      file: "V7.sql",
+      line,
+      endLine: line,
+      locks: [{ relation, mode: "METADATA EXCLUSIVE" }],
+      findings: [
+        { ruleId: "DBS-MYSQL-LOCK-WAIT", rating: "medium" as const, message: "DDL needs an exclusive metadata lock" },
+      ],
+    });
+    const merged = riskRows(
+      toReviewModel(
+        {
+          ...report,
+          statements: [statement(1, "shop.orders"), statement(2, "shop.orders"), statement(3, "shop.customers")],
+        },
+        [],
+      ),
+    );
+    expect(merged.map((r) => [r.relation, r.line, r.moreLines])).toEqual([
+      ["shop.orders", 1, [2]],
+      ["shop.customers", 3, []],
+    ]);
+  });
+
+  it("names the relation an engine reports before its locks", () => {
+    const report = migrationReport();
+    const sqlite = {
+      ...fixtureStatement(),
+      relations: ["notes"],
+      locks: [{ relation: "main", mode: "DATABASE WRITE" }],
+    };
+    expect(riskRows(toReviewModel({ ...report, statements: [sqlite] }, []))[0]?.relation).toBe("notes");
   });
 
   it("sorts critical first by default, ties in file order", () => {

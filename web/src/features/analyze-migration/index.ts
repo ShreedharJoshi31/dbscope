@@ -30,6 +30,7 @@ export {
   collectDrop,
   collectFileList,
   isMigrationFile,
+  isSqlFile,
   readPicked,
   reviewTitle,
   utf8Length,
