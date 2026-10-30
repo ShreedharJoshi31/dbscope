@@ -847,6 +847,26 @@ indices or documents.
 Not yet: AWS SigV4, PPL (it needs another cluster permission), and cluster
 health and shard allocation.
 
+**Workload.** The map's Workload view reads index stats
+(`GET <pattern>/_stats/search,indexing,docs`) and nothing else, and never
+resets them. Calls are query-phase searches on the index's shards, primaries
+and replicas, so one search over a two-shard index counts twice; `_count`
+and searches through an alias count on the index behind it. Query time is
+those shard searches' time added up. Writes are documents indexed plus
+deleted on primary shards; live rows are the primary document count, which
+includes the hidden documents of nested objects. A data stream shows the sum
+of its backing indices; aliases get no badge of their own, since their
+traffic is already on their indices. Dot-prefixed system indices and
+OpenSearch's `security-auditlog-*` are left out, and dbscope tags its own
+schema-reading search with the stats group `dbscope` so it does not count.
+The counters live on each shard copy and start from zero when it starts (a
+node restart, a shard move), with no recorded reset time. Neither product
+keeps a history of search requests (the search slow log is a file on each
+node), so there is no query text, no top queries and no scan metric.
+Reading index stats needs the `monitor` index privilege on the profile's
+pattern (OpenSearch: `indices_monitor`); without it the view says which.
+Verified on Elasticsearch 9.5.5 and OpenSearch 3.9.0.
+
 ### ClickHouse
 
 Research with sources: [research-clickhouse.md](research-clickhouse.md).
@@ -1027,6 +1047,26 @@ implicit conversions that may stop a seek.
 Not yet: Windows and Entra ID authentication, migration risk of DDL
 (online index operations, which ALTERs are metadata-only), Query Store and
 wait statistics, and Always On replica routing.
+
+**Workload.** The map's Workload view reads two views for the profile's
+database, and never clears the plan cache or changes a setting. Scans and
+writes come from `sys.dm_db_index_usage_stats`: scans of a table's heap or
+clustered index are full scans; seeks, lookups and scans of nonclustered
+indexes are index scans; writes are the heap's or clustered index's
+`user_updates`, which count write statements, not rows (a two-row `INSERT`
+counts once). Calls and query time come from `sys.dm_exec_query_stats`, at
+most 2,000 statements, most elapsed time first, grouped by query hash and
+tied to tables by name: `schema.table`, `database.schema.table` for this
+database, or a bare name only when one table on the map has it (reserved
+words such as `ORDER` are never read as names; a bare name matching tables in
+two schemas counts as not tied to a table). `SET` and catalog-only statements
+(`sys.*`, `INFORMATION_SCHEMA`), dbscope's own reads and Query Store's among
+them, are left out. Both views count since the server started; only plans
+still in the plan cache are counted, from when they were cached. The login
+needs `VIEW SERVER PERFORMANCE STATE` (2022 and later; `VIEW SERVER STATE`
+also works), granted in master; without it the view says which `GRANT` to
+run. Verified on SQL Server 2025 and 2022. Azure SQL Database is not
+supported yet.
 
 ### Oracle
 
