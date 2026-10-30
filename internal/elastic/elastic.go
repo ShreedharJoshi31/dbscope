@@ -428,7 +428,8 @@ func (c *Client) topLevelDocs(ctx context.Context, pattern string) (map[string]i
 			} `json:"indices"`
 		} `json:"aggregations"`
 	}
-	body := map[string]any{"size": 0, "aggs": map[string]any{"indices": map[string]any{"terms": map[string]any{"field": "_index", "size": 10000}}}}
+	// The stats group keeps this read of dbscope's own out of Workload's search counts.
+	body := map[string]any{"size": 0, "stats": []string{statsGroup}, "aggs": map[string]any{"indices": map[string]any{"terms": map[string]any{"field": "_index", "size": 10000}}}}
 	if err := c.do(ctx, "POST", "/"+pattern+"/_search?timeout=10s", body, &out); err != nil {
 		return nil, err
 	}

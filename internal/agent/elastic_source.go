@@ -103,8 +103,15 @@ func (es *elasticSource) MigrationBase(context.Context, conn.Profile, string) (*
 	return nil, errUnsupported
 }
 
-func (es *elasticSource) Workload(context.Context, conn.Profile, string, *schema.Model) (*workload.Snapshot, error) {
-	return nil, errUnsupported
+// Workload reads per-index search and indexing counters (internal/elastic.Workload).
+func (es *elasticSource) Workload(ctx context.Context, p conn.Profile, password string, m *schema.Model) (*workload.Snapshot, error) {
+	ctx, cancel := context.WithTimeout(ctx, statementTimeout(p)+connectSlack)
+	defer cancel()
+	c, err := es.get(p, password)
+	if err != nil {
+		return nil, err
+	}
+	return elastic.Workload(ctx, c, m)
 }
 
 func (es *elasticSource) Forget(profileID string) {
