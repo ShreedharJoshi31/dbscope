@@ -15,14 +15,15 @@ export function isMigrationFile(name: string): boolean {
 }
 
 /**
- * A statement file: .sql, .cql for Cassandra and ScyllaDB tools, .http for elasticsearch-evolution, or .js for
+ * A statement file: .sql, .cql for Cassandra and ScyllaDB tools, .cypher for Neo4j (neo4j-migrations), .http for
+ * elasticsearch-evolution, or .js for
  * MongoDB (mongosh scripts, migrate-mongo); the agent skips .js files for other engines and says so.
  */
 export function isSqlFile(name: string): boolean {
   return STATEMENT_FILE.test(name);
 }
 
-const STATEMENT_FILE = /\.(sql|cql|http|js)$/i;
+const STATEMENT_FILE = /\.(sql|cql|cypher|http|js)$/i;
 
 /** A file and the relative path it was found under. */
 export interface PickedFile {

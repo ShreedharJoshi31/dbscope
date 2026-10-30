@@ -616,9 +616,26 @@ node expanded.
 | `DBS-NEO4J-MIXED-TYPES` | warn | a property stored with more than one type across the label's nodes (exact, from `db.schema.nodeTypeProperties`) |
 | `DBS-NEO4J-NO-INDEX` | warn | 10,000 or more nodes with no index or constraint at all |
 
-Not yet: risks of schema-changing Cypher (constraint creation on existing
-duplicates, index population), and relationship types between labels the
-count store does not connect.
+**Migration risk.** Cypher migrations (`.cypher` files, as neo4j-migrations
+writes them; statements end at `;` outside strings and comments) are
+checked against the live database. Each prediction is verified by
+`TestMigratePredictions`, which predicts and then runs every statement on
+5.26 and 2026.10 Community and 2026.10 Enterprise with an 8 MB
+`db.memory.transaction.max`:
+
+| Rule | Rating | When |
+|---|---|---|
+| `DBS-NEO4J-FAILS` | high | the server refuses it: a uniqueness or key constraint over values that already repeat, an existence or key constraint over entries missing the property (both counted live, under the statement timeout), an existence, key or type constraint on Community Edition, a name already in use without `IF NOT EXISTS`, or a `DROP` of a name that does not exist without `IF EXISTS` |
+| `DBS-NEO4J-UNBATCHED` | medium from 10,000 entries, high from 100,000 | a write over a label or type that large without `CALL { } IN TRANSACTIONS`: one transaction holds every change in memory, and fails past `db.memory.transaction.max` (shown when the server reports it) |
+| `DBS-NEO4J-DROPS-DATA` | high | `DELETE`, `DETACH DELETE` or `REMOVE` |
+| `DBS-NEO4J-DROPS-SCHEMA` | medium | dropping an index (lookups fall back to scans) or a constraint (duplicates are accepted again) |
+| `DBS-NEO4J-INDEX-POPULATING` | low, medium from 100,000 entries | a new index is populated in the background; queries plan without it until it is `ONLINE`, so follow it with `CALL db.awaitIndexes()` |
+| `DBS-NEO4J-CONSTRAINT-SCAN` | low, medium from 100,000 entries | a constraint the data satisfies still reads every entry to validate it |
+| `DBS-NEO4J-UNCHECKED` | medium | the duplicate or missing-value count did not finish in time |
+
+Not yet: lock behaviour of schema changes under concurrent writes (not
+measured, so not claimed), and relationship types between labels the count
+store does not connect.
 
 ### Elasticsearch and OpenSearch
 

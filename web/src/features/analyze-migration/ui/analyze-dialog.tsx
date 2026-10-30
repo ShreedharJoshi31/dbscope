@@ -164,11 +164,13 @@ function PasteMode({
   sql,
   onName,
   onSql,
+  placeholder,
 }: {
   name: string;
   sql: string;
   onName: (v: string) => void;
   onSql: (v: string) => void;
+  placeholder: string;
 }) {
   const id = useId();
   return (
@@ -200,7 +202,7 @@ function PasteMode({
           value={sql}
           onChange={(e) => onSql(e.target.value)}
           spellCheck={false}
-          placeholder="ALTER TABLE shop.orders ADD COLUMN note text;"
+          placeholder={placeholder}
           className="max-h-72 min-h-40 font-mono text-xs"
         />
       </div>
@@ -282,7 +284,17 @@ function AnalyzeForm({ onDone }: { onDone: () => void }) {
           }}
         />
       ) : (
-        <PasteMode name={name} sql={sql} onName={setName} onSql={setSql} />
+        <PasteMode
+          name={name}
+          sql={sql}
+          onName={setName}
+          onSql={setSql}
+          placeholder={
+            profile?.engine === "neo4j"
+              ? "CREATE CONSTRAINT person_email FOR (p:Person) REQUIRE p.email IS UNIQUE;"
+              : "ALTER TABLE shop.orders ADD COLUMN note text;"
+          }
+        />
       )}
       {/* Transaction mode and lock_timeout are PostgreSQL options; other engines read the files as written. */}
       {(!profile || profile.engine === "postgres") && <ReviewOptionsFields value={options} onChange={setOptions} />}
@@ -302,7 +314,9 @@ function AnalyzeForm({ onDone }: { onDone: () => void }) {
       </DialogFooter>
       <p className="text-xs text-text-muted">
         {target
-          ? `Checked against ${label}. dbscope only reads the catalog; nothing runs against your tables.`
+          ? profile?.engine === "neo4j"
+            ? `Checked against ${label}. dbscope reads counts and, to check a new constraint, the values it covers; nothing is written.`
+            : `Checked against ${label}. dbscope only reads the catalog; nothing runs against your tables.`
           : "Add a connection or open the sample schema first: migrations are checked against a schema."}
       </p>
     </form>

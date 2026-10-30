@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,8 +26,9 @@ var Neo4jImages = map[string]string{
 const Neo4jPassword = "neo4j-test-pass"
 
 // Neo4j starts a server and returns a profile for the neo4j user and database.
-// The enterprise image runs under the evaluation license.
-func Neo4j(t testing.TB, name string) conn.Profile {
+// The enterprise image runs under the evaluation license. Settings are extra
+// environment entries, such as "NEO4J_db_memory_transaction_max=16m".
+func Neo4j(t testing.TB, name string, settings ...string) conn.Profile {
 	t.Helper()
 	if testing.Short() || os.Getenv("DBSCOPE_SKIP_NEO4J") != "" {
 		t.Skip("integration test")
@@ -35,6 +37,10 @@ func Neo4j(t testing.TB, name string) conn.Profile {
 	env := map[string]string{"NEO4J_AUTH": "neo4j/" + Neo4jPassword, "NEO4J_server_memory_heap_max__size": "512m"}
 	if name == "enterprise" {
 		env["NEO4J_ACCEPT_LICENSE_AGREEMENT"] = "eval"
+	}
+	for _, s := range settings {
+		k, v, _ := strings.Cut(s, "=")
+		env[k] = v
 	}
 	c, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{

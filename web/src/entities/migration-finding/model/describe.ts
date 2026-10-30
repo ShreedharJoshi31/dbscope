@@ -93,6 +93,12 @@ ENGINE_WORK.mongodb = {
   rewrite: "Rewrites documents one by one; each write is replicated through the oplog",
 };
 
+// Neo4j: schema changes take no long locks; indexes populate in the background.
+ENGINE_WORK.neo4j = {
+  none: "Schema or data change in one transaction: no table locks",
+  index_build: "Populates the index in the background; queries plan without it until it is ONLINE",
+};
+
 export function workWords(work: StatementWork, engine?: string): string {
   return (engine ? ENGINE_WORK[engine]?.[work] : undefined) ?? WORK[work] ?? work;
 }

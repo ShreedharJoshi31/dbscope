@@ -75,6 +75,11 @@ func TestNeo4jProfile(t *testing.T) {
 	expect(t, e.do("POST", "/api/profiles/"+p.ID+"/graph/expand", mustJSON(map[string]any{"nodeId": user, "limit": 201})), 400, "validation")
 	missing := user[:strings.LastIndexByte(user, ':')+1] + "99999999"
 	expect(t, e.do("POST", "/api/profiles/"+p.ID+"/graph/expand", mustJSON(map[string]any{"nodeId": missing})), 404, "not_found")
+	w = e.do("POST", "/api/profiles/"+p.ID+"/migrations/analyze", `{"files":[{"name":"V2__users.cypher","sql":"CREATE CONSTRAINT u FOR (x:User) REQUIRE x.id IS NOT NULL;"}]}`)
+	expect(t, w, 200, "")
+	if !strings.Contains(w.Body.String(), `"engine":"neo4j"`) || !strings.Contains(w.Body.String(), "Enterprise Edition") {
+		t.Errorf("analyze %s", w.Body.String())
+	}
 	expect(t, e.do("POST", "/api/profiles/"+p.ID+"/query", `{"sql":"MATCH (n) DETACH DELETE n"}`), 422, "rejected")
 	expect(t, e.do("POST", "/api/profiles/"+p.ID+"/query", `{"sql":"CALL db.createLabel('X')"}`), 422, "rejected")
 	expect(t, e.do("POST", "/api/profiles/"+p.ID+"/query", `{"sql":"MATCH (n RETURN n"}`), 400, "database")

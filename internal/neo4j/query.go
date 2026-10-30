@@ -22,6 +22,7 @@ import (
 type token struct {
 	text string
 	word string // lowercased unquoted word; "" for literals, quoted names and punctuation
+	pos  int    // byte offset in the source
 }
 
 // tokens splits Cypher into words, literals and punctuation, dropping
@@ -53,17 +54,17 @@ func tokens(s string) []token {
 				j++
 			}
 			j = min(j+1, len(s))
-			out = append(out, token{text: s[i:j]})
+			out = append(out, token{text: s[i:j], pos: i})
 			i = j
 		case c == '_' || unicode.IsLetter(rune(c)):
 			j := i
 			for j < len(s) && (s[j] == '_' || unicode.IsLetter(rune(s[j])) || unicode.IsDigit(rune(s[j]))) {
 				j++
 			}
-			out = append(out, token{text: s[i:j], word: strings.ToLower(s[i:j])})
+			out = append(out, token{text: s[i:j], word: strings.ToLower(s[i:j]), pos: i})
 			i = j
 		default:
-			out = append(out, token{text: string(c)})
+			out = append(out, token{text: string(c), pos: i})
 			i++
 		}
 	}

@@ -68,6 +68,7 @@ const ENGINE_NAMES: Record<Exclude<NonNullable<AnalyzeReport["engine"]>, "sqlite
   elasticsearch: "Elasticsearch",
   opensearch: "OpenSearch",
   mongodb: "MongoDB",
+  neo4j: "Neo4j",
 };
 
 /** "MySQL 8.4.13" for 80413, "MariaDB 11.8.9", "ClickHouse 26.8.10" or "Elasticsearch 9.5.5". */

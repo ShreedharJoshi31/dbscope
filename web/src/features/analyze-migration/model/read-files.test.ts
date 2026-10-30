@@ -32,6 +32,7 @@ describe("reading migration files", () => {
         "V1__x.sql.conf",
         "m/atlas.sum",
         "002_users.cql",
+        "V1_1__constraints.cypher",
         "V1_1__fields.http",
         "20261028-add-index.js",
       ].every(isMigrationFile),

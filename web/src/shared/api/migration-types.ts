@@ -113,7 +113,8 @@ export interface AnalyzeReport {
     | "scylla"
     | "elasticsearch"
     | "opensearch"
-    | "mongodb";
+    | "mongodb"
+    | "neo4j";
   /** server_version_num used for version-dependent rules, e.g. 170000; SQLITE_VERSION_NUMBER for SQLite. */
   pgVersion: number;
   rating: Rating;

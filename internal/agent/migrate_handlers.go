@@ -153,6 +153,20 @@ func (s *server) analyzeMigrations(w http.ResponseWriter, r *http.Request) {
 		respond(rep)
 		return
 	}
+	if p.Engine == conn.EngineNeo4j {
+		src, _ := s.source.(engineSource)[conn.EngineNeo4j].(*neo4jSource)
+		if src == nil {
+			s.upstreamError(w, r, errUnsupported)
+			return
+		}
+		rep, err := src.Analyze(ctx, p, password, req.Files)
+		if err != nil {
+			s.upstreamError(w, r, err)
+			return
+		}
+		respond(rep)
+		return
+	}
 	if p.Engine == conn.EngineClickHouse {
 		src, _ := s.source.(engineSource)[conn.EngineClickHouse].(*clickhouseSource)
 		if src == nil {

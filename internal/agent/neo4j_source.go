@@ -8,6 +8,7 @@ import (
 	"github.com/dbscope/dbscope/internal/health"
 	"github.com/dbscope/dbscope/internal/introspect"
 	"github.com/dbscope/dbscope/internal/migrate"
+	"github.com/dbscope/dbscope/internal/migrate/ingest"
 	"github.com/dbscope/dbscope/internal/neo4j"
 	"github.com/dbscope/dbscope/internal/query/exec"
 	"github.com/dbscope/dbscope/internal/schema"
@@ -96,6 +97,19 @@ func (ns *neo4jSource) Expand(ctx context.Context, p conn.Profile, password, nod
 		return nil, err
 	}
 	return neo4j.Expand(ctx, c, nodeID, limit, statementTimeout(p))
+}
+
+// Analyze rates Cypher migrations against the live database (internal/neo4j.Analyze).
+func (ns *neo4jSource) Analyze(ctx context.Context, p conn.Profile, password string, files []ingest.Input) (*migrate.Report, error) {
+	c, err := ns.get(p, password)
+	if err != nil {
+		return nil, err
+	}
+	base, err := neo4j.ReadBase(ctx, c, statementTimeout(p))
+	if err != nil {
+		return nil, err
+	}
+	return neo4j.Analyze(ctx, base, files), nil
 }
 
 func (ns *neo4jSource) Query(context.Context, conn.Profile, string, exec.Request) (*exec.Result, error) {
