@@ -11,6 +11,7 @@ import (
 	"github.com/dbscope/dbscope/internal/health"
 	"github.com/dbscope/dbscope/internal/introspect"
 	"github.com/dbscope/dbscope/internal/migrate"
+	"github.com/dbscope/dbscope/internal/migrate/ingest"
 	"github.com/dbscope/dbscope/internal/mssql"
 	"github.com/dbscope/dbscope/internal/query/exec"
 	"github.com/dbscope/dbscope/internal/schema"
@@ -102,6 +103,22 @@ func (ms *mssqlSource) Query(context.Context, conn.Profile, string, exec.Request
 
 func (ms *mssqlSource) MigrationBase(context.Context, conn.Profile, string) (*migrate.Base, error) {
 	return nil, errUnsupported
+}
+
+// Analyze checks T-SQL migration files against the profile's database
+// (internal/mssql.Analyze) and lists sessions whose locks the DDL would wait for.
+func (ms *mssqlSource) Analyze(ctx context.Context, p conn.Profile, password string, files []ingest.Input) (*migrate.Report, error) {
+	db, err := ms.get(p, password)
+	if err != nil {
+		return nil, err
+	}
+	base, err := mssql.ReadBase(ctx, db, p.Schemas)
+	if err != nil {
+		return nil, err
+	}
+	rep := mssql.Analyze(base, files)
+	mssql.ReadBlockers(ctx, db, base, rep)
+	return rep, nil
 }
 
 // Workload reads the server's index usage and plan cache statistics (internal/mssql.Workload).

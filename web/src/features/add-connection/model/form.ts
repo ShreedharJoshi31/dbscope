@@ -224,7 +224,7 @@ export function parseSchemas(raw: string): string[] {
  */
 /** Engines whose migrations dbscope reviews, so the folder fields apply (docs/ENGINES.md). */
 export function hasMigrationReview(engine: Engine): boolean {
-  return !["redis", "dynamodb", "sqlserver", "oracle"].includes(engine);
+  return !["redis", "dynamodb", "oracle"].includes(engine);
 }
 
 /** Blank folders are sent empty so an update clears them. */

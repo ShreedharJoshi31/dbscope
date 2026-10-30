@@ -147,7 +147,7 @@ logins, encrypted keys, unknown and changed host keys, and a dropped session.
 | Neo4j | labels and relationship types | read-only Cypher | not yet | Cypher schema changes | yes |
 | Elasticsearch / OpenSearch | indices, aliases, data streams | search JSON and SQL | not yet | console-format requests | yes |
 | ClickHouse | tables, keys, parts | SQL under readonly | not yet | ALTER mutations | yes |
-| SQL Server / Azure SQL | tables, views, keys, indexes | SELECT behind a plan gate | not yet | not yet | yes |
+| SQL Server / Azure SQL | tables, views, keys, indexes | SELECT behind a plan gate | not yet | T-SQL schema changes | yes |
 | Oracle | tables, views, materialized views, keys, indexes | SELECT in a READ ONLY transaction | not yet | not yet | yes |
 
 ### Apache AGE (graphs in PostgreSQL)
@@ -1142,8 +1142,33 @@ filters (an index would let the server seek), key and RID lookups, joins
 without a predicate, the optimizer's missing-index suggestions and
 implicit conversions that may stop a seek.
 
-Not yet: Windows and Entra ID authentication, migration risk of DDL
-(online index operations, which ALTERs are metadata-only), Query Store and
+**Migrations.** `mssql.Analyze` checks T-SQL migration files against the profile's database, with no parser
+dependency: scripts are split at semicolons, at `GO` batch separators and at lines that begin a new statement. For
+each statement it predicts the lock it queues for (Sch-M for ALTER, TRUNCATE and sp_rename, S for CREATE INDEX and for
+online operations, X for DROP TABLE), whether it changes only metadata, reads every row, builds an index or writes
+every row, and whether the server rejects it. Adding a NULL column, or a NOT NULL column with a runtime-constant
+default, is metadata only on Enterprise, Developer and Azure SQL; Express and Standard write the value to every row.
+`TestDDLPredictions` runs every case on SQL Server 2025 and 2022 Developer and on 2022 Express inside a rolled-back
+transaction with an open writer on the table, and compares each prediction with the transaction's log bytes, new
+partitions, logical reads, the lock the statement waited for and its error.
+
+| Rule | When |
+|---|---|
+| `DBS-MSSQL-LOCK-WAIT` | DDL without `SET LOCK_TIMEOUT` earlier in the file or `WAIT_AT_LOW_PRIORITY`: it waits behind any open transaction on the table, and later queries queue behind it |
+| `DBS-MSSQL-BLOCKS-TABLE` | the statement writes every row under Sch-M (type changes, NEWID or LOB defaults, persisted or identity columns, offline rebuilds); high from 100,000 rows or 100 MiB, critical from 1M rows or 1 GiB (dbscope's cutoffs) |
+| `DBS-MSSQL-TABLE-SCAN` | it reads every row under Sch-M (NOT NULL on fixed-length columns, narrowing, foreign keys and checks added WITH CHECK) |
+| `DBS-MSSQL-OFFLINE-INDEX` / `-TABLE-WORK` | an index build without `ONLINE = ON`, which blocks writes; or online work, which lets them continue |
+| `DBS-MSSQL-FAILS` | the server rejects it: NOT NULL without a default on a table with rows, ALTER or DROP COLUMN with a dependent index or constraint, DROP INDEX on a key constraint, TRUNCATE or DROP of a referenced table, ONLINE on an edition without it |
+| `DBS-MSSQL-NULLABLE`, `-UNTRUSTED-FK`, `-UNTRUSTED-CHECK`, `-DISABLED-FK` | ALTER COLUMN that drops NOT NULL; constraints added WITH NOCHECK, disabled, or re-enabled without WITH CHECK |
+| `DBS-MSSQL-DROPS-DATA` / `DBS-DROP-CONSTRAINT` | DROP COLUMN, DROP TABLE, TRUNCATE (high); dropping a key, unique, check or foreign key (medium) |
+
+A CREATE INDEX without options gets a safer rewrite with `WITH (ONLINE = ON, RESUMABLE = ON)` (RESUMABLE from 2019),
+which needs Enterprise, Developer or Azure SQL and must run outside an explicit transaction (error 574). Sessions
+holding locks on the migration's tables are listed as blockers when the login has VIEW SERVER PERFORMANCE STATE (VIEW
+SERVER STATE before 2022). Not covered: duration estimates, migration-history reading (pending files), replaying
+down migrations, and a `dbscope migrate check` base flag for SQL Server.
+
+Not yet: Windows and Entra ID authentication, Query Store and
 wait statistics, and Always On replica routing.
 
 **Workload.** The map's Workload view reads two views for the profile's

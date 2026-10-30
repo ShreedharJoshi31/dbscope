@@ -23,6 +23,12 @@ const BY_ENGINE: Partial<Record<Engine, PasteCopy>> = {
   mysql: { ...SQL, placeholder: "ALTER TABLE orders ADD COLUMN note TEXT, ALGORITHM=INSTANT;" },
   sqlite: { ...SQL, placeholder: "ALTER TABLE notes ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;" },
   clickhouse: { ...SQL, placeholder: "ALTER TABLE events ADD COLUMN country LowCardinality(String);" },
+  sqlserver: {
+    ...SQL,
+    title: "Paste a T-SQL migration",
+    field: "Migration T-SQL",
+    placeholder: "ALTER TABLE dbo.orders ADD note nvarchar(200) NULL;\nGO",
+  },
   cassandra: {
     title: "Paste a CQL migration",
     field: "Migration CQL",
