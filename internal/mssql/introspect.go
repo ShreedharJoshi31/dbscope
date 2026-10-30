@@ -277,6 +277,7 @@ func Introspect(ctx context.Context, db *sql.DB, schemas []string) (*schema.Mode
 		}
 		storageFindings(x, heaps[x.QName()], clustered[x.QName()])
 	}
+	indexFindings(ctx, db, srv, in, args, rel)
 	addStubs(m)
 	m.IntrospectedAt = time.Now().UTC()
 	m.DurationMs = time.Since(start).Milliseconds()
