@@ -10,10 +10,12 @@ func (r *Report) add(id, rating, msg, alt string) {
 }
 
 // rate turns server facts and the scan into findings (docs/research-redis.md, 4).
+// Without INFO (info is nil) only the scan's findings remain.
 func (r *Report) rate(info Info) {
 	m := r.Memory
 	policy := m.Policy
 	switch {
+	case info == nil:
 	case m.Max == 0 && r.Server.Role != "slave":
 		r.add("DBS-REDIS-NO-MAXMEMORY", "medium", "maxmemory is 0, so Redis grows without limit until the operating system runs out of memory",
 			"Set maxmemory below the machine's memory, leaving room for buffers and fork copy-on-write")

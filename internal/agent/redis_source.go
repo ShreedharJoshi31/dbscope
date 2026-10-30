@@ -9,6 +9,7 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 
 	"github.com/dbscope/dbscope/internal/conn"
+	"github.com/dbscope/dbscope/internal/health"
 	"github.com/dbscope/dbscope/internal/introspect"
 	"github.com/dbscope/dbscope/internal/migrate"
 	"github.com/dbscope/dbscope/internal/query/exec"
@@ -85,6 +86,17 @@ func (rs *redisSource) Keyspace(ctx context.Context, p conn.Profile, password st
 	}
 	rs.mu.Unlock()
 	return rep, nil
+}
+
+// Health reads the server's health checks (internal/redis.Health).
+func (rs *redisSource) Health(ctx context.Context, p conn.Profile, password string) (*health.Report, error) {
+	ctx, cancel := context.WithTimeout(ctx, statementTimeout(p)+connectSlack)
+	defer cancel()
+	c, err := rs.get(p, password)
+	if err != nil {
+		return nil, err
+	}
+	return redis.Health(ctx, c)
 }
 
 func (rs *redisSource) Namespaces(ctx context.Context, p conn.Profile, password string) ([]introspect.Namespace, error) {

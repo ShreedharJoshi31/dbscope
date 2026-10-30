@@ -30,13 +30,20 @@ func (r *Report) Model(db int) *schema.Model {
 		case p.NoTTL > 0:
 			expiry = fmt.Sprintf("%d of %d never expire", p.NoTTL, p.Keys)
 		}
+		memory := bytesText(p.Bytes)
+		switch {
+		case !r.MemorySampled:
+			memory = "not measured"
+		case !r.Complete && p.EstimatedBytes > 0:
+			memory = fmt.Sprintf("about %s (%s in the %.0f%% scanned)", bytesText(p.EstimatedBytes), bytesText(p.Bytes), 100*r.SampleFraction)
+		}
 		rel := schema.Relation{Schema: s, Name: p.Pattern, Kind: schema.KindKeyPattern, RowEstimate: &n,
 			Columns: []schema.Column{
 				{Name: "type", Type: strings.Join(types, ", ")},
-				{Name: "memory", Type: bytesText(p.Bytes)},
+				{Name: "memory", Type: memory},
 				{Name: "expiry", Type: expiry},
 			}}
-		if p.Largest != nil {
+		if p.Largest != nil && r.MemorySampled {
 			rel.Comment = fmt.Sprintf("largest: %s (%s)", p.Largest.Name, bytesText(p.Largest.Bytes))
 		}
 		m.Relations = append(m.Relations, rel)
