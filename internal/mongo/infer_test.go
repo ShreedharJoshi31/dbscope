@@ -57,4 +57,8 @@ func TestInfer(t *testing.T) {
 	if f := byPath["_id"]; f.TypeText() != "objectId" || s.Coverage(f) != 100 {
 		t.Errorf("_id %+v", f)
 	}
+	// One length per document holding the array, empty arrays included.
+	if f := byPath["tags"]; !slices.Equal(f.ArrayLens, []int{2, 0}) || byPath["name"].ArrayLens != nil {
+		t.Errorf("tags lengths %v", f.ArrayLens)
+	}
 }

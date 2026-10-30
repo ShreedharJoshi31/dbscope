@@ -3,6 +3,7 @@ package mongo
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -44,7 +45,7 @@ func Namespaces(ctx context.Context, c *mongo.Client) ([]introspect.Namespace, e
 // Introspect reads a database's collections: the catalog, document counts,
 // indexes, and a schema inferred from a sample of each collection, plus
 // references guessed from ObjectId fields whose values exist in another
-// collection.
+// collection, and design risks as findings (findings.go).
 func Introspect(ctx context.Context, c *mongo.Client, db string) (*schema.Model, error) {
 	start := time.Now()
 	srv, err := describe(ctx, c, db)
@@ -56,24 +57,29 @@ func Introspect(ctx context.Context, c *mongo.Client, db string) (*schema.Model,
 	if err != nil {
 		return nil, err
 	}
-	var specs []struct {
-		Name    string `bson:"name"`
-		Type    string `bson:"type"`
-		Options struct {
-			Validator bson.Raw `bson:"validator"`
-			ViewOn    string   `bson:"viewOn"`
-		} `bson:"options"`
-	}
+	var specs []collSpec
 	if err := cur.All(ctx, &specs); err != nil {
 		return nil, err
 	}
 	sort.Slice(specs, func(i, j int) bool { return specs[i].Name < specs[j].Name })
+	specs = slices.DeleteFunc(specs, func(s collSpec) bool { return strings.HasPrefix(s.Name, "system.") })
+	specs = specs[:min(len(specs), maxCollections)]
+	// Index use is read before this read samples anything, since sampling a view
+	// can use its source's indexes; earlier introspections' reads still count.
+	unused := map[string][]schema.Finding{}
+	for _, s := range specs {
+		if s.Type == "view" {
+			continue
+		}
+		f, refused := unusedIndexes(ctx, d.Collection(s.Name))
+		if refused {
+			break // the privilege is per database: the other collections would be refused too
+		}
+		unused[s.Name] = f
+	}
 	m := &schema.Model{Engine: "mongodb", ServerVersion: srv.Num, Schemas: []string{db}, Relations: []schema.Relation{}, Enums: []schema.Enum{}}
 	var cols []Collection
 	for _, s := range specs {
-		if strings.HasPrefix(s.Name, "system.") || len(cols) == maxCollections {
-			continue
-		}
 		col := Collection{Name: s.Name, Kind: s.Type, ViewOn: s.Options.ViewOn}
 		if len(s.Options.Validator) > 0 {
 			if b, err := bson.MarshalExtJSON(s.Options.Validator, false, false); err == nil {
@@ -97,12 +103,24 @@ func Introspect(ctx context.Context, c *mongo.Client, db string) (*schema.Model,
 		cols = append(cols, col)
 	}
 	for _, col := range cols {
-		m.Relations = append(m.Relations, col.Relation(db))
+		r := col.Relation(db)
+		addFindings(col, &r)
+		r.Findings = append(r.Findings, unused[col.Name]...)
+		m.Relations = append(m.Relations, r)
 	}
 	inferReferences(ctx, d, cols, m)
 	m.IntrospectedAt = time.Now().UTC()
 	m.DurationMs = time.Since(start).Milliseconds()
 	return m, nil
+}
+
+type collSpec struct {
+	Name    string `bson:"name"`
+	Type    string `bson:"type"`
+	Options struct {
+		Validator bson.Raw `bson:"validator"`
+		ViewOn    string   `bson:"viewOn"`
+	} `bson:"options"`
 }
 
 // sample returns up to SampleSize documents. $sample is a cheap random

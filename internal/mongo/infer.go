@@ -19,6 +19,9 @@ type Field struct {
 	Types map[string]int
 	// Present counts the sampled documents that have the path at all.
 	Present int
+	// ArrayLens holds, for each sampled document where the path is an
+	// array, its length (the longest when the path repeats inside an array).
+	ArrayLens []int
 }
 
 // Shape is what a sample says about a collection.
@@ -40,12 +43,16 @@ func Infer(docs []bson.Raw) Shape {
 		// Each path counts once per document, with every type it held there.
 		var order []string
 		seen := map[string]map[string]bool{}
-		walk(d, "", 0, func(path, typ string) {
+		lens := map[string]int{}
+		walk(d, "", 0, func(path, typ string, n int) {
 			if seen[path] == nil {
 				seen[path] = map[string]bool{}
 				order = append(order, path)
 			}
 			seen[path][typ] = true
+			if n >= 0 {
+				lens[path] = max(lens[path], n)
+			}
 		})
 		for _, path := range order {
 			i, known := index[path]
@@ -58,12 +65,16 @@ func Infer(docs []bson.Raw) Shape {
 			for t := range seen[path] {
 				s.Fields[i].Types[t]++
 			}
+			if n, ok := lens[path]; ok {
+				s.Fields[i].ArrayLens = append(s.Fields[i].ArrayLens, n)
+			}
 		}
 	}
 	return s
 }
 
-func walk(d bson.Raw, prefix string, depth int, f func(path, typ string)) {
+// walk calls f for every path with its type and, for an array, its length (else -1).
+func walk(d bson.Raw, prefix string, depth int, f func(path, typ string, n int)) {
 	elems, err := d.Elements()
 	if err != nil {
 		return
@@ -73,22 +84,25 @@ func walk(d bson.Raw, prefix string, depth int, f func(path, typ string)) {
 	}
 }
 
-func walkValue(path string, v bson.RawValue, depth int, f func(path, typ string)) {
-	f(path, typeName(v.Type))
+func walkValue(path string, v bson.RawValue, depth int, f func(path, typ string, n int)) {
+	if v.Type != bson.TypeArray {
+		f(path, typeName(v.Type), -1)
+		if v.Type == bson.TypeEmbeddedDocument && depth < maxDepth {
+			walk(v.Document(), path+".", depth+1, f)
+		}
+		return
+	}
+	vals, err := v.Array().Values()
+	if err != nil {
+		f(path, "array", -1)
+		return
+	}
+	f(path, "array", len(vals))
 	if depth >= maxDepth {
 		return
 	}
-	switch v.Type {
-	case bson.TypeEmbeddedDocument:
-		walk(v.Document(), path+".", depth+1, f)
-	case bson.TypeArray:
-		vals, err := v.Array().Values()
-		if err != nil {
-			return
-		}
-		for _, x := range vals {
-			walkValue(path+"[]", x, depth+1, f)
-		}
+	for _, x := range vals {
+		walkValue(path+"[]", x, depth+1, f)
 	}
 }
 
