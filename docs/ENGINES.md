@@ -237,6 +237,25 @@ any named file. Rules are checked with dbscope's SQLite (3.54.1); the version
 an application links may accept fewer ALTER forms, which the version rule
 calls out.
 
+**Findings.** Introspection adds design risks from the catalog alone,
+without reading rows. `DBS-SQLITE-FK-NO-INDEX` (warn) is a foreign key no
+index can serve: an index counts when its leading columns are the key's
+columns in any order (the planner was seen using `(b, a)` for a key on
+`(a, b)`), with the parent key's collation, and it is not partial with a
+predicate other than `IS NOT NULL` on them; without one, each delete from
+the parent, or change to its key, scans the child when foreign keys are
+enforced. `DBS-SQLITE-FK-OFF` (info), once on the first table that declares
+foreign keys: SQLite enforces them only on connections that run
+`PRAGMA foreign_keys = ON`, off by default, and dbscope cannot see the
+application's connections. `DBS-SQLITE-NO-STATS` (info) is a table with
+indexes and no row in `sqlite_stat1` (`ANALYZE` writes none for a table that
+was empty when it ran, or created after it). `DBS-SQLITE-TYPE-AFFINITY`
+(warn) is a declared type whose affinity, under the rules of
+datatype3.html section 3.1, differs from what its name suggests: names that
+match two rules (`FLOATING POINT` is INTEGER), `STRING`, the binary names
+`BINARY`, `VARBINARY`, `BYTEA` and `BYTES` (all NUMERIC), and `ANY` outside
+a STRICT table. A check whose read fails is skipped.
+
 ### MySQL and MariaDB
 
 One profile engine, `mysql`, covers both; the server's `VERSION()` tells them
@@ -402,6 +421,22 @@ them without access to documents, and the view gives the
 `grantRolesToUser` command. On a replica set the counters are the member
 read (secondary preferred), marked as a replica. Verified on MongoDB 8.0.
 
+**Schema risks.** Introspection adds findings from each collection's
+sample, never for views. `DBS-MONGO-MIXED-TYPES` (warn) is a field holding
+more than one BSON type besides null, such as `int 75% | string 25%`; a mix
+of only numeric types is not reported, since MongoDB compares numbers as one
+type. `DBS-MONGO-RARE-FIELD` (info) is a field in under 5% of a sample of at
+least 100 documents, often a misspelling (fields under a rare parent and
+array element paths are left out). `DBS-MONGO-UNBOUNDED-ARRAY` (warn) is an
+array longer than 1,000 elements in some sampled document, with its median
+length. `DBS-MONGO-UNUSED-INDEX` (warn) is an index other than `_id_`,
+unique, TTL or hidden indexes, with no `$indexStats` access since its
+counters started at least a day ago; it reads the primary when there is one
+and names the member, since counters are per member and restart with
+mongod, and it needs the `indexStats` action, which the `read` role lacks
+(the check is then skipped). dbscope's own sampling of views counts as index
+use. The thresholds are dbscope's, not MongoDB limits. Verified on MongoDB 8.0.
+
 ### Redis and Valkey
 
 Research with sources: [research-redis.md](research-redis.md). Tested against
@@ -429,7 +464,7 @@ whole report and is refused GET and SET.
 ```
 ACL SETUSER dbscope on >PASSWORD resetkeys %R~* resetchannels -@all
   +ping +hello +info +dbsize +scan +type +pttl +strlen +llen +hlen +scard +zcard +xlen
-  +memory|usage +client|no-touch
+  +memory|usage +client|no-touch +slowlog|len
 ```
 
 The connection test checks write access with `ACL DRYRUN`, which only a user
@@ -449,6 +484,27 @@ allowed to run it can use; otherwise it says it could not check.
 
 Not yet: cluster mode (SCAN is per node), hot keys (LFU's OBJECT FREQ or Redis
 8.6's HOTKEYS), and SLOWLOG, which needs an admin grant.
+
+**Memory and big keys.** For each scanned key the report runs `MEMORY
+USAGE` with `SAMPLES 0`, which counts every element; collections of 10,000
+or more elements keep the default 5 samples, because counting every element
+is linear (a 1,000,000-field hash took 110 ms on Redis 7.4), and are marked
+approximate. Each pattern shows the bytes of its scanned keys and, after a
+partial scan, an estimate for the whole database: the scanned bytes divided
+by the share of keys scanned, which the report states. The report lists the
+10 largest scanned keys by memory and the 10 largest collections by element
+count, and never reads values. A user without `+memory|usage` still gets the
+scan, without sizes.
+
+**Health.** The Health tab reads one `INFO` and `SLOWLOG LEN`, and never
+changes settings or resets counters or the slow log: memory used against
+`maxmemory` (warn at 80%, danger at 95%; no limit is fine, with a note),
+evictions and writes refused with OOM explained for the eviction policy,
+connected clients against `maxclients` and connections refused at the
+limit, a replica's link to its primary (down is danger), failed RDB saves
+and AOF writes (either makes the server refuse writes), and the slow log's
+length. Without `+info` the checks name the missing grant. Verified on Redis
+7, Redis 8 and Valkey 8.
 
 ### DynamoDB
 
@@ -593,6 +649,26 @@ columns and truncates.
 Not yet: per-node health signals (`system_views` tombstones per read and
 partition sizes on Cassandra, `system.large_partitions` on ScyllaDB), and
 schema agreement across nodes.
+
+**Schema risks from node statistics.** Introspection also reads the
+answering node's statistics, so these findings describe that node only.
+`DBS-CQL-LARGE-PARTITION` (warn; danger from 1 GiB, dbscope's choice near
+ScyllaDB's 1000 MB default) comes from `system_views.max_partition_size` on
+Cassandra and `system.large_partitions` on ScyllaDB; both count only
+partitions already flushed to SSTables, and Cassandra rounds up to whole
+mebibytes. On Cassandra the warning level is `partition_size_warn_threshold`
+from `system_views.settings`, off by default in 5.0, so 100 MiB (4.1's
+default) is used; ScyllaDB records only partitions above
+`compaction_large_partition_warning_threshold_mb` (1000) or
+`compaction_rows_count_warning_threshold` (100000 rows). The partition key is
+row data and is not shown. `DBS-CQL-TOMBSTONES` (warn) comes from
+`system_views.tombstones_per_read` when recent reads scanned more than
+`tombstone_warn_threshold` (1000) tombstones; ScyllaDB exposes no such table
+over CQL. `DBS-CQL-TTL-NO-TWCS` (info) is a table with a default TTL not
+using TimeWindowCompactionStrategy. These checks need SELECT on
+`system_views` or `system.large_partitions`; without it, or after 5 seconds,
+they are skipped and the map still loads. Verified on Cassandra 5.0 and
+ScyllaDB 2025.1.
 
 ### Neo4j
 

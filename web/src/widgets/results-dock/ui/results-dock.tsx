@@ -51,8 +51,12 @@ export function ResultsDock() {
   // Graph databases always have the tab; PostgreSQL gets it once a result holds Apache AGE vertices.
   const resultGraph = useRunStore((s) => Boolean(s.output?.result?.graph));
   const graph = Boolean(profile?.capabilities.graph) || resultGraph;
-  // Key-value stores have no queries to show; their dock is the keyspace report.
-  const tabs = (keyspace ? TABS.filter((t) => t.value === "keyspace") : TABS.filter((t) => t.value !== "keyspace"))
+  // Key-value stores have no queries to show; their dock is the keyspace report and server health.
+  const tabs = (
+    keyspace
+      ? TABS.filter((t) => t.value === "keyspace" || t.value === "health")
+      : TABS.filter((t) => t.value !== "keyspace")
+  )
     .filter((t) => t.value !== "health" || health)
     .filter((t) => t.value !== "graph" || graph);
   const stored = useRunStore((s) => s.dockTab);

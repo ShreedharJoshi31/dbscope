@@ -1,7 +1,7 @@
 import { KeyRound, LoaderCircle } from "lucide-react";
 import { useActiveConnection } from "@/entities/connection";
 import { formatBytes, RatingBadge } from "@/entities/migration-finding";
-import { type KeyspaceReport, useKeyspace } from "@/shared/api";
+import { type KeyInfo, type KeyspaceReport, useKeyspace } from "@/shared/api";
 import { formatGrouped } from "@/shared/lib/format-number";
 import { EmptyState } from "@/shared/ui/empty-state";
 
@@ -82,12 +82,51 @@ function Patterns({ report }: { report: KeyspaceReport }) {
                 .join(", ")}
             </td>
             <td className="px-2 py-1 text-right font-mono tabular-nums">{formatGrouped(p.keys)}</td>
-            <td className="px-2 py-1 text-right font-mono tabular-nums">{formatBytes(p.bytes)}</td>
+            <td
+              className="px-2 py-1 text-right font-mono tabular-nums"
+              title={
+                report.memorySampled !== false && !report.complete
+                  ? `${formatBytes(p.bytes)} in the ${Math.round(100 * report.sampleFraction)}% of keys scanned`
+                  : undefined
+              }
+            >
+              {report.memorySampled === false
+                ? "not measured"
+                : !report.complete && p.estimatedBytes > 0
+                  ? `≈ ${formatBytes(p.estimatedBytes)}`
+                  : formatBytes(p.bytes)}
+            </td>
             <td className="px-2 py-1 text-right font-mono tabular-nums">
               {p.keys > 0 ? `${Math.round((100 * p.noTtl) / p.keys)}%` : ""}
             </td>
             <td className="truncate px-3 py-1 font-mono text-text-muted" title={p.largest?.name}>
               {p.largest ? `${p.largest.name} (${formatBytes(p.largest.bytes)})` : ""}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function LargestKeys({ title, keys, by }: { title: string; keys: KeyInfo[]; by: "memory" | "elements" }) {
+  if (keys.length === 0) return null;
+  return (
+    <table aria-label={title} className="w-full border-collapse text-xs">
+      <caption className="px-3 pt-3 pb-1 text-left text-2xs font-medium tracking-wide text-text-muted uppercase">
+        {title}
+      </caption>
+      <tbody>
+        {keys.map((k) => (
+          <tr key={k.name} className="border-t border-border-default">
+            <td className="truncate px-3 py-1 font-mono" title={k.name}>
+              {k.name}
+            </td>
+            <td className="px-2 py-1 text-text-muted">{k.type}</td>
+            <td className="px-2 py-1 text-right font-mono tabular-nums">
+              {by === "memory"
+                ? `${k.bytesApprox ? "≈ " : ""}${formatBytes(k.bytes)}`
+                : `${formatGrouped(k.elements)} ${k.type === "string" ? "bytes" : "elements"}`}
             </td>
           </tr>
         ))}
@@ -130,6 +169,8 @@ export function KeyspaceTab() {
       <Summary report={report.data} />
       <Findings report={report.data} />
       <Patterns report={report.data} />
+      <LargestKeys title="Largest keys by memory" keys={report.data.largestByMemory ?? []} by="memory" />
+      <LargestKeys title="Largest keys by elements" keys={report.data.largestByElements ?? []} by="elements" />
     </div>
   );
 }

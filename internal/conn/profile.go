@@ -80,7 +80,7 @@ func (e Engine) Capabilities() Capabilities {
 	case EngineMongoDB:
 		return Capabilities{Query: true, Migrations: true, Workload: true, Health: true}
 	case EngineRedis:
-		return Capabilities{Keyspace: true}
+		return Capabilities{Keyspace: true, Health: true}
 	case EngineSQLServer:
 		return Capabilities{Query: true, Workload: true, Health: true}
 	case EngineOracle:
