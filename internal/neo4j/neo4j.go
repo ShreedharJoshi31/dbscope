@@ -258,6 +258,9 @@ func Introspect(ctx context.Context, c *Client) (*schema.Model, error) {
 		return nil, err
 	}
 	for _, l := range labels {
+		c.addFindings(ctx, byLabel[l])
+	}
+	for _, l := range labels {
 		m.Relations = append(m.Relations, *byLabel[l])
 	}
 	m.ServerVersion = versionNum(srv.Version)

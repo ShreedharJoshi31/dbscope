@@ -594,6 +594,28 @@ suffix, details and estimated rows) and flags:
 Results render nodes and relationships as JSON with their labels or type,
 paths as their nodes and relationships, and temporal values as text.
 
+**Graph view.** A result that holds nodes, relationships or paths (also
+inside lists and maps) opens on the dock's Graph tab, drawn with a force
+layout: each element once by its element id, at most 500 nodes and 1,000
+relationships, and only from the rows returned. A relationship whose end
+nodes the query did not return keeps them as dashed placeholders.
+Double-clicking a node, or its details panel's button, expands it:
+`POST /api/profiles/{id}/graph/expand` runs fixed, parameterised Cypher
+(no user text) in a rolled-back read transaction under the profile's
+timeout, and returns the node's degree (`COUNT { (n)--() }`) and up to 50
+of its relationships with their other ends (200 at most per request), so a
+supernode with millions of relationships is shown as "50 of 2,345,678".
+Nodes already drawn stay where they are; new ones are placed around the
+node expanded.
+
+**Findings** on the map:
+
+| Rule | Level | When |
+|---|---|---|
+| `DBS-NEO4J-SUPERNODE` | warn from 1,000 relationships on one node, danger from 100,000 | the highest degree among the label's first 1,000 nodes (a sample, read under a 5-second timeout and skipped if it runs out; a supernode outside the sample is missed) |
+| `DBS-NEO4J-MIXED-TYPES` | warn | a property stored with more than one type across the label's nodes (exact, from `db.schema.nodeTypeProperties`) |
+| `DBS-NEO4J-NO-INDEX` | warn | 10,000 or more nodes with no index or constraint at all |
+
 Not yet: risks of schema-changing Cypher (constraint creation on existing
 duplicates, index population), and relationship types between labels the
 count store does not connect.
