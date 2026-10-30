@@ -512,6 +512,7 @@ func (a *ddlAnalysis) alter(out *migrate.Statement, add func(string, score.Ratin
 		b := tbl.Bytes
 		out.SizeBytes = &b
 	}
+	out.Estimate = ddlEstimate(plan, out.Work, tbl, kinds)
 	a.sizeRules(out, add, plan, display, tbl, strings.Join(whats, ", "))
 	a.mdl(out, add, wait)
 }

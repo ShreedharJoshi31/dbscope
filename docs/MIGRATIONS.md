@@ -172,3 +172,18 @@ SHOW TRANSACTIONS, naming transactions that hold locks and whose current query n
 large write uses; this is a heuristic, because Neo4j does not list the locks themselves, and transactions holding
 locks between queries are listed only in a warning. dbscope's own sessions are left out, every read is bounded, and a
 read that fails becomes a warning. It is a snapshot: a blocker can finish before the deploy, or a new one start.
+
+## Duration estimates
+
+For statements that rewrite a table, build an index, scan a table to validate a constraint, run a ClickHouse
+mutation or build a MongoDB index, the review shows a duration range (`Statement.Estimate`) instead of a size alone.
+The range divides the bytes the statement processes by a throughput range for that kind of work. The bytes come from
+the base: heap and indexes for a PostgreSQL rewrite, the heap for a scan or index build, data plus index length on
+MySQL and MariaDB, dbstat pages on SQLite, compressed bytes on ClickHouse, and the data size on MongoDB. The throughput
+was measured by running each statement on test servers at three table sizes on a laptop-class machine (Apple M2,
+internal SSD): the slow end is the slowest measurement divided by five (ten for PostgreSQL scans, which read cached
+pages), the fast end the fastest multiplied by four, and a fixed allowance is added where small statements showed one,
+such as a ClickHouse mutation's scheduling. The basis text names the size and rates used. Production disks, CPUs,
+caches and load differ, so read the range as telling a statement that needs a maintenance window from one that does
+not, not as a schedule. Work whose cost depends on a query or on data dbscope cannot see (UPDATE with a WHERE,
+VACUUM, CLUSTER, materialized views, full-text indexes) gets no estimate, and neither does a table of unknown size.

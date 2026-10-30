@@ -209,6 +209,7 @@ func analyzeStatement(st *apply.State, tm *timeouts.Machine, b *Base, f ingest.F
 	switch {
 	case known && w > 0:
 		r.SizeBytes = &bytes
+		r.Estimate = pgEstimate(eff, bytes, major)
 	case largest >= 0:
 		r.SizeBytes = &largest
 	}

@@ -302,6 +302,9 @@ func (a *chAnalysis) statement(file string, p piece) (out migrate.Statement) {
 		if contains(w, "final") {
 			add("DBS-CH-OPTIMIZE-FINAL", score.Max(score.Medium, a.tier(tableBytes(tbl), tbl != nil)), fmt.Sprintf("OPTIMIZE ... FINAL merges every partition of %s (%s) into one part each, "+
 				"reading and writing all of it", display, sizeText(tableBytes(tbl), tbl != nil)), "Let background merges do it, or OPTIMIZE one PARTITION at a time")
+			if tbl != nil && !contains(w, "partition") {
+				addEstimate(&out, "DBS-CH-OPTIMIZE-FINAL", tbl.Bytes)
+			}
 		}
 	case at(0) == "create":
 		i := 1
@@ -376,6 +379,9 @@ func (a *chAnalysis) clause(out *migrate.Statement, add func(string, score.Ratin
 	rewrite := func(id, what string, bytes uint64, known bool, alt string) {
 		out.Work = "rewrite"
 		add(id, a.tier(bytes, known), fmt.Sprintf("%s: a mutation rewrites it in every part of %s (%s to rewrite)", what, display, sizeText(bytes, known)), alt)
+		if known {
+			addEstimate(out, id, bytes)
+		}
 	}
 	switch {
 	case at(0) == "add" && at(1) == "column":
@@ -426,7 +432,9 @@ func (a *chAnalysis) clause(out *migrate.Statement, add func(string, score.Ratin
 				"Add a new column, backfill it, and rebuild the table with the new key")
 			return false
 		}
-		rewrite("DBS-CH-COLUMN-REWRITE", "MODIFY COLUMN "+name+" "+typ+" converts the column", col.Bytes, known, "Run it when the table is quiet, with disk space for a second copy of the column while parts are rewritten")
+		// Compact parts (small tables) record no per-column sizes: 0 bytes on a non-empty table means unknown.
+		sized := known && (col.Bytes > 0 || tableBytes(tbl) == 0)
+		rewrite("DBS-CH-COLUMN-REWRITE", "MODIFY COLUMN "+name+" "+typ+" converts the column", col.Bytes, sized, "Run it when the table is quiet, with disk space for a second copy of the column while parts are rewritten")
 		return true
 	case at(0) == "modify" && at(1) == "order" && at(2) == "by":
 		add("DBS-CH-ORDER-BY", score.Medium, "MODIFY ORDER BY may only append columns added in the same ALTER; any existing column in the new expressions makes it fail", "")

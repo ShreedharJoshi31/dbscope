@@ -143,3 +143,18 @@ func TestAnalyzeSkipsDownFiles(t *testing.T) {
 		t.Fatalf("statements %+v", rep.Statements)
 	}
 }
+
+// Compact parts record 0 bytes per column; that is an unknown size, not an empty column.
+func TestColumnRewriteCompactParts(t *testing.T) {
+	base := &Base{Database: "app", Tables: map[string]*TableInfo{"app.events": {Engine: "MergeTree", Rows: 1000, Bytes: 5 << 20,
+		Columns: map[string]ColumnInfo{"n": {Type: "UInt32"}}}}}
+	rep := Analyze(base, []ingest.Input{{Name: "1.sql", SQL: "ALTER TABLE events MODIFY COLUMN n UInt64;"}})
+	for _, f := range rep.Statements[0].Findings {
+		if f.RuleID == "DBS-CH-COLUMN-REWRITE" && strings.Contains(f.Message, "0 bytes") {
+			t.Fatalf("claims an empty column: %s", f.Message)
+		}
+	}
+	if !hasRule(rep.Statements[0], "DBS-CH-COLUMN-REWRITE") {
+		t.Fatalf("no rewrite finding: %+v", rep.Statements[0].Findings)
+	}
+}

@@ -254,6 +254,9 @@ func (a *mongoAnalysis) createIndex(out *migrate.Statement, add func(string, sco
 		}
 	}
 	out.Work = "index_build"
+	if out.Estimate == nil {
+		out.Estimate = indexEstimate(info)
+	}
 	add("DBS-MONGO-INDEX-BUILD", a.tier(info), fmt.Sprintf("Building %s reads all of %s (%s, %s); reads and writes continue except at its start and end",
 		name, coll, docsText(info), sizeText(info)), "Build it at a quiet time; on a replica set every member builds at once")
 	if unique && info != nil && info.Count > 0 {

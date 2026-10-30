@@ -28,6 +28,10 @@ type Base struct {
 	DDL []string
 	// Rows is a row count or estimate per table; a missing table is unknown.
 	Rows map[string]int64
+	// Bytes is the pages of each table and its indexes; a missing table is unknown.
+	Bytes map[string]int64
+	// Warnings are reads ReadBase skipped.
+	Warnings []string
 	// Source is "live" for a database file and "dump" for a schema script.
 	Source string
 }
@@ -78,7 +82,38 @@ func ReadBase(ctx context.Context, db *sql.DB) (*Base, error) {
 			}
 		}
 	}
+	if err := readBytes(ctx, db, b); err != nil {
+		b.Warnings = append(b.Warnings, fmt.Sprintf("table sizes in bytes could not be read (%v), so durations are not estimated", err))
+	}
 	return b, nil
+}
+
+// readBytes sums dbstat's pages per table, its indexes included, within
+// countBudget: dbstat walks every page of the file.
+func readBytes(ctx context.Context, db *sql.DB, b *Base) error {
+	ctx, cancel := context.WithTimeout(ctx, countBudget)
+	defer cancel()
+	rows, err := db.QueryContext(ctx, `SELECT s.tbl_name, sum(d.pgsize) FROM dbstat d
+		JOIN sqlite_schema s ON s.name = d.name AND s.type IN ('table', 'index')
+		WHERE d.aggregate = TRUE GROUP BY s.tbl_name`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	bytes := map[string]int64{}
+	for rows.Next() {
+		var name string
+		var n int64
+		if err := rows.Scan(&name, &n); err != nil {
+			return err
+		}
+		bytes[name] = n
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	b.Bytes = bytes
+	return nil
 }
 
 // BaseFromDump takes a schema script, such as the sqlite3 shell's .schema
@@ -140,6 +175,7 @@ func Analyze(ctx context.Context, base *Base, files []ingest.Input) (*migrate.Re
 		rep.PGVersion = n
 		rep.Warnings = append(rep.Warnings, fmt.Sprintf("checked with SQLite %s; the version your application links decides which ALTER forms it accepts", v))
 	}
+	rep.Warnings = append(rep.Warnings, base.Warnings...)
 	if len(base.Rows) == 0 {
 		rep.Warnings = append(rep.Warnings, "table sizes are unknown, so the cost of rewrites and index builds is not rated by size")
 	}
@@ -357,6 +393,11 @@ func (a *analysis) check(st *statement) migrate.Statement {
 	}
 	if out.Work != "none" && st.kind != "VACUUM" && existed {
 		a.sizeRule(st, &out, rows, sized, add)
+		if b, ok := a.baseName(st.table); ok {
+			if n, ok := a.base.Bytes[b]; ok {
+				out.Estimate = sqliteEstimate(st, out.Work, n)
+			}
+		}
 	}
 	for _, f := range out.Findings {
 		out.Rating = score.Max(out.Rating, f.Rating)
