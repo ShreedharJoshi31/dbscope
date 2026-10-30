@@ -5,10 +5,12 @@
 package migrate
 
 import (
+	"slices"
+	"time"
+
 	"github.com/dbscope/dbscope/internal/migrate/apply"
 	"github.com/dbscope/dbscope/internal/migrate/impact"
 	"github.com/dbscope/dbscope/internal/migrate/score"
-	"slices"
 )
 
 // Rating re-exports score.Rating.
@@ -30,6 +32,60 @@ type Report struct {
 	Warnings []string `json:"warnings"`
 	// Base says where the base schema came from: live, stats, dump or sample.
 	Base string `json:"base"`
+	// Blockers are sessions that, when the report was made, held or waited
+	// for locks the migration needs; BlockersAt is when they were read.
+	Blockers   []Blocker  `json:"blockers,omitempty"`
+	BlockersAt *time.Time `json:"blockersAt,omitempty"`
+	// Pending says which files the migration tool's history shows applied.
+	Pending *Pending `json:"pending,omitempty"`
+	// Usages are lines of the profile's project folder that name what the
+	// migration drops or renames.
+	Usages []Usage `json:"usages,omitempty"`
+}
+
+// Blocker is an open session holding or waiting for a lock on a relation the migration locks.
+type Blocker struct {
+	Relation string `json:"relation"`
+	// Session is the server's id for it: a backend pid, a connection id or an operation id.
+	Session    string  `json:"session"`
+	User       string  `json:"user,omitempty"`
+	State      string  `json:"state"`
+	AgeSeconds float64 `json:"ageSeconds"` // how long its transaction or operation has been open
+	Query      string  `json:"query,omitempty"`
+	Lock       string  `json:"lock,omitempty"`
+}
+
+// Pending is what a migration tool's history table recorded as applied.
+type Pending struct {
+	Tool  string `json:"tool"`
+	Table string `json:"table"`
+	// Applied are files left out of the analysis because the history has them.
+	Applied []string `json:"applied"`
+	// Changed are applied files whose checksum no longer matches the history; they are analyzed again.
+	Changed []string `json:"changed"`
+}
+
+// Usage is a line of application code naming a table or column the migration drops or renames.
+type Usage struct {
+	Name string `json:"name"`
+	File string `json:"file"` // relative to the project folder
+	Line int    `json:"line"`
+	Text string `json:"text"`
+}
+
+// Rewrite is a safer form of a statement that dbscope can write itself.
+type Rewrite struct {
+	SQL string `json:"sql"`
+	// Note says what changed and what the new form needs, such as running outside a transaction.
+	Note string `json:"note"`
+}
+
+// Estimate is how long a statement's work may take on this server.
+type Estimate struct {
+	LowSeconds  float64 `json:"lowSeconds"`
+	HighSeconds float64 `json:"highSeconds"`
+	// Basis says what the estimate rests on (sizes, measured rates) so it can be judged.
+	Basis string `json:"basis"`
 }
 
 // Statement is one analyzed statement.
@@ -51,6 +107,10 @@ type Statement struct {
 	// Relations are the tables, collections, indices or labels the statement
 	// acts on, for engines whose statements take no table lock to name them.
 	Relations []string `json:"relations,omitempty"`
+	// Rewrite is a safer form of the statement, when one can be written mechanically.
+	Rewrite *Rewrite `json:"rewrite,omitempty"`
+	// Estimate is how long its work may take, when the engine can tell.
+	Estimate *Estimate `json:"estimate,omitempty"`
 }
 
 // Touch records a relation the statement acts on, once.
