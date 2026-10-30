@@ -8,6 +8,7 @@ import (
 	"math"
 	"net"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -154,6 +155,11 @@ type Profile struct {
 	HasPassword bool     `json:"hasPassword"`
 	// SSH, when set, reaches the server through an SSH tunnel.
 	SSH *SSHTunnel `json:"ssh,omitempty"`
+	// MigrationsDir and ProjectDir are local folders the agent reads (never
+	// writes): the migration files, and the application code that uses the
+	// database. Both are optional absolute paths.
+	MigrationsDir string `json:"migrationsDir,omitempty"`
+	ProjectDir    string `json:"projectDir,omitempty"`
 	// Origin is the server's own address while Host and Port point at the
 	// local end of its SSH tunnel; it is never stored or sent.
 	Origin *Address `json:"-"`
@@ -187,6 +193,8 @@ type ProfileInput struct {
 	SSH                *SSHTunnel  `json:"ssh"`
 	// SSHPassphrase is the SSH key file's passphrase; like Password, omitted keeps the stored one.
 	SSHPassphrase *string `json:"sshPassphrase"`
+	MigrationsDir string  `json:"migrationsDir"`
+	ProjectDir    string  `json:"projectDir"`
 }
 
 // SSHTunnel is the SSH server (a bastion) a profile's database is reached
@@ -316,7 +324,38 @@ func (in ProfileInput) Profile() (Profile, error) {
 	if err := p.sshTunnel(in); err != nil {
 		return Profile{}, err
 	}
+	var err error
+	if p.MigrationsDir, err = folder(in.MigrationsDir, "migrations folder"); err != nil {
+		return Profile{}, err
+	}
+	if p.ProjectDir, err = folder(in.ProjectDir, "project folder"); err != nil {
+		return Profile{}, err
+	}
 	return p, nil
+}
+
+// folder checks an optional local folder: absolute (or under ~/) and an
+// existing directory, returned cleaned and with ~ expanded.
+func folder(path, what string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", nil
+	}
+	if rest, ok := strings.CutPrefix(path, "~/"); ok {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", invalid("the %s starts with ~/ but the home folder is unknown: %v", what, err)
+		}
+		path = filepath.Join(home, rest)
+	}
+	if !filepath.IsAbs(path) {
+		return "", invalid("the %s must be an absolute path, such as /Users/you/code/app", what)
+	}
+	path = filepath.Clean(path)
+	if st, err := os.Stat(path); err != nil || !st.IsDir() {
+		return "", invalid("the %s %s is not a folder on this computer", what, path)
+	}
+	return path, nil
 }
 
 // sshTunnel validates the SSH tunnel. A tunnel reaches one server, so

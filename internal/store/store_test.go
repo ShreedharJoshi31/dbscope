@@ -52,7 +52,7 @@ func TestOpenCreatesPrivateDirAndIsIdempotent(t *testing.T) {
 	}
 	defer s2.Close()
 	var n int
-	if err := s2.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&n); err != nil || n != 8 {
+	if err := s2.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&n); err != nil || n != 9 {
 		t.Fatalf("schema_migrations rows = %d, err %v", n, err)
 	}
 	ps, err := s2.ListProfiles(context.Background())
@@ -111,12 +111,16 @@ func TestProfileCRUD(t *testing.T) {
 		t.Fatalf("a profile without a tunnel read back with one: %+v", again.SSH)
 	}
 	again.SSH = &conn.SSHTunnel{Host: "bastion", Port: 2222, User: "ops", KeyFile: "/k", HasPassphrase: true}
+	again.MigrationsDir, again.ProjectDir = "/code/app/db/migrate", "/code/app"
 	if _, err := s.UpdateProfile(ctx, again); err != nil {
 		t.Fatal(err)
 	}
 	tunnelled, _ := s.GetProfile(ctx, b.ID)
 	if tunnelled.SSH == nil || *tunnelled.SSH != *again.SSH {
 		t.Fatalf("tunnel not persisted: %+v", tunnelled.SSH)
+	}
+	if tunnelled.MigrationsDir != "/code/app/db/migrate" || tunnelled.ProjectDir != "/code/app" {
+		t.Fatalf("folders not persisted: %q %q", tunnelled.MigrationsDir, tunnelled.ProjectDir)
 	}
 
 	if err := s.DeleteProfile(ctx, b.ID); err != nil {

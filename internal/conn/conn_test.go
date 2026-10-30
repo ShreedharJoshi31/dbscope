@@ -328,3 +328,28 @@ func TestSSLDisableWarning(t *testing.T) {
 		t.Fatalf("loopback should not warn: %v", res.Warnings)
 	}
 }
+
+func TestProfileFolders(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "f.sql")
+	if err := os.WriteFile(file, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	in := validInput()
+	in.MigrationsDir, in.ProjectDir = dir+"/./", " "+dir+" "
+	p, err := in.Profile()
+	if err != nil || p.MigrationsDir != dir || p.ProjectDir != dir {
+		t.Fatalf("%q %q %v", p.MigrationsDir, p.ProjectDir, err)
+	}
+	for _, bad := range []string{"relative/path", file, filepath.Join(dir, "missing")} {
+		in.ProjectDir = bad
+		if _, err := in.Profile(); err == nil || !strings.Contains(err.Error(), "project folder") {
+			t.Errorf("%q: %v", bad, err)
+		}
+	}
+	home, _ := os.UserHomeDir()
+	in.ProjectDir = "~/"
+	if p, err := in.Profile(); err != nil || p.ProjectDir != filepath.Clean(home) {
+		t.Errorf("~/: %q %v", p.ProjectDir, err)
+	}
+}
