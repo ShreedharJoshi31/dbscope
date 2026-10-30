@@ -11,6 +11,7 @@ import (
 	"github.com/dbscope/dbscope/internal/conn"
 	"github.com/dbscope/dbscope/internal/mytest"
 	"github.com/dbscope/dbscope/internal/neo4j"
+	"github.com/dbscope/dbscope/internal/query/exec"
 	"github.com/dbscope/dbscope/internal/schema"
 )
 
@@ -58,6 +59,22 @@ func TestNeo4jProfile(t *testing.T) {
 	if !strings.Contains(w.Body.String(), `"a@x"`) {
 		t.Errorf("query %s", w.Body.String())
 	}
+	w = e.do("POST", "/api/profiles/"+p.ID+"/query", `{"sql":"MATCH (u:User) RETURN u"}`)
+	expect(t, w, 200, "")
+	res := decodeBody[exec.Result](t, w)
+	if res.Graph == nil || len(res.Graph.Nodes) != 1 || res.Graph.Nodes[0].Labels[0] != "User" {
+		t.Fatalf("graph %s", w.Body.String())
+	}
+	user := res.Graph.Nodes[0].ID
+	w = e.do("POST", "/api/profiles/"+p.ID+"/graph/expand", mustJSON(map[string]any{"nodeId": user}))
+	expect(t, w, 200, "")
+	x := decodeBody[neo4j.Expansion](t, w)
+	if x.Degree != 1 || x.Shown != 1 || len(x.Graph.Nodes) != 2 || x.Graph.Relationships[0].Type != "OWNS" || x.Graph.Relationships[0].Start != user {
+		t.Errorf("expand %s", w.Body.String())
+	}
+	expect(t, e.do("POST", "/api/profiles/"+p.ID+"/graph/expand", mustJSON(map[string]any{"nodeId": user, "limit": 201})), 400, "validation")
+	missing := user[:strings.LastIndexByte(user, ':')+1] + "99999999"
+	expect(t, e.do("POST", "/api/profiles/"+p.ID+"/graph/expand", mustJSON(map[string]any{"nodeId": missing})), 404, "not_found")
 	expect(t, e.do("POST", "/api/profiles/"+p.ID+"/query", `{"sql":"MATCH (n) DETACH DELETE n"}`), 422, "rejected")
 	expect(t, e.do("POST", "/api/profiles/"+p.ID+"/query", `{"sql":"CALL db.createLabel('X')"}`), 422, "rejected")
 	expect(t, e.do("POST", "/api/profiles/"+p.ID+"/query", `{"sql":"MATCH (n RETURN n"}`), 400, "database")

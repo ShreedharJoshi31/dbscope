@@ -23,7 +23,14 @@ export interface StubProfile {
     | "sqlserver"
     | "oracle";
   path?: string;
-  capabilities: { query: boolean; ask: boolean; migrations: boolean; workload: boolean };
+  capabilities: {
+    query: boolean;
+    ask: boolean;
+    migrations: boolean;
+    workload: boolean;
+    health?: boolean;
+    graph?: boolean;
+  };
   host: string;
   port: number;
   database: string;

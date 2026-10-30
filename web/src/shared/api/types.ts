@@ -27,6 +27,8 @@ export interface Capabilities {
   keyspace?: boolean;
   /** Server health checks (docs/HEALTH.md). */
   health?: boolean;
+  /** Exploring a graph database's nodes by their neighbours. */
+  graph?: boolean;
 }
 
 export interface Profile {

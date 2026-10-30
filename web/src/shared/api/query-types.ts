@@ -101,6 +101,39 @@ export interface QueryResult {
   plan: PlanNode;
   overlay: Overlay;
   warnings: string[];
+  /** The nodes and relationships of a graph database's result, joined by id. */
+  graph?: ResultGraph;
+}
+
+/** Mirrors internal/query/exec.Graph. Property values are the same JSON as result cells. */
+export interface ResultGraph {
+  nodes: GraphNode[];
+  relationships: GraphRelationship[];
+  /** More came back than is drawn (500 nodes, 1,000 relationships). */
+  truncated: boolean;
+}
+
+export interface GraphNode {
+  id: string;
+  labels: string[];
+  props: Record<string, CellValue>;
+  /** A relationship's end the result did not return: only its id is known. */
+  stub?: boolean;
+}
+
+export interface GraphRelationship {
+  id: string;
+  type: string;
+  start: string;
+  end: string;
+  props: Record<string, CellValue>;
+}
+
+/** POST /graph/expand: a node, its degree, and the neighbours drawn. */
+export interface GraphExpansion {
+  graph: ResultGraph;
+  degree: number;
+  shown: number;
 }
 
 export interface ExplainResult {

@@ -10,6 +10,7 @@ import (
 	"github.com/dbscope/dbscope/internal/health"
 	"github.com/dbscope/dbscope/internal/introspect"
 	"github.com/dbscope/dbscope/internal/migrate"
+	"github.com/dbscope/dbscope/internal/neo4j"
 	"github.com/dbscope/dbscope/internal/query/exec"
 	"github.com/dbscope/dbscope/internal/schema"
 	"github.com/dbscope/dbscope/internal/workload"
@@ -99,6 +100,24 @@ func (e engineSource) Health(ctx context.Context, p conn.Profile, password strin
 		return nil, errUnsupported
 	}
 	return hs.Health(ctx, p, password)
+}
+
+// graphSource is a source that expands graph nodes by their neighbours.
+type graphSource interface {
+	Expand(ctx context.Context, p conn.Profile, password, nodeID string, limit int) (*neo4j.Expansion, error)
+}
+
+// Expand reads a node's neighbours, when the profile's engine is a graph database.
+func (e engineSource) Expand(ctx context.Context, p conn.Profile, password, nodeID string, limit int) (*neo4j.Expansion, error) {
+	src, err := e.of(p)
+	if err != nil {
+		return nil, err
+	}
+	gs, ok := src.(graphSource)
+	if !ok {
+		return nil, errUnsupported
+	}
+	return gs.Expand(ctx, p, password, nodeID, limit)
 }
 
 func supports(w http.ResponseWriter, p conn.Profile, has bool, mode string) bool {

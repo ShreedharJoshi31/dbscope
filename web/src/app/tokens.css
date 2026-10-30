@@ -48,6 +48,14 @@
   --status-info-emphasis: light-dark(#0969da, #1f6feb);
   --status-info-subtle: light-dark(#ddf4ff, #121d2f);
 
+  /* Graph labels: categorical, one per node label in a drawn graph (fg contrast as status colours) */
+  --graph-1: light-dark(#0969da, #58a6ff);
+  --graph-2: light-dark(#1a7f37, #3fb950);
+  --graph-3: light-dark(#bc4c00, #db6d28);
+  --graph-4: light-dark(#8250df, #a371f7);
+  --graph-5: light-dark(#bf3989, #db61a2);
+  --graph-6: light-dark(#0f766e, #2dd4bf);
+
   /* Environments */
   --env-local-fg: light-dark(#0f766e, #2dd4bf);
   --env-staging-fg: light-dark(#bc4c00, #db6d28);

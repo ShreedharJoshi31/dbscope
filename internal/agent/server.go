@@ -123,6 +123,7 @@ func New(cfg Config) (*Agent, error) {
 	mux.HandleFunc("GET /api/profiles/{id}/workload", s.workload)
 	mux.HandleFunc("GET /api/profiles/{id}/keyspace", s.keyspace)
 	mux.HandleFunc("GET /api/profiles/{id}/health", s.serverHealth)
+	mux.HandleFunc("POST /api/profiles/{id}/graph/expand", s.expandNode)
 	mux.HandleFunc("GET /api/profiles/{id}/shared", s.exportShared)
 	mux.HandleFunc("POST /api/profiles/{id}/shared/preview", s.previewShared)
 	mux.HandleFunc("POST /api/profiles/{id}/shared/import", s.importShared)

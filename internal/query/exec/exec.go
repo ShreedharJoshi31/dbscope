@@ -61,6 +61,32 @@ type Result struct {
 	Plan        *plan.Node          `json:"plan"`
 	Overlay     plan.Overlay        `json:"overlay"`
 	Warnings    []string            `json:"warnings"`
+	// Graph holds the nodes and relationships of a graph query's result, for drawing.
+	Graph *Graph `json:"graph,omitempty"`
+}
+
+// Graph is the nodes and relationships a graph query returned, joined by id.
+type Graph struct {
+	Nodes         []GraphNode         `json:"nodes"`
+	Relationships []GraphRelationship `json:"relationships"`
+	// Truncated means the result held more than the drawing limits.
+	Truncated bool `json:"truncated"`
+}
+
+type GraphNode struct {
+	ID     string                     `json:"id"`
+	Labels []string                   `json:"labels"`
+	Props  map[string]json.RawMessage `json:"props"`
+	// Stub is a relationship's end the result did not return; only its id is known.
+	Stub bool `json:"stub,omitempty"`
+}
+
+type GraphRelationship struct {
+	ID    string                     `json:"id"`
+	Type  string                     `json:"type"`
+	Start string                     `json:"start"`
+	End   string                     `json:"end"`
+	Props map[string]json.RawMessage `json:"props"`
 }
 
 // ErrConnect marks failures to get a connection or begin the transaction.

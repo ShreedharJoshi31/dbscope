@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { ApiError, Overlay, PlanNode, QueryResult } from "@/shared/api";
 
-export type DockTab = "results" | "messages" | "plan" | "risk" | "schema" | "drift" | "keyspace" | "health";
+export type DockTab = "results" | "graph" | "messages" | "plan" | "risk" | "schema" | "drift" | "keyspace" | "health";
 export type RunKind = "query" | "explain";
 export type RunSource = "editor" | "assistant";
 
@@ -104,7 +104,8 @@ export const useRunStore = create<RunState>((set, get) => ({
       running: null,
       output,
       messages: withMessages(s.messages, added),
-      dockTab: meta.kind === "explain" ? "plan" : "results",
+      // A result with nodes reads best drawn; the table stays one tab away.
+      dockTab: meta.kind === "explain" ? "plan" : result?.graph ? "graph" : "results",
       revision: s.revision + 1,
       last: { durationMs: result?.durationMs ?? 0, rowCount: result?.rowCount ?? null, kind: meta.kind },
     }));

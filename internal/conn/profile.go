@@ -57,6 +57,8 @@ type Capabilities struct {
 	Keyspace bool `json:"keyspace"`
 	// Health is the server health checks (docs/HEALTH.md).
 	Health bool `json:"health"`
+	// Graph is exploring a graph database's nodes by their neighbours.
+	Graph bool `json:"graph"`
 }
 
 func (e Engine) Capabilities() Capabilities {
@@ -80,7 +82,7 @@ func (e Engine) Capabilities() Capabilities {
 	case EngineSQLServer, EngineOracle:
 		return Capabilities{Query: true, Health: true}
 	case EngineNeo4j:
-		return Capabilities{Query: true, Health: true}
+		return Capabilities{Query: true, Health: true, Graph: true}
 	case EngineDynamoDB:
 		return Capabilities{Query: true}
 	}

@@ -181,11 +181,15 @@ func Run(ctx context.Context, c *Client, stmt string, maxRows int, explainOnly b
 	for _, k := range keys {
 		res.Columns = append(res.Columns, exec.Column{Name: k})
 	}
+	g := newGraphBuilder()
 	for len(res.Rows) <= maxRows && r.Next(ctx) {
 		rec := r.Record()
 		row := make([]json.RawMessage, len(rec.Values))
 		for i, v := range rec.Values {
 			row[i] = cell(v)
+			if len(res.Rows) < maxRows {
+				g.add(v)
+			}
 		}
 		res.Rows = append(res.Rows, row)
 	}
@@ -196,6 +200,7 @@ func Run(ctx context.Context, c *Client, stmt string, maxRows int, explainOnly b
 		res.Rows, res.Truncated = res.Rows[:maxRows], true
 	}
 	res.RowCount = len(res.Rows)
+	res.Graph = g.graph()
 	res.DurationMs = float64(time.Since(start).Microseconds()) / 1000
 	return res, nil
 }

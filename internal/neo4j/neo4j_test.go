@@ -188,6 +188,67 @@ func testServer(t *testing.T, name string) {
 			t.Error("syntax error ran")
 		}
 	})
+	testGraph(t, ctx, c)
+}
+
+func testGraph(t *testing.T, ctx context.Context, c *Client) {
+	t.Run("graph result", func(t *testing.T) {
+		r, err := Run(ctx, c, "MATCH p = (:Person {age: 1})-[:KNOWS*3]->(:Person) RETURN p", 10, false, 10*time.Second)
+		if err != nil || r.Graph == nil || len(r.Graph.Nodes) != 4 || len(r.Graph.Relationships) != 3 || r.Graph.Truncated {
+			t.Fatalf("path graph %+v %v", r.Graph, err)
+		}
+		ids := map[string]bool{}
+		for _, n := range r.Graph.Nodes {
+			ids[n.ID] = true
+			if n.Stub || n.Labels[0] != "Person" || n.Props["email"] == nil {
+				t.Errorf("node %+v", n)
+			}
+		}
+		for _, rel := range r.Graph.Relationships {
+			if rel.Type != "KNOWS" || !ids[rel.Start] || !ids[rel.End] {
+				t.Errorf("relationship %+v", rel)
+			}
+		}
+		// Relationships alone bring their ends as stubs.
+		r, err = Run(ctx, c, "MATCH (:Person {age: 5})-[w:WORKS_AT]->() RETURN w", 10, false, 10*time.Second)
+		if err != nil || r.Graph == nil || len(r.Graph.Relationships) != 1 || len(r.Graph.Nodes) != 2 || !r.Graph.Nodes[0].Stub ||
+			string(r.Graph.Relationships[0].Props["since"]) != "2020" {
+			t.Errorf("relationship graph %+v %v", r.Graph, err)
+		}
+		if r, err := Run(ctx, c, "MATCH (p:Person) RETURN p.name LIMIT 3", 10, false, 10*time.Second); err != nil || r.Graph != nil {
+			t.Errorf("scalar result drew a graph: %+v %v", r, err)
+		}
+		// Only the rows returned are drawn.
+		if r, err := Run(ctx, c, "MATCH (p:Person) RETURN p", 7, false, 10*time.Second); err != nil || len(r.Graph.Nodes) != 7 {
+			t.Errorf("row limit %+v %v", r, err)
+		}
+	})
+
+	t.Run("expand", func(t *testing.T) {
+		recs, _, err := c.read(ctx, 10*time.Second, "MATCH (p:Person {age: 2}) RETURN elementId(p)", nil)
+		if err != nil || len(recs) != 1 {
+			t.Fatal(err)
+		}
+		id := recs[0].Values[0].(string)
+		// age 2 KNOWS 3, is known by 1, and works at C2.
+		x, err := Expand(ctx, c, id, 1, 10*time.Second)
+		if err != nil || x.Degree != 3 || x.Shown != 1 || len(x.Graph.Nodes) != 2 {
+			t.Fatalf("expand 1 %+v %v", x, err)
+		}
+		x, err = Expand(ctx, c, id, 10, 10*time.Second)
+		if err != nil || x.Degree != 3 || x.Shown != 3 || len(x.Graph.Nodes) != 4 || x.Graph.Nodes[0].ID != id {
+			t.Fatalf("expand 10 %+v %v", x, err)
+		}
+		for _, n := range x.Graph.Nodes {
+			if n.Stub {
+				t.Errorf("stub in expansion %+v", n)
+			}
+		}
+		missing := id[:strings.LastIndexByte(id, ':')+1] + "99999999"
+		if _, err := Expand(ctx, c, missing, 10, 10*time.Second); !errors.Is(err, ErrNoNode) {
+			t.Errorf("missing node: %v", err)
+		}
+	})
 }
 
 func sessionConfig(db string) drv.SessionConfig { return drv.SessionConfig{DatabaseName: db} }
