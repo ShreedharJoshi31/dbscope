@@ -73,7 +73,8 @@ described in [WORKLOAD.md](WORKLOAD.md).
 Overrides: statements that will fail (CONCURRENTLY in a transaction, ADD … NOT NULL without default
 on a non-empty table, unparseable) → Critical. Breaking changes (drop/rename column or table, type
 narrowing, new NOT NULL on an existing column) → at least High when anything depends on the object
-(impact), else Medium. Data loss (DROP TABLE/COLUMN, TRUNCATE on a non-empty table) → Critical.
+(impact), else Medium. Dropping a foreign key, check or unique constraint (`DBS-DROP-CONSTRAINT`) is
+Medium: the statement is cheap, but the database stops enforcing the rule, and the finding says which. Data loss (DROP TABLE/COLUMN, TRUNCATE on a non-empty table) → Critical.
 Lock and rewrite are reported separately (squawk and strong_migrations disagree on varchar widening
 because one looks at the lock and the other at the rewrite; both facts are shown).
 

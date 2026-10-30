@@ -168,3 +168,39 @@ func tableID(t *testing.T, db *sql.DB, flavor string) string {
 	}
 	return strings.TrimSpace(id)
 }
+
+// TestReadBaseConstraints checks the names ReadBase records for DBS-DROP-CONSTRAINT on real servers.
+func TestReadBaseConstraints(t *testing.T) {
+	for _, flavor := range []string{"mysql", "mariadb"} {
+		t.Run(flavor, func(t *testing.T) {
+			t.Parallel()
+			db, err := Open(mytest.Server(t, flavor), mytest.Password, time.Minute)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			ctx := context.Background()
+			for _, q := range []string{"DROP TABLE IF EXISTS kid, mom", "CREATE TABLE mom (id INT PRIMARY KEY)",
+				"CREATE TABLE kid (id INT PRIMARY KEY, mom_id INT, code VARCHAR(10), n INT, CONSTRAINT Kid_Mom FOREIGN KEY (mom_id) REFERENCES mom (id), " +
+					"UNIQUE KEY uq_code (code), KEY by_n (n), CONSTRAINT chk_n CHECK (n >= 0))"} {
+				if _, err := db.ExecContext(ctx, q); err != nil {
+					t.Fatalf("%s: %v", q, err)
+				}
+			}
+			base, err := ReadBase(ctx, db, nil, "app")
+			if err != nil {
+				t.Fatal(err)
+			}
+			c := base.Tables["app.kid"].Constraints
+			for name, want := range map[string]string{"kid_mom": "(mom_id) is no longer checked against app.mom", "uq_code": "duplicate (code)",
+				"primary": "duplicate (id)", "chk_n": "rows breaking"} {
+				if !strings.Contains(c[name], want) {
+					t.Errorf("%s: %q, want %q (all: %v)", name, c[name], want, c)
+				}
+			}
+			if _, ok := c["by_n"]; ok {
+				t.Errorf("a plain index is not a constraint: %v", c)
+			}
+		})
+	}
+}

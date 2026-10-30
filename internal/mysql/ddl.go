@@ -57,6 +57,9 @@ type TableInfo struct {
 	ForeignKeys  int                   // keys from or to the table
 	CascadingFKs bool
 	PrimaryKey   bool
+	// Constraints maps a lower-case foreign key, check or unique index name
+	// ("primary" for the primary key) to what dropping it stops enforcing.
+	Constraints map[string]string
 }
 
 // Session is the state earlier statements of the migration set.
@@ -314,4 +317,12 @@ func notNull(w []string) bool {
 		}
 	}
 	return false
+}
+
+// constraint is what dropping the named constraint of t stops enforcing, or "" when unknown.
+func (t *TableInfo) constraint(name string) string {
+	if t == nil {
+		return ""
+	}
+	return t.Constraints[name]
 }

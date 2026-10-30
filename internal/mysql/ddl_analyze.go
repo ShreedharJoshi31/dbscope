@@ -43,14 +43,28 @@ func ReadBase(ctx context.Context, db *sql.DB, schemas []string, fallback string
 		if r.Kind != schema.KindTable || r.Stub {
 			continue
 		}
-		t := &TableInfo{Columns: map[string]ColumnInfo{}, PrimaryKey: len(r.PrimaryKey) > 0}
+		t := &TableInfo{Columns: map[string]ColumnInfo{}, PrimaryKey: len(r.PrimaryKey) > 0, Constraints: map[string]string{}}
+		dup := func(cols []string) string {
+			return "duplicate (" + strings.Join(cols, ", ") + ") values can be written"
+		}
+		if len(r.PrimaryKey) > 0 {
+			t.Constraints["primary"] = dup(r.PrimaryKey)
+		}
+		for _, c := range r.Checks {
+			t.Constraints[strings.ToLower(c.Name)] = "rows breaking " + c.Expr + " can be written"
+		}
 		for _, c := range r.Columns {
 			t.Columns[strings.ToLower(c.Name)] = ColumnInfo{Type: c.Type, Nullable: c.Nullable, BytesPerChar: 1}
 		}
 		for _, i := range r.Indexes {
 			t.HasFulltext = t.HasFulltext || i.Method == "fulltext"
+			if i.Unique && !i.Primary {
+				t.Constraints[strings.ToLower(i.Name)] = dup(i.Columns)
+			}
 		}
 		for _, fk := range r.ForeignKeys {
+			t.Constraints[strings.ToLower(fk.Name)] = fmt.Sprintf("(%s) is no longer checked against %s, so rows can point at %s rows that do not exist",
+				strings.Join(fk.Columns, ", "), fk.Ref, fk.Ref)
 			t.ForeignKeys++
 			t.CascadingFKs = t.CascadingFKs || fk.OnDelete == "cascade" || fk.OnUpdate == "cascade" || fk.OnDelete == "set null" || fk.OnUpdate == "set null"
 		}
@@ -361,7 +375,7 @@ func (a *ddlAnalysis) alter(out *migrate.Statement, add func(string, score.Ratin
 	plan := Plan{Algo: Instant, DML: true}
 	reqAlgo, reqLock := "", ""
 	fails := false // the server will reject the statement, so it does no work
-	var whats, drops []string
+	var whats, drops, constraints []string
 	for i, c := range clauses {
 		if len(c) == 0 {
 			continue
@@ -380,9 +394,18 @@ func (a *ddlAnalysis) alter(out *migrate.Statement, add func(string, score.Ratin
 		p := planClause(srv, tbl, a.sess, k, c, kinds)
 		a.diff(display, k, c)
 		// DROP PARTITION has its own rule (DBS-MYSQL-PARTITION-DATA).
-		if k == "drop column" {
+		switch k {
+		case "drop column":
 			col, _, _ := columnOf(k, c)
 			drops = append(drops, "DROP COLUMN "+col+" removes the column and its data")
+		case "drop index", "drop primary key", "drop foreign key", "drop constraint":
+			cname := "primary"
+			if k != "drop primary key" && len(c) > 0 {
+				cname = strings.ToLower(name(c[len(c)-1]))
+			}
+			if lost := tbl.constraint(cname); lost != "" {
+				constraints = append(constraints, fmt.Sprintf("drops %s on %s: %s", cname, display, lost))
+			}
 		}
 		for _, n := range p.Notes {
 			r := score.Medium
@@ -436,6 +459,9 @@ func (a *ddlAnalysis) alter(out *migrate.Statement, add func(string, score.Ratin
 	}
 	for _, d := range drops {
 		add("DBS-MYSQL-DROPS-DATA", score.High, d+" from "+display, "Take a backup first; stop using it in one release and drop it in a later one")
+	}
+	for _, c := range constraints {
+		add("DBS-DROP-CONSTRAINT", score.Medium, c, "Enforce the rule in the application first, or add the replacement before dropping this one")
 	}
 	mode := "METADATA EXCLUSIVE"
 	if !plan.DML {

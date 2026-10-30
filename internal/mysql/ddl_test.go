@@ -112,3 +112,30 @@ func TestDDLAnalyzeNoBase(t *testing.T) {
 		t.Errorf("warnings %v", rep.Warnings)
 	}
 }
+
+func TestDDLDropConstraint(t *testing.T) {
+	base := ddlBase("mysql", 80413)
+	base.Tables["app.orders"].Constraints = map[string]string{
+		"fk_cust": "(customer_id) is no longer checked against app.customers", "uq_code": "duplicate (code) values can be written",
+		"primary": "duplicate (id) values can be written", "chk_total": "rows breaking total >= 0 can be written",
+	}
+	rep := Analyze(base, []ingest.Input{{Name: "1.sql", SQL: `SET SESSION lock_wait_timeout = 5;
+ALTER TABLE orders DROP FOREIGN KEY fk_cust;
+ALTER TABLE orders DROP INDEX uq_code;
+DROP INDEX uq_code ON orders;
+ALTER TABLE orders DROP CHECK chk_total;
+ALTER TABLE orders DROP INDEX by_total;`}})
+	want := map[int]string{2: "drops fk_cust on app.orders: (customer_id)", 3: "drops uq_code", 4: "drops uq_code", 5: "rows breaking total >= 0"}
+	for _, s := range rep.Statements {
+		msg := ""
+		for _, f := range s.Findings {
+			if f.RuleID == "DBS-DROP-CONSTRAINT" {
+				msg = f.Message
+			}
+		}
+		// by_total is a plain index: dropping it enforces nothing less.
+		if w := want[s.Line]; (w == "") != (msg == "") || !strings.Contains(msg, w) {
+			t.Errorf("line %d: %q, want %q", s.Line, msg, w)
+		}
+	}
+}

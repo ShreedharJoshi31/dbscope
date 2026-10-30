@@ -500,6 +500,11 @@ func (c *classifier) alterCmd(q QName, rel *schema.Relation, cmd *pg_query.Alter
 		} else {
 			c.use("drop_constraint", x)
 		}
+		if lost := constraintLost(rel, col); lost != "" && !c.st.Created(q) {
+			c.e.Findings = append(c.e.Findings, Finding{ID: "DBS-DROP-CONSTRAINT", Class: Breaking,
+				Message: fmt.Sprintf("drops %s on %s: %s", col, q, lost),
+				Safe:    "Enforce the rule in the application first, or add the replacement constraint (NOT VALID, then VALIDATE) before dropping this one"})
+		}
 	case pg_query.AlterTableType_AT_ValidateConstraint:
 		if fk := findFK(rel, col); fk != nil {
 			x.referenced = []QName{fk.Ref}
@@ -569,6 +574,29 @@ func (c *classifier) referencingColumn(q QName, col string) []QName {
 		}
 	}
 	return out
+}
+
+// constraintLost says what the database stops enforcing when constraint name
+// of rel is dropped, or "" when rel does not have it.
+func constraintLost(rel *schema.Relation, name string) string {
+	if rel == nil {
+		return ""
+	}
+	if fk := findFK(rel, name); fk != nil {
+		return fmt.Sprintf("(%s) is no longer checked against %s, so rows can point at %s rows that do not exist",
+			strings.Join(fk.Columns, ", "), fk.Ref, fk.Ref)
+	}
+	for _, ch := range rel.Checks {
+		if ch.Name == name {
+			return fmt.Sprintf("rows breaking %s can be written", ch.Expr)
+		}
+	}
+	for _, ix := range rel.Indexes {
+		if ix.Name == name && (ix.Unique || ix.Primary) {
+			return fmt.Sprintf("duplicate (%s) values can be written", strings.Join(ix.Columns, ", "))
+		}
+	}
+	return ""
 }
 
 func findFK(rel *schema.Relation, name string) *schema.ForeignKey {

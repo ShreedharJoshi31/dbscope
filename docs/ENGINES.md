@@ -314,6 +314,7 @@ come from the manuals and are not checked against a server.
 | `DBS-MYSQL-NOT-NULL` / `-NULLABLE` | NOT NULL that fails on existing NULLs, or a MODIFY that drops NOT NULL by restating the column |
 | `DBS-MYSQL-UNIQUE-DATA`, `-FK-UNCHECKED`, `-PARTITION-DATA`, `-TRUNCATE`, `-ROW-VERSIONS` | data-dependent failures, unchecked foreign keys, partition and table data loss, INSTANT's row-version limit |
 | `DBS-MYSQL-DROPS-DATA` | DROP COLUMN, or DROP TABLE of a table in the base (high) |
+| `DBS-DROP-CONSTRAINT` | dropping a foreign key, check, unique index or the primary key, with what stops being enforced (medium) |
 
 The safe alternative names gh-ost or pt-online-schema-change by the table's
 foreign keys and primary key. The CLI takes a live base (`--mysql URL` or
