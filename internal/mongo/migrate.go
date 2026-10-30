@@ -13,6 +13,7 @@ import (
 
 	"github.com/dbscope/dbscope/internal/migrate"
 	"github.com/dbscope/dbscope/internal/migrate/apply"
+	"github.com/dbscope/dbscope/internal/migrate/down"
 	"github.com/dbscope/dbscope/internal/migrate/impact"
 	"github.com/dbscope/dbscope/internal/migrate/ingest"
 	"github.com/dbscope/dbscope/internal/migrate/score"
@@ -84,7 +85,13 @@ func Analyze(base *Base, files []ingest.Input) *migrate.Report {
 		rep.Base = "none"
 	}
 	a := &mongoAnalysis{base: base, rep: rep, altered: map[string]bool{}}
-	for _, f := range files {
+	paired := ingest.Pair(files)
+	rep.Warnings = append(rep.Warnings, paired.Warnings...)
+	downs := map[string]down.Result{}
+	for _, f := range paired.Forward {
+		if d := paired.Downs[f.Name]; d != nil && !d.Missing {
+			downs[f.Name] = a.checkDown(f, d)
+		}
 		calls := findCalls(f.SQL)
 		if len(calls) == 0 && strings.TrimSpace(f.SQL) != "" {
 			rep.Unanalyzable = append(rep.Unanalyzable, migrate.Unanalyzable{File: f.Name, Line: 1,
@@ -94,6 +101,11 @@ func Analyze(base *Base, files []ingest.Input) *migrate.Report {
 			st := a.statement(f.Name, call)
 			rep.Statements = append(rep.Statements, st)
 			rep.Rating = score.Max(rep.Rating, st.Rating)
+		}
+	}
+	for _, f := range paired.Forward {
+		if d := paired.Downs[f.Name]; d != nil {
+			migrate.AttachDown(rep, f.Name, down.Findings(d, downs[f.Name]))
 		}
 	}
 	for k := range a.altered {

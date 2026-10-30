@@ -120,7 +120,10 @@ func Analyze(base *Base, files []ingest.Input) *migrate.Report {
 		rep.Warnings = append(rep.Warnings, "no tables in the base database: sizes are unknown, so rewrites are rated as medium")
 	}
 	a := &chAnalysis{base: base, rep: rep, altered: map[string]bool{}}
-	for _, f := range files {
+	// Rollbacks (golang-migrate .down.sql, goose Down sections) are not forward statements.
+	paired := ingest.Pair(files)
+	rep.Warnings = append(rep.Warnings, paired.Warnings...)
+	for _, f := range paired.Forward {
 		for _, p := range splitScript(f.SQL) {
 			st := a.statement(f.Name, p)
 			rep.Statements = append(rep.Statements, st)

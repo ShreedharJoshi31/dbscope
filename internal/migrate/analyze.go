@@ -58,7 +58,15 @@ func Analyze(ctx context.Context, b *Base, req Request) (*Report, error) {
 	rep := &Report{PGVersion: version, Rating: score.Low, Statements: []Statement{}, Impact: map[string][]impact.Item{},
 		Unanalyzable: []Unanalyzable{}, Warnings: append(slices.Clone(b.Warnings), set.Warnings...), Base: b.Source}
 	var work []*pending
+	var downs []rollback
 	for _, f := range set.Files {
+		if d := set.Downs[f.Name]; d != nil {
+			fs, warn := checkDown(st, f, d)
+			downs = append(downs, rollback{file: f.Name, findings: fs})
+			if warn != "" {
+				rep.Warnings = append(rep.Warnings, warn)
+			}
+		}
 		tm.StartFile(f.Wrapped)
 		for _, m := range f.Meta {
 			rep.Unanalyzable = append(rep.Unanalyzable, Unanalyzable{File: f.Name, Line: m.Line,
@@ -106,6 +114,9 @@ func Analyze(ctx context.Context, b *Base, req Request) (*Report, error) {
 		rate(p, rep.Impact)
 		rep.Rating = score.Max(rep.Rating, p.rep.Rating)
 		rep.Statements = append(rep.Statements, *p.rep)
+	}
+	for _, d := range downs {
+		AttachDown(rep, d.file, d.findings)
 	}
 	return rep, nil
 }

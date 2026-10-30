@@ -97,3 +97,18 @@ table or model (`customers`, `customer`, `Customer`). The statement that drops o
 `DBS-STILL-USED` (high) with up to 20 example lines and the total count. Generated schema files kept in the project,
 such as Rails' `db/schema.rb`, are reported too. The safe path is expand and contract: stop using the name in one
 release and drop it in the next.
+
+## Rollback (down) check
+
+When the migration tool supports rollbacks, dbscope pairs each up migration with its down: golang-migrate
+`.down.sql` files, Flyway `U` undo files (only when the folder has any), goose `-- +goose Down` and dbmate
+`-- migrate:down` sections, and the `down` function of migrate-mongo files. Down code is read only for this check and
+is never rated as a forward migration (ClickHouse and Cassandra skip it too). An up with no down gets
+`DBS-DOWN-MISSING` (medium). dbscope then applies the up and the down to a copy of the schema as it was before the up:
+the apply model on PostgreSQL, a scratch SQLite database, and a name-level replay of tables, columns, indexes and
+collections on MySQL, MariaDB and MongoDB. If the result differs from the starting schema, or SQLite rejects a down
+statement, the up gets `DBS-DOWN-INCOMPLETE` (high). If the up drops a table, column, collection or field, it gets
+`DBS-DOWN-LOSES-DATA` (medium): the down can recreate the structure but not the rows. The findings go on the up
+file's first statement, so they count toward its rating and the CI exit code. Limits: column order is ignored on
+PostgreSQL (a re-added column always goes last); MySQL compares column types and nullability but not defaults or
+charsets; an up file sent alone from the browser, without its down beside it, is reported as missing a down.

@@ -17,7 +17,9 @@ const MaxFileBytes = 1 << 20
 // repo-relative SARIF URIs) when the file is under it. Only *.sql,
 // *.sql.conf and atlas.sum are read from directories. Files named on the
 // command line keep their order; files found in a directory are sorted
-// naturally, which Load refines for detected frameworks.
+// naturally, which Load refines for detected frameworks. A golang-migrate
+// up file or Flyway versioned file named on its own brings its down or undo
+// file from the same directory along, for the rollback check.
 func ReadPaths(paths []string, root string) ([]Input, error) {
 	var out []Input
 	add := func(p string) error {
@@ -43,6 +45,13 @@ func ReadPaths(paths []string, root string) ([]Input, error) {
 		if !info.IsDir() {
 			if err := add(p); err != nil {
 				return nil, err
+			}
+			for _, sib := range downSiblings(p) {
+				if !slices.Contains(paths, sib) {
+					if err := add(sib); err != nil {
+						return nil, err
+					}
+				}
 			}
 			continue
 		}
@@ -103,4 +112,34 @@ func RepoRoot(dir string) string {
 		}
 		d = parent
 	}
+}
+
+// downSiblings finds the down file of a golang-migrate up file, or the undo
+// file of a Flyway versioned file, next to it.
+func downSiblings(p string) []string {
+	base := filepath.Base(p)
+	var match func(string) bool
+	switch {
+	case golangUp.MatchString(base):
+		key := golangKey(filepath.ToSlash(p))
+		match = func(n string) bool {
+			return golangDown.MatchString(n) && golangKey(filepath.ToSlash(filepath.Join(filepath.Dir(p), n))) == key
+		}
+	case flywayV.MatchString(base):
+		key := flywayKey(base)
+		match = func(n string) bool { return flywayU.MatchString(n) && flywayKey(n) == key }
+	default:
+		return nil
+	}
+	entries, err := os.ReadDir(filepath.Dir(p))
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, e := range entries {
+		if !e.IsDir() && match(e.Name()) {
+			out = append(out, filepath.Join(filepath.Dir(p), e.Name()))
+		}
+	}
+	return out
 }

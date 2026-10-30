@@ -3,7 +3,7 @@
 //
 // Ordering (docs/research-migrations.md section 5):
 //   - Flyway: V<version>__<desc>.sql by numeric version, then R__ repeatables by description;
-//   - golang-migrate: <version>_<title>.up.sql by version (.down.sql skipped);
+//   - golang-migrate: <version>_<title>.up.sql by version (.down.sql files are rollbacks, see Pair);
 //   - Prisma: migrations/<timestamp>_<name>/migration.sql by directory name;
 //   - otherwise the order given (API) or natural, numeric-aware filename order (CLI directories).
 //
@@ -100,6 +100,8 @@ type Set struct {
 	Files     []File
 	Framework Framework
 	Warnings  []string
+	// Downs are the files' rollbacks, keyed by file name (see Pair).
+	Downs map[string]*Down
 }
 
 // Options control loading.
@@ -133,9 +135,6 @@ func Load(inputs []Input, opts Options) *Set {
 		opts.Mode = ModeAuto
 	}
 	set := &Set{}
-	confs := map[string]string{}
-	atlasSum := map[string]bool{}
-	var sqlFiles []Input
 	seen := map[string]string{}
 	for _, in := range inputs {
 		lower := strings.ToLower(in.Name)
@@ -143,6 +142,14 @@ func Load(inputs []Input, opts Options) *Set {
 			set.Warnings = append(set.Warnings, fmt.Sprintf("%s and %s differ only in letter case; they collide on case-insensitive file systems", prev, in.Name))
 		}
 		seen[lower] = in.Name
+	}
+	paired := Pair(inputs)
+	set.Downs = paired.Downs
+	set.Warnings = append(set.Warnings, paired.Warnings...)
+	confs := map[string]string{}
+	atlasSum := map[string]bool{}
+	var sqlFiles []Input
+	for _, in := range paired.Forward {
 		base := path.Base(in.Name)
 		switch {
 		case strings.HasSuffix(base, ".sql.conf"):

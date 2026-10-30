@@ -132,3 +132,14 @@ func TestMigratePredictions(t *testing.T) {
 		})
 	}
 }
+
+// A golang-migrate rollback is not a forward statement: its DROP COLUMN is not data loss.
+func TestAnalyzeSkipsDownFiles(t *testing.T) {
+	rep := Analyze(&Base{Database: "app", Tables: map[string]*TableInfo{}}, []ingest.Input{
+		{Name: "1_country.up.sql", SQL: "ALTER TABLE events ADD COLUMN country String DEFAULT '';"},
+		{Name: "1_country.down.sql", SQL: "ALTER TABLE events DROP COLUMN country;"},
+	})
+	if len(rep.Statements) != 1 || hasRule(rep.Statements[0], "DBS-CH-DROPS-DATA") {
+		t.Fatalf("statements %+v", rep.Statements)
+	}
+}

@@ -15,6 +15,7 @@ import (
 
 	"github.com/dbscope/dbscope/internal/migrate"
 	"github.com/dbscope/dbscope/internal/migrate/apply"
+	"github.com/dbscope/dbscope/internal/migrate/down"
 	"github.com/dbscope/dbscope/internal/migrate/impact"
 	"github.com/dbscope/dbscope/internal/migrate/ingest"
 	"github.com/dbscope/dbscope/internal/migrate/score"
@@ -149,7 +150,20 @@ func Analyze(ctx context.Context, base *Base, files []ingest.Input) (*migrate.Re
 			a.origin[strings.ToLower(r.Name)] = r.Name
 		}
 	}
-	for _, f := range files {
+	paired := ingest.Pair(files)
+	rep.Warnings = append(rep.Warnings, paired.Warnings...)
+	downs := map[string]down.Result{}
+	for _, f := range paired.Forward {
+		if d := paired.Downs[f.Name]; d != nil {
+			r, err := a.checkDown(ctx, f, d)
+			if err != nil {
+				return nil, err
+			}
+			if r.Unchecked != "" {
+				rep.Warnings = append(rep.Warnings, fmt.Sprintf("%s: the down migration was not checked because %s", f.Name, r.Unchecked))
+			}
+			downs[f.Name] = r
+		}
 		for _, p := range Split(f.SQL) {
 			st := classify(f.Name, p, a.inTx)
 			a.trackTx(st)
@@ -168,6 +182,11 @@ func Analyze(ctx context.Context, base *Base, files []ingest.Input) (*migrate.Re
 		return nil, err
 	}
 	rep.Diff = diff(before, after)
+	for _, f := range paired.Forward {
+		if d := paired.Downs[f.Name]; d != nil {
+			migrate.AttachDown(rep, f.Name, down.Findings(d, downs[f.Name]))
+		}
+	}
 	return rep, nil
 }
 

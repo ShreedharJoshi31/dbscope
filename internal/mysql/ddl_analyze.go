@@ -10,6 +10,7 @@ import (
 
 	"github.com/dbscope/dbscope/internal/migrate"
 	"github.com/dbscope/dbscope/internal/migrate/apply"
+	"github.com/dbscope/dbscope/internal/migrate/down"
 	"github.com/dbscope/dbscope/internal/migrate/impact"
 	"github.com/dbscope/dbscope/internal/migrate/ingest"
 	"github.com/dbscope/dbscope/internal/migrate/score"
@@ -138,11 +139,22 @@ func Analyze(base *Base, files []ingest.Input) *migrate.Report {
 		rep.Warnings = append(rep.Warnings, fmt.Sprintf("no base schema: rules assume %s %s, and table sizes and column types are unknown, so type changes are assumed to copy the table", label, srv.Version))
 	}
 	a := &ddlAnalysis{base: base, sess: Session{ForeignKeyChecks: true}, altered: map[string]bool{}, rep: rep}
-	for _, f := range files {
+	paired := ingest.Pair(files)
+	rep.Warnings = append(rep.Warnings, paired.Warnings...)
+	downs := map[string]down.Result{}
+	for _, f := range paired.Forward {
+		if d := paired.Downs[f.Name]; d != nil && !d.Missing {
+			downs[f.Name] = a.checkDown(f, d)
+		}
 		for _, p := range Split(f.SQL) {
 			st := a.statement(f.Name, p)
 			rep.Statements = append(rep.Statements, st)
 			rep.Rating = score.Max(rep.Rating, st.Rating)
+		}
+	}
+	for _, f := range paired.Forward {
+		if d := paired.Downs[f.Name]; d != nil {
+			migrate.AttachDown(rep, f.Name, down.Findings(d, downs[f.Name]))
 		}
 	}
 	sort.Strings(rep.Diff.Added)
