@@ -139,16 +139,16 @@ logins, encrypted keys, unknown and changed host keys, and a dropped session.
 |---|---|---|---|---|---|
 | PostgreSQL | yes | yes | yes | yes | yes |
 | SQLite | yes | yes | not yet | yes | n/a |
-| MySQL / MariaDB | yes | yes | not yet | yes | not yet |
-| MongoDB | inferred | yes | not yet | JavaScript migrations | n/a |
+| MySQL / MariaDB | yes | yes | not yet | yes | yes |
+| MongoDB | inferred | yes | not yet | JavaScript migrations | yes |
 | Redis / Valkey | key patterns | n/a | n/a | n/a | keyspace report |
 | DynamoDB | key schemas + sampled attributes | PartiQL SELECT | not yet | n/a | not yet |
 | Cassandra / ScyllaDB | keyspace tables | CQL SELECT | not yet | CQL schema changes | not yet |
-| Neo4j | labels and relationship types | read-only Cypher | not yet | not yet | not yet |
-| Elasticsearch / OpenSearch | indices, aliases, data streams | search JSON and SQL | not yet | console-format requests | not yet |
-| ClickHouse | tables, keys, parts | SQL under readonly | not yet | ALTER mutations | not yet |
-| SQL Server / Azure SQL | tables, views, keys, indexes | SELECT behind a plan gate | not yet | not yet | not yet |
-| Oracle | tables, views, materialized views, keys, indexes | SELECT in a READ ONLY transaction | not yet | not yet | not yet |
+| Neo4j | labels and relationship types | read-only Cypher | not yet | Cypher schema changes | yes |
+| Elasticsearch / OpenSearch | indices, aliases, data streams | search JSON and SQL | not yet | console-format requests | yes |
+| ClickHouse | tables, keys, parts | SQL under readonly | not yet | ALTER mutations | yes |
+| SQL Server / Azure SQL | tables, views, keys, indexes | SELECT behind a plan gate | not yet | not yet | yes |
+| Oracle | tables, views, materialized views, keys, indexes | SELECT in a READ ONLY transaction | not yet | not yet | yes |
 
 ### Apache AGE (graphs in PostgreSQL)
 
@@ -1226,10 +1226,32 @@ filters, and Cartesian merge joins.
 The dictionary views are slow: reading a 5-table schema took 1.5 to 3 s
 on the Free image.
 
+**Workload.** The map's Workload view reads the statements Oracle keeps in
+memory (`V$SQL`) and their plans (`V$SQL_PLAN`), and never flushes or
+changes anything. It counts statements run by any user Oracle does not
+maintain itself, at most 2,000, most elapsed time first; statements that
+differ only in literals count as one. A statement is tied to the tables its
+text names after FROM, JOIN, INTO, UPDATE, DELETE, USING or APPLY, and a
+bare name is looked up as Oracle would for the user who ran it: that user's
+table, then its synonym, then a public synonym. Session and transaction
+statements, EXPLAIN PLAN, reads of the data dictionary only (dbscope's own
+among them), and the optimizer's sampling and statistics queries are left
+out. Full and index scans count the executions of statements whose plan
+reads the table in full or through one of its indexes, once per execution;
+for adaptive plans only the lines Oracle chose count. `V$SEGMENT_STATISTICS`
+is not used: on 23.26 its segment scans undercounted full scans. Rows
+written are the inserts, updates and deletes since the table's statistics
+were last gathered, from `DBA_TAB_MODIFICATIONS` (`ALL_TAB_MODIFICATIONS`
+without the role, which hides partitions of other users' tables); they can
+lag, because Oracle fills that view from memory now and then. Only
+statements still in memory count. The user needs `SELECT_CATALOG_ROLE`,
+which applies to new sessions; without it the view says which `GRANT` to
+run and still shows rows written. AWR and ASH are never read: they need the
+paid Diagnostics Pack. Verified on Oracle AI Database 26ai Free (23.26).
+
 Not yet: wallets and Oracle native network encryption, `DBA_` views for
-users who have them, migration risk of DDL (online operations,
-`DDL_LOCK_TIMEOUT`), and AWR or ASH workload, which need the Diagnostics
-Pack licence.
+users who have them, and migration risk of DDL (online operations,
+`DDL_LOCK_TIMEOUT`).
 
 ## Next engines
 
