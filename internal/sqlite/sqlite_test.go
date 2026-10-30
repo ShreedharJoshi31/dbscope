@@ -165,7 +165,11 @@ func TestOpenMissingFile(t *testing.T) {
 
 func TestOpenPathWithSpacesAndQuery(t *testing.T) {
 	// The fixture is written at a plain path and moved, since the writer's DSN cannot carry '?'.
-	dir := filepath.Join(t.TempDir(), "my data?x=1#y%20")
+	name := "my data?x=1#y%20"
+	if runtime.GOOS == "windows" {
+		name = "my data#y%20" // Windows forbids '?' in file names
+	}
+	dir := filepath.Join(t.TempDir(), name)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}

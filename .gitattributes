@@ -1,0 +1,5 @@
+# One line ending on every checkout: tests compare generated files byte for byte
+# (internal/sample/model.json), and Windows runners would otherwise check out CRLF.
+* text=auto eol=lf
+# Fixtures keep their bytes: some test CRLF handling on purpose.
+**/testdata/** -text

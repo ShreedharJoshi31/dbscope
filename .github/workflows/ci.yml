@@ -42,7 +42,10 @@ jobs:
           done; done
       - name: gofmt
         if: runner.os == 'Linux'
-        run: test -z "$(gofmt -l .)"
+        # Print what is unformatted, not only that something is.
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then echo "$out"; gofmt -d $out; exit 1; fi
 
   web:
     runs-on: ubuntu-latest
