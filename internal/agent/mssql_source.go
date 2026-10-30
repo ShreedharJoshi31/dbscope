@@ -3,6 +3,8 @@ package agent
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/dbscope/dbscope/internal/conn"
@@ -102,8 +104,19 @@ func (ms *mssqlSource) MigrationBase(context.Context, conn.Profile, string) (*mi
 	return nil, errUnsupported
 }
 
-func (ms *mssqlSource) Workload(context.Context, conn.Profile, string, *schema.Model) (*workload.Snapshot, error) {
-	return nil, errUnsupported
+// Workload reads the server's index usage and plan cache statistics (internal/mssql.Workload).
+func (ms *mssqlSource) Workload(ctx context.Context, p conn.Profile, password string, m *schema.Model) (*workload.Snapshot, error) {
+	ctx, cancel := context.WithTimeout(ctx, statementTimeout(p)+connectSlack)
+	defer cancel()
+	db, err := ms.get(p, password)
+	if err != nil {
+		return nil, err
+	}
+	snap, err := mssql.Workload(ctx, db, m)
+	if errors.Is(err, mssql.ErrAzureWorkload) {
+		return nil, fmt.Errorf("%w: %w", errUnsupported, err)
+	}
+	return snap, err
 }
 
 func (ms *mssqlSource) Forget(profileID string) {
