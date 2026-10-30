@@ -10,10 +10,11 @@ import {
   reviewMarkdown,
 } from "@/entities/migration-finding";
 import { clearMigrationOverlay, partitionDiffRelations, useCanvasStore } from "@/entities/schema";
-import { ReviewOptionsFields, reanalyze, showReviewOnCanvas } from "@/features/analyze-migration";
+import { ReviewOptionsFields, reanalyze, setFolderWatch, showReviewOnCanvas } from "@/features/analyze-migration";
 import { announce } from "@/shared/lib/announcer";
 import { copyText, downloadText } from "@/shared/lib/clipboard";
 import { Button } from "@/shared/ui/button";
+import { Checkbox } from "@/shared/ui/checkbox";
 import { StatusIcon } from "@/shared/ui/status-icon";
 import { Blockers, Pending, Usages } from "@/widgets/migration-review/ui/review-context";
 
@@ -154,6 +155,20 @@ export function ReviewHeader({ review, model, onGoTo }: ReviewHeaderProps) {
           <ReviewOptionsFields compact value={review.options} onChange={(next) => reanalyze(review.id, next)} />
         )}
         <SchemaChanges model={model} />
+        {review.folder && (
+          // biome-ignore lint/a11y/noLabelWithoutControl: Base UI's Checkbox renders the control inside the wrapping label.
+          <label className="flex items-center gap-1.5 text-xs text-text-primary">
+            <Checkbox
+              checked={review.folder.watch}
+              onCheckedChange={(on) => {
+                setFolderWatch(review.id, on);
+                announce(on ? "Re-checking the migrations folder on save." : "Stopped watching the migrations folder.");
+              }}
+            />
+            Re-check on save
+            {review.folder.pendingOnly && <span className="text-text-muted">· pending files only</span>}
+          </label>
+        )}
       </div>
       {model.unanalyzable.length > 0 && (
         <section

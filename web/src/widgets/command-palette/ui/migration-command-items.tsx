@@ -1,7 +1,8 @@
-import { ArrowDown, ArrowUp, ClipboardPaste, Eraser, FileUp } from "lucide-react";
+import { ArrowDown, ArrowUp, ClipboardPaste, Eraser, FileUp, FolderSync } from "lucide-react";
+import { useActiveConnection } from "@/entities/connection";
 import { docTabsInScope, useSqlTabs } from "@/entities/query";
 import { clearMigrationOverlay, hasMigrationOverlay, useCanvasStore } from "@/entities/schema";
-import { openAnalyzeFiles, openPasteMigration, stepStatement } from "@/features/analyze-migration";
+import { openAnalyzeFiles, openFolderMigration, openPasteMigration, stepStatement } from "@/features/analyze-migration";
 import { formatCombo, SHORTCUTS } from "@/shared/config/shortcuts";
 import { announce } from "@/shared/lib/announcer";
 import { CommandGroup, CommandItem, CommandShortcut } from "@/shared/ui/command";
@@ -10,6 +11,7 @@ type Run = (action: () => void) => () => void;
 
 export function MigrationCommandItems({ run }: { run: Run }) {
   const overlay = useCanvasStore(hasMigrationOverlay);
+  const { profile } = useActiveConnection();
   const inMigrationTab = useSqlTabs((s) => docTabsInScope(s.docTabs, s.scope).some((t) => t.id === s.active));
   return (
     <CommandGroup heading="Migration">
@@ -21,6 +23,12 @@ export function MigrationCommandItems({ run }: { run: Run }) {
         <ClipboardPaste aria-hidden />
         Paste migration SQL
       </CommandItem>
+      {profile?.migrationsDir && (
+        <CommandItem value="check migrations folder pending watch" onSelect={run(openFolderMigration)}>
+          <FolderSync aria-hidden />
+          Check the migrations folder…
+        </CommandItem>
+      )}
       {inMigrationTab && (
         <>
           <CommandItem value="migration next statement" onSelect={run(() => stepStatement(1))}>

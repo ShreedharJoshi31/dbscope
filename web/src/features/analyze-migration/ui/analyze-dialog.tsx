@@ -1,7 +1,12 @@
 import { ClipboardPaste, FileUp, FolderOpen, LoaderCircle } from "lucide-react";
 import { type DragEvent, type FormEvent, useEffect, useId, useRef, useState } from "react";
 import type { ClientProblem, MigrationSource, ReviewOptions } from "@/entities/migration-finding";
-import { lastReviewOptions, startAnalysis, useMigrationTarget } from "@/features/analyze-migration/model/analyze";
+import {
+  lastReviewOptions,
+  startAnalysis,
+  startFolderAnalysis,
+  useMigrationTarget,
+} from "@/features/analyze-migration/model/analyze";
 import { describeReviewError } from "@/features/analyze-migration/model/describe-error";
 import { type AnalyzeDialogMode, useAnalyzeDialog } from "@/features/analyze-migration/model/dialog-store";
 import { type PasteCopy, pasteCopy } from "@/features/analyze-migration/model/paste-copy";
@@ -17,6 +22,7 @@ import {
 } from "@/features/analyze-migration/model/read-files";
 import { ReviewOptionsFields } from "@/features/analyze-migration/ui/review-options";
 import { Button } from "@/shared/ui/button";
+import { Checkbox } from "@/shared/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/shared/ui/dialog";
 import { Input } from "@/shared/ui/input";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
@@ -27,6 +33,48 @@ const MODE_OPTIONS: { value: AnalyzeDialogMode; label: string }[] = [
   { value: "files", label: "Files" },
   { value: "paste", label: "Paste" },
 ];
+const FOLDER_OPTION: { value: AnalyzeDialogMode; label: string } = { value: "folder", label: "Migrations folder" };
+
+/** The connection's migrations folder, read by the agent: only pending files, and re-check on save. */
+function FolderMode({
+  dir,
+  pendingOnly,
+  watch,
+  onPendingOnly,
+  onWatch,
+}: {
+  dir: string;
+  pendingOnly: boolean;
+  watch: boolean;
+  onPendingOnly: (on: boolean) => void;
+  onWatch: (on: boolean) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2 text-xs text-text-primary">
+      <p>
+        dbscope reads <span className="font-mono">{dir}</span> on this computer; it never writes there.
+      </p>
+      {/* biome-ignore lint/a11y/noLabelWithoutControl: Base UI's Checkbox renders the control inside the wrapping label. */}
+      <label className="flex items-start gap-2">
+        <Checkbox checked={pendingOnly} onCheckedChange={onPendingOnly} className="mt-px" />
+        <span className="flex flex-col gap-0.5">
+          Only pending files
+          <span className="text-text-muted">
+            Leave out the files the migration tool's history table shows as applied.
+          </span>
+        </span>
+      </label>
+      {/* biome-ignore lint/a11y/noLabelWithoutControl: Base UI's Checkbox renders the control inside the wrapping label. */}
+      <label className="flex items-start gap-2">
+        <Checkbox checked={watch} onCheckedChange={onWatch} className="mt-px" />
+        <span className="flex flex-col gap-0.5">
+          Re-check on save
+          <span className="text-text-muted">Analyze again whenever a migration file is saved, added or removed.</span>
+        </span>
+      </label>
+    </div>
+  );
+}
 
 const ACCEPT = ".sql,.conf,.sum";
 const MAX_LISTED = 8;
@@ -225,11 +273,21 @@ function AnalyzeForm({ onDone }: { onDone: () => void }) {
   const [sql, setSql] = useState("");
   const [problem, setProblem] = useState<ClientProblem | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pendingOnly, setPendingOnly] = useState(true);
+  const [watch, setWatch] = useState(true);
+  const folderDir = profile?.migrationsDir;
+  const modes = folderDir ? [...MODE_OPTIONS, FOLDER_OPTION] : MODE_OPTIONS;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!target) {
       setProblem({ code: "no_target" });
+      return;
+    }
+    if (mode === "folder") {
+      if (!profile || !folderDir) return;
+      startFolderAnalysis(profile, { pendingOnly, watch, options });
+      onDone();
       return;
     }
     let sources: MigrationSource[];
@@ -268,7 +326,7 @@ function AnalyzeForm({ onDone }: { onDone: () => void }) {
     <form onSubmit={(e) => void submit(e)} className="flex min-h-0 flex-col gap-4">
       <SegmentedControl
         aria-label="What to analyze"
-        options={MODE_OPTIONS}
+        options={modes}
         value={mode}
         onValueChange={(m) => {
           setMode(m);
@@ -284,6 +342,18 @@ function AnalyzeForm({ onDone }: { onDone: () => void }) {
             setProblem(null);
           }}
         />
+      ) : mode === "folder" && folderDir ? (
+        <FolderMode
+          dir={folderDir}
+          pendingOnly={pendingOnly}
+          watch={watch}
+          onPendingOnly={setPendingOnly}
+          onWatch={setWatch}
+        />
+      ) : mode === "folder" ? (
+        <p className="text-xs text-text-muted">
+          This connection has no migrations folder. Set one in its settings, under Advanced.
+        </p>
       ) : (
         <PasteMode name={name} sql={sql} onName={setName} onSql={setSql} copy={copy} />
       )}
@@ -328,7 +398,13 @@ export function AnalyzeMigrationDialog() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{mode === "paste" ? pasteCopy(profile?.engine).title : "Analyze migration files"}</DialogTitle>
+          <DialogTitle>
+            {mode === "paste"
+              ? pasteCopy(profile?.engine).title
+              : mode === "folder"
+                ? "Check the migrations folder"
+                : "Analyze migration files"}
+          </DialogTitle>
           <DialogDescription>
             dbscope reports the locks, rewrites and breaking changes each statement causes, with a safer way to write
             it. Deterministic, no LLM.

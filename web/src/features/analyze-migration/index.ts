@@ -8,8 +8,10 @@ export {
   openStatement,
   reanalyze,
   type StartAnalysis,
+  setFolderWatch,
   showReviewOnCanvas,
   startAnalysis,
+  startFolderAnalysis,
   stepStatement,
   useMigrationTarget,
 } from "@/features/analyze-migration/model/analyze";
@@ -21,6 +23,7 @@ export {
 export {
   type AnalyzeDialogMode,
   openAnalyzeFiles,
+  openFolderMigration,
   openPasteMigration,
   useAnalyzeDialog,
 } from "@/features/analyze-migration/model/dialog-store";

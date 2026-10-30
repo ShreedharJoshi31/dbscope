@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type AnalyzeDialogMode = "files" | "paste";
+export type AnalyzeDialogMode = "files" | "paste" | "folder";
 
 interface AnalyzeDialogState {
   open: boolean;
@@ -21,6 +21,11 @@ export const useAnalyzeDialog = create<AnalyzeDialogState>((set) => ({
 /** Palette: "Analyze migration files…". */
 export function openAnalyzeFiles(): void {
   useAnalyzeDialog.getState().openWith("files");
+}
+
+/** Palette: "Check the migrations folder". */
+export function openFolderMigration(): void {
+  useAnalyzeDialog.getState().openWith("folder");
 }
 
 /** Palette: "Paste migration SQL". */

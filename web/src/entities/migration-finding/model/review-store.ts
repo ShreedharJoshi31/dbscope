@@ -51,6 +51,8 @@ export interface MigrationReview {
   selected: number;
   reveal: StatementReveal | null;
   startedAt: number;
+  /** Set when the files come from the connection's migrations folder, read by the agent. */
+  folder?: { pendingOnly: boolean; watch: boolean };
 }
 
 interface ReviewState {
