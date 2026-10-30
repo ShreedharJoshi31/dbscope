@@ -198,7 +198,8 @@ func classify(err error) *conn.TestError {
 
 // Introspect maps the keyspace's tables and materialized views: partition
 // and clustering keys as the primary key, static columns, secondary indexes
-// by kind, and per-table settings that matter for deletes and size.
+// by kind, per-table settings that matter for deletes and size, and the
+// risks this node's statistics show (findings.go).
 func Introspect(ctx context.Context, s *gocql.Session, keyspace string) (*schema.Model, error) {
 	start := time.Now()
 	srv, err := describe(ctx, s)
@@ -221,6 +222,7 @@ func Introspect(ctx context.Context, s *gocql.Session, keyspace string) (*schema
 		if g, ok := row["gc_grace_seconds"].(int); ok && g == 0 {
 			byName[name].AddFinding("DBS-CQL-GC-GRACE-ZERO", "warn", "gc_grace_seconds is 0, so tombstones can be purged before every replica has seen the delete, and a repair can bring deleted rows back", "")
 		}
+		ttlFinding(byName[name], row)
 		row = map[string]any{}
 	}
 	if err := iter.Close(); err != nil {
@@ -323,6 +325,7 @@ func Introspect(ctx context.Context, s *gocql.Session, keyspace string) (*schema
 			}
 		}
 	}
+	statsFindings(ctx, s, srv.Flavor, keyspace, order, byName)
 	for _, name := range order {
 		m.Relations = append(m.Relations, *byName[name])
 	}
