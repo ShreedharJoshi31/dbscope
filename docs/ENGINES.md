@@ -1113,6 +1113,24 @@ actions, and check constraints. Findings:
 | `DBS-MSSQL-UNTRUSTED-FK` / `DISABLED-FK` | a foreign key added or re-enabled `WITH NOCHECK`, or disabled |
 | `DBS-MSSQL-UNTRUSTED-CHECK` | the same for a check constraint |
 | `DBS-MSSQL-DISABLED-INDEX` | a disabled index, neither maintained nor used |
+| `DBS-MSSQL-MISSING-INDEX` | an optimizer missing-index suggestion for the database (warn from an 80% estimated cost cut and 100 uses, info below) |
+| `DBS-MSSQL-UNUSED-INDEX` | a nonclustered, non-unique index no query read since the server started but writes kept up to date (only once the server has been up 7 days) |
+| `DBS-MSSQL-DUPLICATE-INDEX` | a nonclustered index whose keys match another index of the table, or lead another's when neither is unique |
+
+The index rules: missing-index suggestions come from
+`sys.dm_db_missing_index_*`, at most 100, most estimated benefit first. The
+optimizer makes them while compiling, never for trivial plans, and ignores
+similar existing indexes and the cost to writes, so each is a suggestion.
+Unused indexes come from `sys.dm_db_index_usage_stats`, which starts empty
+with the server; unique indexes and constraints are left out because they
+enforce a rule even when never read. Both need `VIEW SERVER PERFORMANCE
+STATE` (`VIEW SERVER STATE` also works) and are left out without it, and on
+Azure SQL Database. A duplicate must have the same filter as the index that
+stays, which must hold its included columns; it reads only the catalog,
+and filtered indexes are compared only with `VIEW DEFINITION`. An index
+leading the clustered key is not flagged, since it can read fewer pages.
+The 80%, 100-use and 7-day cutoffs are dbscope's choice. Verified on SQL
+Server 2025 and 2022.
 
 **Plans.** The same estimated plan becomes the plan tree: one node per
 operator with estimated rows and subtree cost. Flagged: a scan that
