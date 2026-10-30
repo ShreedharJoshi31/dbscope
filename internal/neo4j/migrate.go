@@ -208,6 +208,10 @@ func (a *cypherAnalysis) statement(ctx context.Context, file string, p cypherPie
 		add("DBS-NEO4J-DROPS-SCHEMA", score.Medium, msg, "")
 	default:
 		a.dataChange(toks, add)
+		if slices.ContainsFunc(out.Findings, func(f migrate.Finding) bool { return f.RuleID == "DBS-NEO4J-UNBATCHED" }) &&
+			versionNum(a.base.Server.Version) >= 52300 {
+			out.Rewrite = batchRewrite(p)
+		}
 	}
 	return out
 }
@@ -350,6 +354,65 @@ func (a *cypherAnalysis) dataChange(toks []token, add func(string, score.Rating,
 	}
 	add("DBS-NEO4J-UNBATCHED", r, fmt.Sprintf("Writes up to %d %s entries in one transaction, which holds every change in memory until it commits %s",
 		touched, over, limit), "Batch it: CALL { ... } IN TRANSACTIONS OF 10000 ROWS (it must run in an implicit, auto-commit transaction)")
+}
+
+// batchRewrite moves the writes of MATCH ... [WHERE ...] SET|REMOVE|DELETE
+// into CALL (vars) { ... } IN TRANSACTIONS, the variable scope clause of
+// Neo4j 5.23+. Statements with any other clause are left alone.
+func batchRewrite(p cypherPiece) *migrate.Rewrite {
+	toks := p.toks
+	if len(toks) == 0 || toks[0].Word != "match" {
+		return nil
+	}
+	clause := func(i int) string {
+		if i > 0 && (toks[i-1].Text == "." || toks[i-1].Text == ":") || i+1 < len(toks) && toks[i+1].Text == ":" {
+			return "" // a property, label or map key
+		}
+		return toks[i].Word
+	}
+	w := -1
+	for i := range toks {
+		switch clause(i) {
+		case "set", "remove", "delete", "detach":
+			w = i
+		case "with", "unwind", "call", "return", "order", "skip", "limit", "union", "create", "merge", "foreach", "load", "use", "yield":
+			return nil
+		}
+		if w >= 0 {
+			break
+		}
+	}
+	if w < 0 {
+		return nil
+	}
+	ident := func(t token) bool { return t.Word != "" || strings.HasPrefix(t.Text, "`") }
+	bound := map[string]bool{}
+	for i := 1; i+1 < w; i++ {
+		prev, next := toks[i-1].Text, toks[i+1].Text
+		if ident(toks[i]) && ((prev == "(" || prev == "[") && strings.Contains(":)]{", next) || next == "=" && i+2 < w && toks[i+2].Text == "(") {
+			bound[toks[i].Text] = true
+		}
+	}
+	var imports []string
+	for i := w; i < len(toks); i++ {
+		switch clause(i) {
+		case "match", "optional", "with", "unwind", "call", "return", "order", "skip", "limit", "union", "create", "merge", "foreach", "load", "use", "yield":
+			return nil
+		}
+		if ident(toks[i]) && bound[toks[i].Text] && toks[i-1].Text != "." && toks[i-1].Text != ":" && !slices.Contains(imports, toks[i].Text) {
+			imports = append(imports, toks[i].Text)
+		}
+	}
+	if len(imports) == 0 {
+		return nil
+	}
+	off := toks[w].Pos - toks[0].Pos
+	return &migrate.Rewrite{
+		SQL: strings.TrimSpace(p.Text[:off]) + "\nCALL (" + strings.Join(imports, ", ") + ") {\n  " + p.Text[off:] + "\n} IN TRANSACTIONS OF 10000 ROWS",
+		Note: "Commits the writes every 10000 rows, so memory holds one batch instead of every change. " +
+			"CALL { } IN TRANSACTIONS only runs in an implicit (auto-commit) transaction: session.run in a driver, not a transaction function, " +
+			"and :auto in Neo4j Browser. If it fails part way the earlier batches stay committed, so make sure it can be run again.",
+	}
 }
 
 // plural is "1 value" or "3 values" ("entry" becomes "entries").

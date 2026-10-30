@@ -308,6 +308,9 @@ func (s *State) chooseName(nsp, table string, cols []string, suffix string) stri
 	return name
 }
 
+// NameTaken reports whether a relation, index or constraint in schema nsp is named name.
+func (s *State) NameTaken(nsp, name string) bool { return s.nameTaken(nsp, name) }
+
 func (s *State) nameTaken(nsp, name string) bool {
 	if s.Lookup(QName{Schema: nsp, Name: name}) != nil {
 		return true

@@ -34,6 +34,8 @@ type TableInfo struct {
 	Columns map[string]ColumnInfo
 	// PendingMutations are mutations not yet done; a new one waits behind them.
 	PendingMutations uint64
+	// Projections is true when the definition mentions PROJECTION; lightweight DELETE refuses such tables by default.
+	Projections bool
 }
 
 // ColumnInfo is one column's type, compressed size and key roles.
@@ -54,7 +56,8 @@ func ReadBase(ctx context.Context, c *Client) (*Base, error) {
 		return nil, err
 	}
 	b := &Base{Version: version, Num: versionNum(version), Database: c.Database, Tables: map[string]*TableInfo{}}
-	rows, err := c.Conn.Query(ctx, `SELECT database, name, engine, coalesce(total_rows, 0), coalesce(total_bytes, 0)
+	rows, err := c.Conn.Query(ctx, `SELECT database, name, engine, coalesce(total_rows, 0), coalesce(total_bytes, 0),
+			positionCaseInsensitive(create_table_query, 'PROJECTION') > 0
 		FROM system.tables WHERE database = ? AND NOT is_temporary`, c.Database)
 	if err != nil {
 		return nil, err
@@ -62,12 +65,13 @@ func ReadBase(ctx context.Context, c *Client) (*Base, error) {
 	for rows.Next() {
 		var db, name, engine string
 		var n, bytes uint64
-		if err := rows.Scan(&db, &name, &engine, &n, &bytes); err != nil {
+		var projections bool
+		if err := rows.Scan(&db, &name, &engine, &n, &bytes, &projections); err != nil {
 			rows.Close()
 			return nil, err
 		}
 		b.Tables[strings.ToLower(db+"."+name)] = &TableInfo{Engine: engine, Replicated: strings.HasPrefix(engine, "Replicated") || strings.HasPrefix(engine, "Shared"),
-			Rows: n, Bytes: bytes, Columns: map[string]ColumnInfo{}}
+			Rows: n, Bytes: bytes, Columns: map[string]ColumnInfo{}, Projections: projections}
 	}
 	rows.Close()
 	rows, err = c.Conn.Query(ctx, `SELECT database, table, name, type, data_compressed_bytes,
@@ -244,15 +248,16 @@ func (a *chAnalysis) statement(file string, p piece) (out migrate.Statement) {
 
 	switch {
 	case at(0) == "alter" && at(1) == "table":
-		display, key, next := a.tableName(toks, 2)
+		display, key, tableEnd := a.tableName(toks, 2)
 		out.Kind = "ALTER TABLE"
-		next = skipOnCluster(toks, next)
+		next := skipOnCluster(toks, tableEnd)
 		tbl := a.base.Tables[key]
 		if tbl != nil && tbl.Replicated {
 			add("DBS-CH-REPLICATED", score.Low, display+" is replicated: the change and any mutation run on every replica", "")
 		}
 		mutations := 0
-		for _, clause := range splitClauses(toks[next:]) {
+		clauses := splitClauses(toks[next:])
+		for _, clause := range clauses {
 			if a.clause(&out, add, display, key, tbl, clause) {
 				mutations++
 			}
@@ -264,6 +269,9 @@ func (a *chAnalysis) statement(file string, p piece) (out migrate.Statement) {
 		if mutations > 0 && !strings.Contains(strings.ToLower(p.SQL), "mutations_sync") {
 			add("DBS-CH-ASYNC-MUTATION", score.Low, "The ALTER returns before its mutation finishes; the migration tool reports success while parts are still being rewritten",
 				"Add SETTINGS mutations_sync = 2 to wait, or watch system.mutations")
+			if !contains(w, "settings") && !slices.ContainsFunc(out.Findings, func(f migrate.Finding) bool { return f.RuleID == "DBS-CH-KEY-COLUMN" }) {
+				out.Rewrite = a.mutationRewrite(p.SQL, toks[2:tableEnd], next != tableEnd, clauses, tbl)
+			}
 		}
 	case at(0) == "delete" && at(1) == "from":
 		display, key, _ := a.tableName(toks, 2)
@@ -314,6 +322,27 @@ func (a *chAnalysis) statement(file string, p piece) (out migrate.Statement) {
 		out.Kind = strings.ToUpper(strings.Join(w[:min(2, len(w))], " "))
 	}
 	return out
+}
+
+// lightweightDeleteNum is 23.3, where lightweight DELETE became generally
+// available (ClickHouse 23.3 changelog).
+const lightweightDeleteNum = 230300
+
+// mutationRewrite turns a lone ALTER TABLE t DELETE WHERE ... into a
+// lightweight DELETE FROM t WHERE ... on a MergeTree table without
+// projections, and otherwise makes the ALTER wait for its mutation.
+func (a *chAnalysis) mutationRewrite(sql string, table []token, onCluster bool, clauses [][]token, tbl *TableInfo) *migrate.Rewrite {
+	if c := clauses; len(c) == 1 && len(c[0]) > 2 && c[0][0].word == "delete" && c[0][1].word == "where" && !onCluster && len(table) > 0 &&
+		tbl != nil && strings.HasSuffix(tbl.Engine, "MergeTree") && !tbl.Projections && a.base.Num >= lightweightDeleteNum {
+		last := table[len(table)-1]
+		return &migrate.Rewrite{
+			SQL: "DELETE FROM " + sql[table[0].pos:last.pos+len(last.text)] + " " + sql[c[0][1].pos:],
+			Note: "Lightweight DELETE removes the same rows by writing a row mask instead of rewriting whole parts, and waits for it by default (lightweight_deletes_sync = 2). " +
+				"Merges reclaim the space later; until then queries skip the masked rows.",
+		}
+	}
+	return &migrate.Rewrite{SQL: sql + " SETTINGS mutations_sync = 2",
+		Note: "mutations_sync = 2 makes the ALTER wait until the mutation has finished on every replica, so the migration fails or succeeds with it; the migration then takes as long as the rewrite."}
 }
 
 // clause rates one ALTER TABLE clause and reports whether it starts a mutation.

@@ -136,3 +136,21 @@ changes.
 On the command line, `dbscope migrate check --pending` does the same against the live base given with `--dsn`,
 `--mysql` or `--sqlite` and lists the skipped files on stderr, and `--since GIT-REF` checks only the files that differ
 from GIT-REF in the working tree or are untracked.
+
+## Safer rewrites
+
+When dbscope can write a safer form of a statement mechanically, the review shows a "Safer rewrite" with the exact
+replacement text and a note (`Statement.Rewrite`). Each kind was run on real servers in the tests and analyzed
+again: it removes the finding it fixes without raising the rating, and leaves the same schema or rows as the
+original. PostgreSQL: CREATE INDEX and DROP INDEX become CONCURRENTLY when the statement runs outside a transaction
+(inside one, the note says to move it to its own migration); ADD CONSTRAINT ... FOREIGN KEY or CHECK becomes
+ADD ... NOT VALID followed by VALIDATE CONSTRAINT, naming the constraint as PostgreSQL would; a statement requesting a
+strong lock without lock_timeout gets `SET lock_timeout = '2s'` (SET LOCAL inside a transaction). MySQL and MariaDB:
+DDL without lock_wait_timeout gets `SET SESSION lock_wait_timeout = 5`, and when dbscope predicts the algorithm it names
+it (ALGORITHM=INSTANT, or INPLACE/NOCOPY with LOCK=NONE), so the server refuses the statement instead of silently
+copying the table. Neo4j: an unbatched MATCH ... SET, REMOVE or DELETE over a large label moves its writes into
+`CALL (vars) { ... } IN TRANSACTIONS OF 10000 ROWS` (5.23 or later; it must run as an auto-commit statement).
+ClickHouse: an ALTER that starts a mutation gets `SETTINGS mutations_sync = 2`, and ALTER TABLE ... DELETE WHERE becomes
+a lightweight DELETE FROM on MergeTree tables without projections (23.3 or later). No rewrite is offered when dbscope
+is unsure, or when it would change which rows or objects are affected. dbscope never edits the files: the rewrite is
+copied from the review.

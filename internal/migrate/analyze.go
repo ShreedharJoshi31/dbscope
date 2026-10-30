@@ -263,6 +263,7 @@ func analyzeStatement(st *apply.State, tm *timeouts.Machine, b *Base, f ingest.F
 	for _, q := range eff.Unknown {
 		rep.Warnings = append(rep.Warnings, fmt.Sprintf("%s:%d: %s is not in the base schema; its size, rows and dependents are unknown", f.Name, s.Line, q))
 	}
+	r.Rewrite = rewriteStatement(st, s, eff, p.findings)
 	st.Apply(s.Node)
 	return p
 }

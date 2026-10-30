@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -171,6 +172,15 @@ type ddlAnalysis struct {
 	sess    Session
 	altered map[string]bool
 	rep     *migrate.Report
+	cur     rewriteState
+}
+
+// rewriteState is what the current statement's rules found for its rewrite.
+type rewriteState struct {
+	lockWait bool
+	fails    bool
+	// guard is the ALGORITHM (and LOCK) clause the server is predicted to accept.
+	guard string
 }
 
 // tableName reads a possibly schema-qualified name starting at toks[i] and
@@ -206,8 +216,10 @@ func (a *ddlAnalysis) statement(file string, p Piece) migrate.Statement {
 		}
 		return ""
 	}
+	a.cur = rewriteState{}
 	finish := func() migrate.Statement {
 		out.Score = map[score.Rating]int{score.Low: 0, score.Medium: 4, score.High: 8, score.Critical: 12}[out.Rating]
+		out.Rewrite = a.rewrite(p.SQL, at(0))
 		return out
 	}
 
@@ -365,6 +377,7 @@ func (a *ddlAnalysis) mdl(out *migrate.Statement, add func(string, score.Rating,
 		out.LockTimeout = true
 		return
 	}
+	a.cur.lockWait = true
 	alt := "SET SESSION lock_wait_timeout = 5 before it and retry on timeout"
 	if a.base.Server.Flavor == "mariadb" {
 		alt = "Use ALTER TABLE ... WAIT 5 (or SET SESSION lock_wait_timeout = 5) and retry on timeout"
@@ -466,8 +479,17 @@ func (a *ddlAnalysis) alter(out *migrate.Statement, add func(string, score.Ratin
 	}
 
 	if fails {
+		a.cur.fails = true
 		a.mdl(out, add, wait)
 		return
+	}
+	if tbl != nil && reqAlgo == "" && reqLock == "" && guardable(kinds) {
+		switch {
+		case plan.Algo == Instant:
+			a.cur.guard = "ALGORITHM=INSTANT"
+		case plan.DML && plan.Algo != Copy:
+			a.cur.guard = "ALGORITHM=" + plan.Algo.String() + ", LOCK=NONE"
+		}
 	}
 	for _, d := range drops {
 		add("DBS-MYSQL-DROPS-DATA", score.High, d+" from "+display, "Take a backup first; stop using it in one release and drop it in a later one")
@@ -492,6 +514,41 @@ func (a *ddlAnalysis) alter(out *migrate.Statement, add func(string, score.Ratin
 	}
 	a.sizeRules(out, add, plan, display, tbl, strings.Join(whats, ", "))
 	a.mdl(out, add, wait)
+}
+
+// guardKinds are the clauses whose algorithm, LOCK=NONE and rebuild
+// predictions TestDDLPredictions checks on real servers.
+var guardKinds = []string{"add column", "drop column", "rename column", "modify column", "change column", "alter column",
+	"add index", "add unique", "add fulltext", "add check", "add foreign key", "drop primary key", "add primary key",
+	"convert charset", "rebuild", "rename table"}
+
+func guardable(kinds []string) bool {
+	for _, k := range kinds {
+		if !slices.Contains(guardKinds, k) {
+			return false
+		}
+	}
+	return len(kinds) > 0
+}
+
+// rewrite bounds the metadata lock wait of a statement DBS-MYSQL-LOCK-WAIT
+// flags and, when the algorithm is predicted, names it so the server
+// refuses the statement instead of silently using a slower one.
+func (a *ddlAnalysis) rewrite(sql, verb string) *migrate.Rewrite {
+	if !a.cur.lockWait || a.cur.fails {
+		return nil
+	}
+	note := "Sets lock_wait_timeout to 5 s first, so the statement gives up instead of queueing every later query on the table behind its metadata lock; retry the migration if it times out. The setting lasts for the rest of the session."
+	sql = "SET SESSION lock_wait_timeout = 5;\n" + sql
+	if g := a.cur.guard; g != "" && (verb == "alter" || verb == "create") {
+		if verb == "create" {
+			sql += " " + strings.ReplaceAll(g, ", ", " ")
+		} else {
+			sql += ", " + g
+		}
+		note += " " + strings.ReplaceAll(g, ", ", " and ") + " is what dbscope predicts the server uses; naming it makes the server reject the statement rather than fall back to a slower algorithm if the prediction were wrong."
+	}
+	return &migrate.Rewrite{SQL: sql, Note: note}
 }
 
 // sizeRules rates the work an ALTER does by the table's size.
