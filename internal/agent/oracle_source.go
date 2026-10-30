@@ -102,8 +102,15 @@ func (ms *oracleSource) MigrationBase(context.Context, conn.Profile, string) (*m
 	return nil, errUnsupported
 }
 
-func (ms *oracleSource) Workload(context.Context, conn.Profile, string, *schema.Model) (*workload.Snapshot, error) {
-	return nil, errUnsupported
+// Workload reads the shared pool's statements and plans (internal/oracle.Workload).
+func (ms *oracleSource) Workload(ctx context.Context, p conn.Profile, password string, m *schema.Model) (*workload.Snapshot, error) {
+	ctx, cancel := context.WithTimeout(ctx, statementTimeout(p)+connectSlack)
+	defer cancel()
+	db, err := ms.get(p, password)
+	if err != nil {
+		return nil, err
+	}
+	return oracle.Workload(ctx, db, m)
 }
 
 func (ms *oracleSource) Forget(profileID string) {
