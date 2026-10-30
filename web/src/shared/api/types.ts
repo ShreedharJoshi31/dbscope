@@ -58,6 +58,10 @@ export interface Profile {
   hasPassword: boolean;
   /** The SSH server the database is reached through. */
   ssh?: SSHTunnel;
+  /** Local folder of the migration files, which the agent reads (never writes). */
+  migrationsDir?: string;
+  /** Local folder of the application code, searched for uses of what a migration drops or renames. */
+  projectDir?: string;
   capabilities: Capabilities;
   createdAt: string;
   updatedAt: string;

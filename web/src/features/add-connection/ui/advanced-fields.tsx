@@ -2,7 +2,11 @@ import { Radio } from "@base-ui/react/radio";
 import { RadioGroup } from "@base-ui/react/radio-group";
 import { ChevronRight } from "lucide-react";
 import { useId } from "react";
-import type { ConnectionFormErrors, ConnectionFormValues } from "@/features/add-connection/model/form";
+import {
+  type ConnectionFormErrors,
+  type ConnectionFormValues,
+  hasMigrationReview,
+} from "@/features/add-connection/model/form";
 import type { SummaryMode } from "@/shared/api";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/shared/ui/collapsible";
 import { FormField } from "@/shared/ui/form-field";
@@ -52,7 +56,7 @@ export function AdvancedFields({
       <CollapsibleTrigger className="group/advanced flex items-center gap-1 rounded-sm text-xs font-medium text-text-muted hover:text-text-primary">
         <ChevronRight aria-hidden className="size-3.5 transition-transform group-data-panel-open/advanced:rotate-90" />
         Advanced
-        <span className="font-normal">schemas, assistant data, statement timeout, cost limit</span>
+        <span className="font-normal">schemas, assistant data, statement timeout, cost limit, folders</span>
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-3 flex flex-col gap-4 border-l border-border-default pl-4">
         {values.engine === "neo4j" && (
@@ -196,6 +200,47 @@ export function AdvancedFields({
               />
             )}
           </FormField>
+        )}
+
+        {hasMigrationReview(values.engine) && (
+          <>
+            <FormField
+              label="Migrations folder"
+              optional
+              error={errors.migrationsDir}
+              description="Where this database's migration files live. dbscope reads it to check only pending files and to re-check on save; it never writes there."
+            >
+              {(control) => (
+                <Input
+                  {...control}
+                  value={values.migrationsDir}
+                  onChange={(e) => onChange("migrationsDir", e.target.value)}
+                  onBlur={() => onBlur("migrationsDir")}
+                  placeholder="~/code/app/db/migrations"
+                  spellCheck={false}
+                  className="font-mono"
+                />
+              )}
+            </FormField>
+            <FormField
+              label="Project folder"
+              optional
+              error={errors.projectDir}
+              description="The application's code. A migration review lists the lines that still use what it drops or renames."
+            >
+              {(control) => (
+                <Input
+                  {...control}
+                  value={values.projectDir}
+                  onChange={(e) => onChange("projectDir", e.target.value)}
+                  onBlur={() => onBlur("projectDir")}
+                  placeholder="~/code/app"
+                  spellCheck={false}
+                  className="font-mono"
+                />
+              )}
+            </FormField>
+          </>
         )}
       </CollapsibleContent>
     </Collapsible>

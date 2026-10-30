@@ -30,6 +30,8 @@ export interface ConnectionFormValues {
   sshUser: string;
   sshKeyFile: string;
   sshPassphrase: string;
+  migrationsDir: string;
+  projectDir: string;
 }
 
 export type ConnectionField = keyof ConnectionFormValues;
@@ -56,6 +58,8 @@ export const FIELD_ORDER: readonly ConnectionField[] = [
   "summaryMode",
   "statementTimeoutMs",
   "maxCost",
+  "migrationsDir",
+  "projectDir",
 ];
 
 export const EMPTY_CONNECTION_FORM: ConnectionFormValues = {
@@ -82,6 +86,8 @@ export const EMPTY_CONNECTION_FORM: ConnectionFormValues = {
   sshUser: "",
   sshKeyFile: "",
   sshPassphrase: "",
+  migrationsDir: "",
+  projectDir: "",
 };
 
 export function formFromProfile(profile: Profile): ConnectionFormValues {
@@ -108,6 +114,8 @@ export function formFromProfile(profile: Profile): ConnectionFormValues {
     sshPort: String(profile.ssh?.port ?? 22),
     sshUser: profile.ssh?.user ?? "",
     sshKeyFile: profile.ssh?.keyFile ?? "",
+    migrationsDir: profile.migrationsDir ?? "",
+    projectDir: profile.projectDir ?? "",
     sshPassphrase: "",
   };
 }
@@ -214,6 +222,17 @@ export function parseSchemas(raw: string): string[] {
  * Converts validated values into the API body. An empty password is omitted,
  * which keeps the stored secret on update and stores none on create.
  */
+/** Engines whose migrations dbscope reviews, so the folder fields apply (docs/ENGINES.md). */
+export function hasMigrationReview(engine: Engine): boolean {
+  return !["redis", "dynamodb", "sqlserver", "oracle"].includes(engine);
+}
+
+/** Blank folders are sent empty so an update clears them. */
+function folders(values: ConnectionFormValues): Pick<ProfileInput, "migrationsDir" | "projectDir"> {
+  if (!hasMigrationReview(values.engine)) return { migrationsDir: "", projectDir: "" };
+  return { migrationsDir: values.migrationsDir.trim(), projectDir: values.projectDir.trim() };
+}
+
 export function toProfileInput(values: ConnectionFormValues): ProfileInput {
   if (!values.env) throw new Error("toProfileInput requires a validated form with env set");
   if (values.engine === "dynamodb") {
@@ -237,6 +256,7 @@ export function toProfileInput(values: ConnectionFormValues): ProfileInput {
     return {
       name: values.name.trim(),
       engine: "sqlite",
+      ...folders(values),
       path: values.path.trim(),
       host: "",
       port: 0,
@@ -252,6 +272,7 @@ export function toProfileInput(values: ConnectionFormValues): ProfileInput {
   }
   const input: ProfileInput = {
     engine: values.engine,
+    ...folders(values),
     ...((values.engine === "mongodb" ||
       values.engine === "cassandra" ||
       values.engine === "neo4j" ||

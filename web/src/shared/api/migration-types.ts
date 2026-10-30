@@ -57,6 +57,55 @@ export interface AnalyzedStatement {
   findings: MigrationFinding[];
   /** Tables, collections, indices or labels acted on, for engines whose statements take no table lock. */
   relations?: string[];
+  /** A safer form of the statement that dbscope wrote mechanically. */
+  rewrite?: StatementRewrite;
+  /** How long its work may take on this server. */
+  estimate?: StatementEstimate;
+}
+
+export interface StatementRewrite {
+  sql: string;
+  /** What changed and what the new form needs, such as running outside a transaction. */
+  note: string;
+}
+
+export interface StatementEstimate {
+  lowSeconds: number;
+  highSeconds: number;
+  /** What the estimate rests on, so it can be judged. */
+  basis: string;
+}
+
+/** An open session that held or waited for a lock the migration needs when the report was made. */
+export interface MigrationBlocker {
+  relation: string;
+  /** The server's id for it: a backend pid, a connection id or an operation id. */
+  session: string;
+  user?: string;
+  state: string;
+  /** How long its transaction or operation had been open. */
+  ageSeconds: number;
+  query?: string;
+  lock?: string;
+}
+
+/** What the migration tool's history table recorded as applied. */
+export interface MigrationPending {
+  tool: string;
+  table: string;
+  /** Files left out of the analysis because the history has them. */
+  applied: string[];
+  /** Applied files whose checksum no longer matches the history; analyzed again. */
+  changed: string[];
+}
+
+/** A line of the project folder that names a table or column the migration drops or renames. */
+export interface CodeUsage {
+  name: string;
+  /** Relative to the project folder. */
+  file: string;
+  line: number;
+  text: string;
 }
 
 export type ColumnChangeKind = "added" | "dropped" | "altered" | "renamed";
@@ -116,7 +165,9 @@ export interface AnalyzeReport {
     | "elasticsearch"
     | "opensearch"
     | "mongodb"
-    | "neo4j";
+    | "neo4j"
+    | "sqlserver"
+    | "oracle";
   /** server_version_num used for version-dependent rules, e.g. 170000; SQLITE_VERSION_NUMBER for SQLite. */
   pgVersion: number;
   rating: Rating;
@@ -129,4 +180,9 @@ export interface AnalyzeReport {
   warnings?: string[] | null;
   /** Where the base schema came from; additive to the contract. */
   base?: MigrationBase;
+  blockers?: MigrationBlocker[];
+  /** When the blockers were read (ISO time). */
+  blockersAt?: string;
+  pending?: MigrationPending;
+  usages?: CodeUsage[];
 }

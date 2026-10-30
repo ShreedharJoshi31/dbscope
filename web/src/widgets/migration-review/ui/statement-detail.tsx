@@ -19,6 +19,7 @@ import { copyText } from "@/shared/lib/clipboard";
 import { Button } from "@/shared/ui/button";
 import { SqlCode } from "@/shared/ui/sql-code";
 import { StatusIcon } from "@/shared/ui/status-icon";
+import { durationWords } from "@/widgets/migration-review/ui/review-context";
 
 function Fact({ term, children }: { term: string; children: ReactNode }) {
   return (
@@ -198,6 +199,14 @@ export function StatementDetail({ review, statement: s, total, unanalyzable, hea
         </Fact>
         <Fact term="Work">{workWords(s.work, engine)}</Fact>
         {!noLocks && <Fact term="Size">{sizeWords(s.sizeBytes, s.locks.length)}</Fact>}
+        {s.estimate && (
+          <Fact term="Duration">
+            <span data-testid="statement-estimate">
+              {estimateWords(s.estimate.lowSeconds, s.estimate.highSeconds)}
+              <span className="block text-2xs text-text-muted">{s.estimate.basis}</span>
+            </span>
+          </Fact>
+        )}
         <Fact term="Transaction">{txWords(s.tx)}</Fact>
         {!noLocks && (
           <Fact term={timeoutName}>
@@ -212,6 +221,28 @@ export function StatementDetail({ review, statement: s, total, unanalyzable, hea
           </Fact>
         )}
       </dl>
+      {s.rewrite && (
+        <section
+          aria-labelledby="statement-rewrite-heading"
+          data-testid="statement-rewrite"
+          className="flex flex-col gap-1.5 rounded-md border border-status-success-fg p-2"
+        >
+          <div className="flex items-center gap-1">
+            <h4 id="statement-rewrite-heading" className="text-2xs font-semibold text-status-success-fg uppercase">
+              Safer rewrite
+            </h4>
+            <span className="ml-auto">
+              <CopyButton text={s.rewrite.sql} label="the rewritten statement" />
+            </span>
+          </div>
+          <SqlCode
+            sql={s.rewrite.sql}
+            label={`Rewritten statement for ${s.file} line ${s.line}`}
+            className="max-h-40"
+          />
+          <p className="text-xs text-text-primary">{s.rewrite.note}</p>
+        </section>
+      )}
       <section aria-labelledby="statement-findings-heading" className="flex flex-col gap-2">
         <h4 id="statement-findings-heading" className="text-2xs font-semibold tracking-wide text-text-muted uppercase">
           Findings ({s.findings.length})
@@ -229,4 +260,11 @@ export function StatementDetail({ review, statement: s, total, unanalyzable, hea
       </section>
     </section>
   );
+}
+
+/** "about 40 s", "1 min to 5 min": the estimate's range in the largest unit that reads well. */
+function estimateWords(low: number, high: number): string {
+  const lo = durationWords(low);
+  const hi = durationWords(high);
+  return lo === hi ? `about ${lo}` : `${lo} to ${hi}`;
 }

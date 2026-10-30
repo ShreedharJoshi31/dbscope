@@ -188,6 +188,17 @@ describe("toProfileInput", () => {
       summaryMode: "profile",
       maxRowsToLLM: 50,
       statementTimeoutMs: 30000,
+      migrationsDir: "",
+      projectDir: "",
+    });
+  });
+
+  it("trims the folders, and sends them empty for engines without migration review", () => {
+    const withFolders = { ...valid, migrationsDir: " ~/app/db/migrate ", projectDir: "/code/app " };
+    expect(toProfileInput(withFolders)).toMatchObject({ migrationsDir: "~/app/db/migrate", projectDir: "/code/app" });
+    expect(toProfileInput({ ...withFolders, engine: "redis", port: "6379" })).toMatchObject({
+      migrationsDir: "",
+      projectDir: "",
     });
   });
 

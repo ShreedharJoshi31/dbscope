@@ -15,6 +15,7 @@ import { announce } from "@/shared/lib/announcer";
 import { copyText, downloadText } from "@/shared/lib/clipboard";
 import { Button } from "@/shared/ui/button";
 import { StatusIcon } from "@/shared/ui/status-icon";
+import { Blockers, Pending, Usages } from "@/widgets/migration-review/ui/review-context";
 
 function reportFileName(review: MigrationReview): string {
   const base = review.title.endsWith(".sql") ? review.title.slice(0, -4) : "migrations";
@@ -187,6 +188,9 @@ export function ReviewHeader({ review, model, onGoTo }: ReviewHeaderProps) {
           </ul>
         </section>
       )}
+      {model.report.pending && <Pending pending={model.report.pending} />}
+      <Blockers blockers={model.report.blockers ?? []} at={model.report.blockersAt} />
+      <Usages usages={model.report.usages ?? []} />
       {model.warnings.length > 0 && (
         <ul aria-label="Notes about the analysis" className="flex flex-col gap-0.5">
           {model.warnings.map((w) => (
