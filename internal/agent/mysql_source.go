@@ -118,8 +118,15 @@ func (ms *mysqlSource) MigrationBase(context.Context, conn.Profile, string) (*mi
 	return nil, errUnsupported
 }
 
-func (ms *mysqlSource) Workload(context.Context, conn.Profile, string, *schema.Model) (*workload.Snapshot, error) {
-	return nil, errUnsupported
+// Workload reads performance_schema (internal/mysql.Workload).
+func (ms *mysqlSource) Workload(ctx context.Context, p conn.Profile, password string, m *schema.Model) (*workload.Snapshot, error) {
+	ctx, cancel := context.WithTimeout(ctx, statementTimeout(p)+connectSlack)
+	defer cancel()
+	db, err := ms.get(p, password)
+	if err != nil {
+		return nil, err
+	}
+	return mysql.Workload(ctx, db, m)
 }
 
 func (ms *mysqlSource) Forget(profileID string) {

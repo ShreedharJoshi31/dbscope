@@ -27,8 +27,9 @@ var Images = map[string]string{
 // Password is the throwaway containers' root password.
 const Password = "dbscope-test"
 
-// Server starts a container of the flavor and returns a root profile for its "app" database.
-func Server(t testing.TB, flavor string) conn.Profile {
+// Server starts a container of the flavor and returns a root profile for its
+// "app" database. args go to the server, e.g. "--performance-schema=ON".
+func Server(t testing.TB, flavor string, args ...string) conn.Profile {
 	t.Helper()
 	if testing.Short() || os.Getenv("DBSCOPE_SKIP_MYSQL") != "" {
 		t.Skip("integration test")
@@ -40,7 +41,7 @@ func Server(t testing.TB, flavor string) conn.Profile {
 	}
 	c, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Image: Images[flavor], Env: env, ExposedPorts: []string{"3306/tcp"},
+			Image: Images[flavor], Env: env, ExposedPorts: []string{"3306/tcp"}, Cmd: args,
 			WaitingFor: wait.ForSQL("3306/tcp", "mysql", func(host string, port network.Port) string {
 				return "root:" + Password + "@tcp(" + host + ":" + port.Port() + ")/app"
 			}).WithStartupTimeout(3 * time.Minute),
