@@ -120,8 +120,16 @@ export function workloadEntries(s: WorkloadSnapshot, metric: WorkloadMetric): Re
   return entries;
 }
 
-/** One line on what the numbers under metric cover and what is missing from them. */
-export function workloadSummary(s: WorkloadSnapshot, metric: WorkloadMetric, now: number = Date.now()): string {
+/**
+ * One line on what the numbers under metric cover and what is missing from them. Engines other than
+ * PostgreSQL say in their own message what their per-query source lacks.
+ */
+export function workloadSummary(
+  s: WorkloadSnapshot,
+  metric: WorkloadMetric,
+  now: number = Date.now(),
+  engine: string = "postgres",
+): string {
   const parts: string[] = [];
   const st = s.statements;
   // Query time and calls count since pg_stat_statements was reset; scans and writes since the table counters were.
@@ -133,6 +141,11 @@ export function workloadSummary(s: WorkloadSnapshot, metric: WorkloadMetric, now
   );
   if (since && now - new Date(since).getTime() < 24 * 3_600_000) parts.push("less than a day of data");
   if (s.inRecovery) parts.push("a replica: only what ran here, no writes");
+  const postgres = engine === "postgres";
+  if (!postgres && st.status !== "ok") {
+    parts.push(st.message ?? "per-query statistics are not available");
+    return `${parts.join(" · ")}.`;
+  }
   switch (st.status) {
     case "not_installed":
       parts.push("pg_stat_statements is not installed in this database, so only scans and writes are shown");

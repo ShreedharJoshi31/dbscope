@@ -30,6 +30,7 @@ export function WorkloadControl({ profileId }: { profileId: string | undefined }
 }
 
 function WorkloadToggle({ profileId }: { profileId: string | undefined }) {
+  const { profile } = useActiveConnection();
   const { on, metric, setOn, setMetric } = useWorkloadView();
   const workload = useWorkload(profileId, on);
   const applied = useRef<Record<string, OverlayEntry> | null>(null);
@@ -132,7 +133,11 @@ function WorkloadToggle({ profileId }: { profileId: string | undefined }) {
           Workload
         </TooltipTrigger>
         <TooltipContent side="bottom">
-          {on ? "Hide workload" : "Show which tables real queries use (pg_stat_statements and table counters)"}
+          {on
+            ? "Hide workload"
+            : profile?.engine === "postgres"
+              ? "Show which tables real queries use (pg_stat_statements and table counters)"
+              : "Show which tables real queries use, from the server's own statistics"}
         </TooltipContent>
       </Tooltip>
       {on && workload.isSuccess && (
@@ -164,7 +169,7 @@ function WorkloadToggle({ profileId }: { profileId: string | undefined }) {
               )}
             </TooltipTrigger>
             <TooltipContent side="bottom" className="max-w-sm">
-              {workloadSummary(workload.data, shown)}
+              {workloadSummary(workload.data, shown, Date.now(), profile?.engine)}
             </TooltipContent>
           </Tooltip>
         </>

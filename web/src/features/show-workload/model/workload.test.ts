@@ -89,6 +89,15 @@ describe("workloadSummary", () => {
       "not in shared_preload_libraries",
     );
     expect(workloadSummary({ ...snapshot(), inRecovery: true }, "reads", now)).toContain("a replica");
+    // Other engines report their own source's gap, not pg_stat_statements'.
+    const es = workloadSummary(
+      snapshot({ status: "not_loaded", message: "Elasticsearch keeps no per-query history" }),
+      "time",
+      now,
+      "elasticsearch",
+    );
+    expect(es).toContain("Elasticsearch keeps no per-query history");
+    expect(es).not.toContain("pg_stat_statements");
   });
 
   it("formats durations", () => {

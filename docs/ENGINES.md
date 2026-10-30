@@ -900,6 +900,19 @@ it runs.
 Not yet: replication lag and queues, distributed DDL (`ON CLUSTER`) queue
 state, and cardinality order of key columns, which needs reading data.
 
+**Workload.** The map's Workload view reads `system.query_log`, which lists
+the tables each finished query used, so statements are tied to tables
+without parsing their text: the last 7 days (or less, if the log's TTL is
+shorter) of initial, finished reads and data changes (`query_kind` Select,
+Insert, Delete, Update; DDL is left out, though the log names its table
+too), grouped by `normalized_query_hash`. Query time and calls count every
+shape that used a table; writes are the rows inserts wrote. Queries that
+touch only `system` or `information_schema` tables, dbscope's catalog reads
+among them, are left out. The user needs `GRANT SELECT ON system.query_log`;
+without it, or with query logging off, the view says so. Verified on 26.8
+and 25.8 (the log is flushed every 7.5 seconds, so a query appears a few
+seconds after it finishes).
+
 ### SQL Server and Azure SQL
 
 Tested against SQL Server 2025 and 2022 (Developer edition, the amd64

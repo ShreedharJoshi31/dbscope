@@ -113,8 +113,15 @@ func (cs *clickhouseSource) MigrationBase(context.Context, conn.Profile, string)
 	return nil, errUnsupported
 }
 
-func (cs *clickhouseSource) Workload(context.Context, conn.Profile, string, *schema.Model) (*workload.Snapshot, error) {
-	return nil, errUnsupported
+// Workload reads system.query_log (internal/clickhouse.Workload).
+func (cs *clickhouseSource) Workload(ctx context.Context, p conn.Profile, password string, m *schema.Model) (*workload.Snapshot, error) {
+	ctx, cancel := context.WithTimeout(ctx, statementTimeout(p)+connectSlack)
+	defer cancel()
+	c, err := cs.get(p, password)
+	if err != nil {
+		return nil, err
+	}
+	return clickhouse.Workload(ctx, c, m)
 }
 
 func (cs *clickhouseSource) Forget(profileID string) {
