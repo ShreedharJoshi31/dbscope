@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -38,6 +39,16 @@ type Bastion struct {
 // TunnelTarget is how the bastion reaches a database container's published
 // port on this machine.
 func TunnelTarget(port int) (string, int) { return "host.docker.internal", port }
+
+// TunnelListenAddr is where a test server the bastion must reach listens. On
+// Linux host.docker.internal is the Docker bridge gateway, which a listener on
+// 127.0.0.1 never sees; Docker Desktop forwards it to the host's loopback.
+func TunnelListenAddr() string {
+	if runtime.GOOS == "linux" {
+		return "0.0.0.0:0"
+	}
+	return "127.0.0.1:0"
+}
 
 // SSH starts a bastion with one user, "tunnel", who logs in with a key generated here.
 func SSH(t testing.TB) Bastion {
