@@ -1,5 +1,6 @@
 import { ChevronRight } from "lucide-react";
 import { positionToRange } from "@/entities/query/model/position";
+import { useSqlTabs } from "@/entities/query/model/sql-tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/shared/ui/collapsible";
 
 interface SqlWithMarkProps {
@@ -42,18 +43,19 @@ interface ExecutedSqlProps {
   defaultOpen?: boolean;
 }
 
-/** "Executed SQL" disclosure: the exact statement dbscope ran (UX rule 4). */
+/** "Executed SQL" disclosure: the exact statement dbscope ran (UX rule 4); "query" for MongoDB, Cypher and the like. */
 export function ExecutedSql({ executedSql, submittedSql, position, defaultOpen = false }: ExecutedSqlProps) {
   const rewritten = submittedSql !== undefined && submittedSql.trim() !== executedSql.trim();
+  const label = useSqlTabs((s) => s.extension) === "sql" ? "Executed SQL" : "Executed query";
   return (
     <Collapsible defaultOpen={defaultOpen}>
       <CollapsibleTrigger className="group/exec flex items-center gap-1 rounded-sm text-xs font-medium text-text-muted hover:text-text-primary">
         <ChevronRight aria-hidden className="size-3.5 transition-transform group-data-panel-open/exec:rotate-90" />
-        Executed SQL
+        {label}
         {rewritten && <span className="font-normal">(rewritten by dbscope)</span>}
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-1">
-        <SqlWithMark sql={executedSql} position={position} label="Executed SQL" />
+        <SqlWithMark sql={executedSql} position={position} label={label} />
       </CollapsibleContent>
     </Collapsible>
   );
