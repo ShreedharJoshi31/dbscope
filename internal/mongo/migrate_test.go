@@ -2,14 +2,19 @@ package mongo
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"github.com/dbscope/dbscope/internal/migrate"
+	"github.com/dbscope/dbscope/internal/migrate/apply"
 	"github.com/dbscope/dbscope/internal/migrate/ingest"
 	"github.com/dbscope/dbscope/internal/migrate/score"
+	"github.com/dbscope/dbscope/internal/migrate/usage"
 	"github.com/dbscope/dbscope/internal/mytest"
 )
 
@@ -81,6 +86,36 @@ db.users.renameCollection("orders")`}})
 	}
 	if rep := Analyze(base, []ingest.Input{{Name: "x.js", SQL: "console.log('nothing here')"}}); len(rep.Unanalyzable) != 1 {
 		t.Errorf("unanalyzable %+v", rep.Unanalyzable)
+	}
+}
+
+// TestFieldChanges checks that fields removed or renamed in place reach the
+// schema diff, which code-usage search reads.
+func TestFieldChanges(t *testing.T) {
+	base := &Base{Server: Server{Version: "8.0.4", Num: 80004}, Collections: map[string]*CollectionInfo{
+		"fans": {Count: 40000, Bytes: 5 << 20, Indexes: []IndexInfo{{Name: "_id_", Keys: []string{"_id"}}}},
+	}}
+	rep := Analyze(base, []ingest.Input{{Name: "001.js", SQL: `
+module.exports = {
+  async up(db) {
+    await db.collection("fans").updateMany({}, { $unset: { badge: "" } });
+    await db.collection("fans").updateMany({}, { $rename: { handle: "username" } });
+  },
+};`}})
+	want := []apply.ColumnChange{
+		{Relation: "fans", Column: "badge", Change: "dropped"},
+		{Relation: "fans", Column: "handle", Change: "renamed", To: "username"},
+	}
+	if !slices.Equal(rep.Diff.Columns, want) {
+		t.Fatalf("columns %+v", rep.Diff.Columns)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "leaderboard.js"), []byte(`db.collection("fans").find({ badge: "founder" })`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	usage.Apply(context.Background(), rep, dir, nil)
+	if len(rep.Usages) != 1 || rep.Usages[0].Name != "fans.badge" || rep.Usages[0].File != "leaderboard.js" {
+		t.Errorf("usages %+v", rep.Usages)
 	}
 }
 

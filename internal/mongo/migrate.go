@@ -188,6 +188,20 @@ func (a *mongoAnalysis) statement(file string, c call) (out migrate.Statement) {
 			add("DBS-MONGO-BULK-UPDATE", a.tier(info), fmt.Sprintf("%s rewrites every matching document of %s (%s, %s), and each write goes through the oplog to every secondary",
 				c.Method, c.Collection, docsText(info), sizeText(info)), "Update in batches by _id range, pausing between batches so secondaries keep up")
 		}
+		// Fields removed or renamed in place, so code-usage search can find their readers.
+		if u, ok := arg(1).(jsObject); ok && c.Method != "bulkWrite" {
+			if unset, ok := u.get("$unset").(jsObject); ok {
+				for _, kv := range unset {
+					a.rep.Diff.Columns = append(a.rep.Diff.Columns, apply.ColumnChange{Relation: c.Collection, Column: kv.Key, Change: "dropped"})
+				}
+			}
+			if rename, ok := u.get("$rename").(jsObject); ok {
+				for _, kv := range rename {
+					to, _ := kv.Value.(string)
+					a.rep.Diff.Columns = append(a.rep.Diff.Columns, apply.ColumnChange{Relation: c.Collection, Column: kv.Key, Change: "renamed", To: to})
+				}
+			}
+		}
 	case "renameCollection":
 		to, _ := arg(0).(string)
 		dropTarget, _ := arg(1).(bool)
