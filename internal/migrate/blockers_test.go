@@ -139,6 +139,46 @@ func TestBlockersPostgres(t *testing.T) {
 		t.Logf("observed: %+v", b)
 	})
 
+	t.Run("parallel query", func(t *testing.T) {
+		// Parallel workers lock the relation too; they are part of their leader's query, not sessions of their own.
+		leader := d.Connect(t, p.User, pw)
+		var leaderPID int32
+		if err := leader.QueryRow(ctx, "SELECT pg_backend_pid()").Scan(&leaderPID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := leader.Exec(ctx, "SET debug_parallel_query = on"); err != nil {
+			t.Fatal(err)
+		}
+		done := make(chan error, 1)
+		go func() {
+			_, err := leader.Exec(ctx, "SELECT count(*) FROM films, pg_sleep(4)")
+			done <- err
+		}()
+		defer func() {
+			if err := <-done; err != nil {
+				t.Error(err)
+			}
+		}()
+		var workers int
+		for range 50 {
+			if err := d.Admin.QueryRow(ctx, `SELECT count(*) FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid
+				WHERE l.relation = 'films'::regclass AND a.backend_type = 'parallel worker'`).Scan(&workers); err != nil {
+				t.Fatal(err)
+			}
+			if workers > 0 {
+				break
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		if workers == 0 {
+			t.Fatal("no parallel worker locked films")
+		}
+		rep := analyze(d.Admin, alter)
+		if len(rep.Blockers) != 1 || rep.Blockers[0].Session != itoa(leaderPID) {
+			t.Fatalf("want only the leader %d, got %+v", leaderPID, rep.Blockers)
+		}
+	})
+
 	t.Run("session already waiting", func(t *testing.T) {
 		tx, err := holder.Begin(ctx)
 		if err != nil {

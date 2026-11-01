@@ -204,7 +204,8 @@ func queryLocks(ctx context.Context, b *Base, schemas, names []string) ([]pgLock
 		}
 	}
 	// pg_locks shows every session's locks; pg_stat_activity hides other
-	// users' state and query unless the role has pg_read_all_stats.
+	// users' state and query unless the role has pg_read_all_stats. Parallel
+	// workers hold the same locks as their leader, so only the leader is listed.
 	rows, err := tx.Query(ctx, `SELECT n.nspname || '.' || c.relname, l.pid, l.mode, l.granted,
 			coalesce(a.usename::text, ''), coalesce(a.state, ''), a.state IS NOT NULL,
 			coalesce(extract(epoch FROM now() - coalesce(a.xact_start, a.query_start))::float8, -1),
@@ -217,6 +218,7 @@ func queryLocks(ctx context.Context, b *Base, schemas, names []string) ([]pgLock
 		WHERE l.locktype = 'relation' AND l.database = (SELECT oid FROM pg_database WHERE datname = current_database())
 			AND l.pid IS NOT NULL AND l.pid <> pg_backend_pid()
 			AND coalesce(a.application_name, '') NOT LIKE 'dbscope%'
+			AND coalesce(a.backend_type, '') <> 'parallel worker'
 		ORDER BY l.granted DESC, l.pid
 		LIMIT 500`, schemas, names)
 	if err != nil {
