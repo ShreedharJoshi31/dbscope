@@ -183,3 +183,7 @@ Database tests start PostgreSQL 14/17/18 containers with Docker, or use
 `DBSCOPE_TEST_DSN`; without either they are skipped. Design documents live in
 [docs/](docs/): [ARCHITECTURE](docs/ARCHITECTURE.md), [API](docs/API.md),
 [QUERY-SAFETY](docs/QUERY-SAFETY.md), [NL](docs/NL.md), [MIGRATIONS](docs/MIGRATIONS.md).
+
+## License
+
+[Apache License 2.0](LICENSE).
