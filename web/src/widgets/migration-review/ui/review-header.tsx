@@ -90,7 +90,7 @@ interface ReviewHeaderProps {
 export function ReviewHeader({ review, model, onGoTo }: ReviewHeaderProps) {
   const overlayHere = useCanvasStore((s) => s.diff?.sourceId === review.id);
   const base = baseWords(model.report.base);
-  const files = model.files.length;
+  const files = model.files.filter((f) => !f.rollback).length;
   return (
     <header className="flex shrink-0 flex-col gap-2 border-b border-border-default bg-surface-subtle px-3 py-2">
       <div className="flex flex-wrap items-center gap-2">

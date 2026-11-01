@@ -39,7 +39,7 @@ export function reviewMarkdown(model: ReviewModel, options: MarkdownOptions = {}
   const meta = ratingMeta(model.rating);
   lines.push(`## dbscope migration review: ${meta.label}`, "");
 
-  const files = model.files.length;
+  const files = model.files.filter((f) => !f.rollback).length;
   const against = options.target ? ` against ${escapeMarkdown(options.target)}` : "";
   const base = baseWords(model.report.base);
   lines.push(

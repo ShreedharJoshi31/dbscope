@@ -39,6 +39,8 @@ export interface ReviewFile {
   statements: number[];
   /** The text was rebuilt from the statements because the source file was not available. */
   synthesized: boolean;
+  /** A separate rollback file, checked against its up migration instead of analyzed as one. */
+  rollback: boolean;
 }
 
 export interface UnanalyzableView {
@@ -100,6 +102,14 @@ export function emptyCounts(): Record<Rating, number> {
   return { critical: 0, high: 0, medium: 0, low: 0 };
 }
 
+// The separate down files internal/migrate/ingest.Pair keeps out of analysis: golang-migrate
+// {version}_{title}.down.sql and Flyway undo U{version}__{desc}.sql.
+const ROLLBACK_FILE = /(^|\/)(\d+_[^/]*\.down\.sql|U\d+(?:[._]\d+)*__[^/]*\.sql)$/;
+
+export function isRollbackFile(name: string): boolean {
+  return ROLLBACK_FILE.test(name);
+}
+
 /** Maps the agent's report (plus the files sent) to what the review UI renders. */
 export function toReviewModel(report: AnalyzeReport, sources: readonly MigrationSource[]): ReviewModel {
   const statementsIn = report.statements ?? [];
@@ -139,6 +149,7 @@ export function toReviewModel(report: AnalyzeReport, sources: readonly Migration
       text: sql === undefined ? synthesize(own) : normalizeSql(sql),
       statements: own.map((s) => s.index),
       synthesized: sql === undefined,
+      rollback: isRollbackFile(name),
     };
   });
 

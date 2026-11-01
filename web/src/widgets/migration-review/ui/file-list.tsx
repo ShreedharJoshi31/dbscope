@@ -105,7 +105,11 @@ export function FileList({
                     </p>
                   )}
                   {statements.length === 0 && (
-                    <p className="px-3 py-1 text-2xs text-text-muted">No SQL statements in this file.</p>
+                    <p className="px-3 py-1 text-2xs text-text-muted">
+                      {file.rollback
+                        ? "Rollback migration: checked against its up migration, not analyzed on its own."
+                        : "No SQL statements in this file."}
+                    </p>
                   )}
                   <Suspense
                     fallback={

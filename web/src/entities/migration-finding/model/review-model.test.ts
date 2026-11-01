@@ -5,6 +5,7 @@ import {
   impactByRelation,
   impactNodeId,
   initialSelection,
+  isRollbackFile,
   normalizeSql,
   relationChanges,
   statementAtLine,
@@ -69,6 +70,20 @@ describe("toReviewModel", () => {
     expect(initialSelection(model)).toBe(5);
     expect(statementAtLine(model, 0, 7)).toBe(3); // inside the multi-line CREATE TABLE
     expect(statementAtLine(model, 0, 1)).toBeNull(); // the comment line
+  });
+
+  it("marks separate down files as rollbacks, not as empty migrations", () => {
+    expect(isRollbackFile("migrations/0006_cleanup.down.sql")).toBe(true);
+    expect(isRollbackFile("db/U42__orders.sql")).toBe(true);
+    expect(isRollbackFile("migrations/0006_cleanup.up.sql")).toBe(false);
+    expect(isRollbackFile("V42__orders.sql")).toBe(false);
+    expect(isRollbackFile("notes.down.sql")).toBe(false);
+    const m = toReviewModel(migrationReport(), [
+      ...migrationSources(),
+      { name: "0001_orders.down.sql", sql: "DROP TABLE shop.parcel_events;" },
+    ]);
+    expect(m.files.at(-1)).toMatchObject({ name: "0001_orders.down.sql", rollback: true, statements: [] });
+    expect(m.files.filter((f) => f.rollback)).toHaveLength(1);
   });
 
   it("normalizes line endings like the agent", () => {
