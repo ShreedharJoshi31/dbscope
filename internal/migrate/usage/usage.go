@@ -237,6 +237,9 @@ func Search(ctx context.Context, dir string, targets []Target, b Budget) ([]migr
 
 	ctx, cancel := context.WithTimeout(ctx, b.Timeout)
 	defer cancel()
+	// The context's timer goroutine may not have run yet when the deadline
+	// passes, so the clock is checked too.
+	deadline := time.Now().Add(b.Timeout)
 	hits := make([][]migrate.Usage, len(ms))
 	files, unreadable := 0, 0
 	var cut string
@@ -251,7 +254,7 @@ func Search(ctx context.Context, dir string, targets []Target, b Budget) ([]migr
 			}
 			return nil
 		}
-		if ctx.Err() != nil {
+		if ctx.Err() != nil || !time.Now().Before(deadline) {
 			cut = fmt.Sprintf("the project search stopped after %s with %d files read; files after them were not searched", b.Timeout, files)
 			return fs.SkipAll
 		}
