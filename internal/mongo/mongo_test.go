@@ -129,6 +129,12 @@ func TestMongo(t *testing.T) {
 		if !planHas(res.Plan, "COLLSCAN") || !planFlagged(res.Plan) {
 			t.Errorf("an unindexed match should be a flagged collection scan: %+v", res.Plan)
 		}
+		// A $sort after $group is not pushed down, so explain nests the plan in stages[0].$cursor.
+		sorted, _ := Parse(`{"aggregate": "orders", "pipeline": [{"$match": {"total": {"$gt": 100}}}, {"$group": {"_id": "$status", "n": {"$sum": 1}}}, {"$sort": {"n": -1}}]}`)
+		res, err = Run(ctx, rc.Database("app"), sorted, 10, true, 5*time.Second)
+		if err != nil || !planHas(res.Plan, "COLLSCAN") {
+			t.Errorf("explain of an aggregate with $sort: %+v %v", res, err)
+		}
 	})
 
 	t.Run("timeout", func(t *testing.T) {

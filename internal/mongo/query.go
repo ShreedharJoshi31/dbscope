@@ -286,7 +286,7 @@ func explain(ctx context.Context, d *mongo.Database, cmd bson.D) (*plan.Node, er
 	qp, ok := out.Lookup("queryPlanner").DocumentOK()
 	if !ok {
 		// An aggregate's plan sits in its first stage's $cursor.
-		if stages, ok := out.Lookup("stages").ArrayOK(); ok {
+		if stages, isArray := out.Lookup("stages").ArrayOK(); isArray {
 			if first, err := stages.IndexErr(0); err == nil {
 				qp, ok = first.Document().Lookup("$cursor", "queryPlanner").DocumentOK()
 			}
@@ -307,7 +307,14 @@ func explain(ctx context.Context, d *mongo.Database, cmd bson.D) (*plan.Node, er
 }
 
 func planNode(d bson.Raw) *plan.Node {
-	n := &plan.Node{NodeType: d.Lookup("stage").StringValue(), Flags: []plan.Flag{}, Children: []*plan.Node{}}
+	stage, ok := d.Lookup("stage").StringValueOK()
+	n := &plan.Node{NodeType: stage, Flags: []plan.Flag{}, Children: []*plan.Node{}}
+	// A plan too large for one BSON document ends in {warning: "stats tree exceeded ..."} instead of a stage.
+	if !ok {
+		n.NodeType = "Plan cut short by MongoDB"
+		n.Condition, _ = d.Lookup("warning").StringValueOK()
+		return n
+	}
 	if s, ok := d.Lookup("indexName").StringValueOK(); ok {
 		n.Index = s
 	}
