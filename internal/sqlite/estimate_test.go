@@ -20,6 +20,9 @@ func TestEstimate(t *testing.T) {
 	if testing.Short() {
 		t.Skip("writes up to 150 MB of database files")
 	}
+	if raceDetector {
+		t.Skip("the race detector slows the Go SQLite engine about tenfold, so durations cannot be checked")
+	}
 	ctx := context.Background()
 	for _, rows := range []int{100_000, 300_000, 1_000_000} {
 		t.Run(fmt.Sprint(rows), func(t *testing.T) {

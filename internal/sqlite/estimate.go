@@ -14,13 +14,15 @@ import (
 //   - DROP COLUMN: 215, 180, 204
 //   - UPDATE of every row: 250, 224, 223
 //
-// Low is the slowest rate divided by 5 (slower disks, a busier machine, a
-// file not in the OS cache), high the fastest doubled.
+// Low is the slowest rate divided by 10 (slower disks, a busier machine, a
+// file not in the OS cache): a GitHub Actions Windows runner measured DROP
+// COLUMN at 33, 33 and 26 MB/s, 7 times slower than the M2. High is the
+// fastest doubled.
 var (
-	sqliteIndexRate  = estimate.Rate{LowMBps: 11, HighMBps: 125}
-	sqliteCopyRate   = estimate.Rate{LowMBps: 21, HighMBps: 255}
-	sqliteDropRate   = estimate.Rate{LowMBps: 36, HighMBps: 430}
-	sqliteUpdateRate = estimate.Rate{LowMBps: 44, HighMBps: 500}
+	sqliteIndexRate  = estimate.Rate{LowMBps: 5.6, HighMBps: 125}
+	sqliteCopyRate   = estimate.Rate{LowMBps: 10.5, HighMBps: 255}
+	sqliteDropRate   = estimate.Rate{LowMBps: 18, HighMBps: 430}
+	sqliteUpdateRate = estimate.Rate{LowMBps: 22, HighMBps: 500}
 )
 
 // sqliteEstimate is the duration of the statement's work on a table of n
