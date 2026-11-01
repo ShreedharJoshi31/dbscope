@@ -258,6 +258,13 @@ documents live in [docs/](docs/): [ARCHITECTURE](docs/ARCHITECTURE.md),
 [API](docs/API.md), [ENGINES](docs/ENGINES.md), [QUERY-SAFETY](docs/QUERY-SAFETY.md),
 [NL](docs/NL.md), [MIGRATIONS](docs/MIGRATIONS.md).
 
+## Contributing
+
+Bug reports, wrong migration verdicts and pull requests are welcome. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the setup, the tests a change needs and
+the pull request flow, and [SECURITY.md](SECURITY.md) to report a vulnerability
+privately.
+
 ## License
 
 [Apache License 2.0](LICENSE).

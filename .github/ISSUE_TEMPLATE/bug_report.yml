@@ -1,0 +1,40 @@
+name: Bug report
+description: Something is broken, or dbscope reported something that is not true
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what dbscope did instead. Screenshots help.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: For a wrong migration verdict, include the statement and the table's definition (no data).
+    validations:
+      required: true
+  - type: input
+    id: engine
+    attributes:
+      label: Database and version
+      placeholder: PostgreSQL 17.4, MongoDB 8.0.3, ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: dbscope version
+      description: Output of `dbscope version`.
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: macOS 26, Ubuntu 24.04, Windows 11
+  - type: markdown
+    attributes:
+      value: Do not paste passwords, connection strings with credentials, or customer data.

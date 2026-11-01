@@ -1,0 +1,20 @@
+name: Feature request
+description: A new capability, rule or engine
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do, and what gets in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you'd like
+      description: How it could work. For a new rule, which statement and which server behaviour it should catch.
+  - type: input
+    id: engine
+    attributes:
+      label: Database(s) it applies to
