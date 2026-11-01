@@ -16,10 +16,10 @@ dbscope migrate check captured --dsn "$STAGING_REPLICA_URL"
 ## How it works
 
 ```
- migrate command ──DATABASE_URL──▶ dbscope proxy (127.0.0.1:random) ──▶ shadow database
+ migrate command ──DATABASE_URL──> dbscope proxy (127.0.0.1:random) ──> shadow database
                                         │ records every statement, its result
-                                        ▼ and the transaction status
-                         split by bookkeeping writes ──▶ captured/0001_<name>.sql …
+                                        v and the transaction status
+                         split by bookkeeping writes ──> captured/0001_<name>.sql …
 ```
 
 1. Check, before anything runs: `--out` is empty; the shadow is reachable and

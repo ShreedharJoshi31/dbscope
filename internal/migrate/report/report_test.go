@@ -14,7 +14,7 @@ import (
 
 const migration = `SET lock_timeout = '2s';
 ALTER TABLE shop.orders ADD COLUMN uid uuid DEFAULT gen_random_uuid();
--- é😀 comment so columns differ from bytes
+-- é𝄞 comment so columns differ from bytes
 ALTER TABLE shop.orders ALTER COLUMN status TYPE text;  CREATE INDEX shop_orders_note ON shop.orders (placed_at);
 ALTER TABLE shop.customers RENAME COLUMN email TO email_address;
 ALTER TABLE t ADD CONSTRAINT nn NOT NULL a NOT VALID;

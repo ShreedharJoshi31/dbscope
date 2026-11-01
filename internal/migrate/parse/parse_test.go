@@ -91,8 +91,8 @@ func TestUnterminatedQuote(t *testing.T) {
 }
 
 func TestUTF16Columns(t *testing.T) {
-	// "é" is one UTF-16 unit (2 bytes in UTF-8); "😀" is two units (4 bytes).
-	text := "SELECT 'é😀'; SELECT 1; SELEC 'é' 2;"
+	// "é" is one UTF-16 unit (2 bytes in UTF-8); "𝄞" is two units (4 bytes).
+	text := "SELECT 'é𝄞'; SELECT 1; SELEC 'é' 2;"
 	f := Split(text)
 	if len(f.Statements) != 3 {
 		t.Fatalf("%q", sqls(f))

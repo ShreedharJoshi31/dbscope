@@ -44,11 +44,11 @@ describe("readSseStream", () => {
   });
 
   it("handles CRLF split across chunks and multi-byte UTF-8 split across chunks", async () => {
-    const bytes = encoder.encode("data: café ✓\r\n\r\n");
+    const bytes = encoder.encode("data: café €\r\n\r\n");
     const splitAt = bytes.indexOf(0xc3) + 1; // inside the two-byte "é"
     const crlf = bytes.length - 3; // between the CR and LF of the first line ending
     const { stream } = streamOf([bytes.slice(0, splitAt), bytes.slice(splitAt, crlf), bytes.slice(crlf)]);
-    await expect(collect(readSseStream(stream))).resolves.toEqual([{ event: "message", data: "café ✓" }]);
+    await expect(collect(readSseStream(stream))).resolves.toEqual([{ event: "message", data: "café €" }]);
   });
 
   it("joins multiple data lines, ignores comments and keeps the last id", async () => {

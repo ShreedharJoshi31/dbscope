@@ -17,8 +17,8 @@ describe("error positions", () => {
   });
 
   it("counts characters, not UTF-16 units, before the error", () => {
-    const sql = "SELECT '😀' AS e, nme FROM t";
-    // PostgreSQL counts the emoji as one character, so "nme" starts at character 18.
+    const sql = "SELECT '𝄞' AS e, nme FROM t";
+    // PostgreSQL counts the G clef as one character, so "nme" starts at character 18.
     expect(codePointToIndex(sql, 18)).toBe(sql.indexOf("nme"));
     expect(positionToRange(sql, 18)).toMatchObject({ line: 1, column: 18 });
   });
