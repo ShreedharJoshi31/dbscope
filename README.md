@@ -178,15 +178,8 @@ Every answer shows the SQL before its result, the steps it took, editable
 assumptions, what was sent and to which model. Generated SQL goes through the
 same read-only checks as SQL you type.
 
-Accuracy on the bundled evaluation set (`eval/nl`) with small local models, 2026-10-27:
-
-| Model (Ollama, Apple M2, 8 GB) | Pagila, 32 questions | Messy schema, 20 questions | Median time |
-|---|---|---|---|
-| qwen2.5-coder:3b | 37.5% | 20% | 8 s |
-| qwen2.5-coder:7b | 53.1% | not measured | 19 s |
-
-Larger hosted models are expected to do much better; run `dbscope eval nl` with
-your provider to measure.
+To measure accuracy with your own provider, run `dbscope eval nl` against the
+bundled evaluation set in `eval/nl`.
 
 ![Assistant answer](web/e2e/__screenshots__/chromium-darwin/assistant-answer-light.png)
 
