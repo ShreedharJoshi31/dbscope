@@ -32,7 +32,7 @@ Stack choices below were researched on 2026-10-26 from primary sources
 | Secrets | `zalando/go-keyring` holds only an age X25519 identity; all secrets in `secrets.age` (`filippo.io/age`) | no keyring (headless Linux/WSL) → age scrypt passphrase; Windows 2560-byte blob limit avoided |
 | LLM | `anthropic-sdk-go/v2` (structured output via `OutputConfig.Format`), `openai-go/v3` Chat Completions (works with Ollama `/v1`; not the Responses API) | |
 | Logging | `log/slog`; `Secret` type implementing `LogValuer` + `ReplaceAttr` key filter | never log a DSN string |
-| Tests | stdlib `testing`; `testcontainers-go` postgres module locally/Linux CI; `DBSCOPE_TEST_DSN` on macOS/Windows CI via `ikalnytskyi/action-setup-postgres@v8` | |
+| Tests | stdlib `testing`; `testcontainers-go` postgres module locally, or an existing server through `DBSCOPE_TEST_DSN`; not run in CI | |
 
 Recovery conflict on hot standby: SQLSTATE `40001` + message containing
 "conflict with recovery" (40001 alone is also a serialization failure).

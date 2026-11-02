@@ -45,9 +45,9 @@ make dev                                              # terminal 2, hot reload o
    make e2e    # Playwright browser tests, when you touched the UI
    ```
 
-4. Open a pull request against `main` and fill in the template. CI runs the Go
-   tests on Linux, macOS and Windows, the web checks and Playwright, and the
-   README's build command on each OS.
+4. Open a pull request against `main` and fill in the template. CI runs the web
+   checks and Playwright, and the README's build command on each OS. It does
+   not run the Go tests, so run `make test` before you open the pull request.
 5. A maintainer reviews it. Address review comments with new commits.
 
 ## Tests
