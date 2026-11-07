@@ -1167,6 +1167,12 @@ partitions, logical reads, the lock the statement waited for and its error.
 | `DBS-MSSQL-FAILS` | the server rejects it: NOT NULL without a default on a table with rows, ALTER or DROP COLUMN with a dependent index or constraint, DROP INDEX on a key constraint, TRUNCATE or DROP of a referenced table, ONLINE on an edition without it |
 | `DBS-MSSQL-NULLABLE`, `-UNTRUSTED-FK`, `-UNTRUSTED-CHECK`, `-DISABLED-FK` | ALTER COLUMN that drops NOT NULL; constraints added WITH NOCHECK, disabled, or re-enabled without WITH CHECK |
 | `DBS-MSSQL-DROPS-DATA` / `DBS-DROP-CONSTRAINT` | DROP COLUMN, DROP TABLE, TRUNCATE (high); dropping a key, unique, check or foreign key (medium) |
+| `DBS-HOT-TABLE` | the table has at least 5% of the statements counted in the schemas read, and at least 1,000: work that blocks it for the whole run (`-BLOCKS-TABLE`, `-OFFLINE-INDEX`, `-TABLE-SCAN`) is rated one step higher, counting writes, plus reads when they wait too; a Sch-M lock that may wait without `LOCK_TIMEOUT` stays medium (reads and writes count) |
+
+Busy tables come from `sys.dm_db_index_usage_stats`, the counters the Workload view reads, since the server started.
+They count statements, not rows: a two-row INSERT is one write. Without VIEW SERVER PERFORMANCE STATE (VIEW SERVER
+STATE before 2022), or on Azure SQL Database, the report warns and no table counts as busy. `TestBusyTable` checks this
+on SQL Server 2025 and 2022. This can move a migration that passed `--fail-on high` to failing it.
 
 A CREATE INDEX without options gets a safer rewrite with `WITH (ONLINE = ON, RESUMABLE = ON)` (RESUMABLE from 2019),
 which needs Enterprise, Developer or Azure SQL and must run outside an explicit transaction (error 574). Sessions

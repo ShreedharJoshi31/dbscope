@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dbscope/dbscope/internal/migrate"
 	"github.com/dbscope/dbscope/internal/schema"
 )
 
@@ -23,6 +24,9 @@ type DDLBase struct {
 	Source string
 	// Warnings are reads that were skipped.
 	Warnings []string
+	// Traffic is each table's index usage, keyed like Tables; nil when it
+	// could not be read, so no table counts as busy.
+	Traffic *migrate.Traffic
 }
 
 // DDLTable is what the rules need to know about a base table.
@@ -182,6 +186,10 @@ func ReadBase(ctx context.Context, db *sql.DB, schemas []string) (*DDLBase, erro
 		})
 	if err != nil {
 		b.Warnings = append(b.Warnings, "table sizes were not read ("+err.Error()+"), so work on tables is rated as if their size were unknown")
+	}
+	var warning string
+	if b.Traffic, warning = readTraffic(ctx, db, m, srv); warning != "" {
+		b.Warnings = append(b.Warnings, warning)
 	}
 	return b, nil
 }

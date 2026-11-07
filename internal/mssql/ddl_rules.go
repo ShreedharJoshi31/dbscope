@@ -68,9 +68,11 @@ func (a *ddlAnalysis) work(out *migrate.Statement, add adder, c change, online b
 				"and inside a transaction it holds its locks until commit", c.what, display, size),
 			"Run it when the server is quiet; add WAIT_AT_LOW_PRIORITY to the ONLINE option so its locks yield to other sessions")
 	case c.eff == effRewrite:
-		add("DBS-MSSQL-BLOCKS-TABLE", rate(score.High, score.Medium, score.High, score.Critical),
+		r := rate(score.High, score.Medium, score.High, score.Critical)
+		add("DBS-MSSQL-BLOCKS-TABLE", r,
 			fmt.Sprintf("%s writes every row of %s (%s) while holding a %s lock, so reads and writes of the table wait for the whole time", c.what, display, size, lockMode),
 			a.rewriteAlt())
+		a.busy(out, add, []string{display}, r, true)
 	case c.eff == effIndex:
 		alt := "Add WITH (ONLINE = ON" + a.resumable() + ") so writes continue during the build"
 		if a.base.EngineEdition != 0 && !a.base.Online() {
@@ -80,13 +82,52 @@ func (a *ddlAnalysis) work(out *migrate.Statement, add adder, c change, online b
 		if lockMode == lockSchM {
 			blocked = "reads and writes of it wait"
 		}
-		add("DBS-MSSQL-OFFLINE-INDEX", rate(score.High, score.Medium, score.High, score.Critical),
+		r := rate(score.High, score.Medium, score.High, score.Critical)
+		add("DBS-MSSQL-OFFLINE-INDEX", r,
 			fmt.Sprintf("%s reads all of %s (%s) offline, holding a %s lock for the whole build, so %s", c.what, display, size, lockMode, blocked), alt)
+		a.busy(out, add, []string{display}, r, lockMode == lockSchM)
 	case c.eff == effScan:
-		add("DBS-MSSQL-TABLE-SCAN", rate(score.Medium, score.Low, score.Medium, score.High),
+		r := rate(score.Medium, score.Low, score.Medium, score.High)
+		add("DBS-MSSQL-TABLE-SCAN", r,
 			fmt.Sprintf("%s reads every row of %s (%s) while holding a %s lock, so reads and writes of the table wait until it finishes", c.what, display, size, lockMode),
 			"Run it when the table is quiet, or add the constraint WITH NOCHECK first and validate it later in a quiet period")
+		a.busy(out, add, []string{display}, r, true)
 	}
+}
+
+// busy adds DBS-HOT-TABLE once per statement when it stops traffic on a busy
+// table (docs/MIGRATIONS.md, "Scoring"). Work that blocks the table for its
+// whole run (blocked is that finding's rating) raises the rating one step;
+// stopsReads says whether reads wait too, so they count. A lock that may wait
+// without LOCK_TIMEOUT (blocked is "") queues every query, so reads and
+// writes count, and the rating stays Medium.
+func (a *ddlAnalysis) busy(out *migrate.Statement, add adder, displays []string, blocked score.Rating, stopsReads bool) {
+	for _, f := range out.Findings {
+		if f.RuleID == "DBS-HOT-TABLE" {
+			return
+		}
+	}
+	var lines []string
+	for _, d := range displays {
+		if line, ok := a.base.Traffic.Busy(strings.ToLower(d), d, stopsReads); ok && !slices.Contains(lines, line) {
+			lines = append(lines, line)
+		}
+	}
+	if len(lines) == 0 {
+		return
+	}
+	busy := strings.Join(lines, "; ")
+	if blocked != "" {
+		waits := "writes to it wait"
+		if stopsReads {
+			waits = "reads and writes of it wait"
+		}
+		add("DBS-HOT-TABLE", blocked.Up(), "locks a busy table: "+busy+"; "+waits+" for as long as the statement runs",
+			"Run it at the quietest time, or use an online form (WITH (ONLINE = ON) where the edition has it)")
+		return
+	}
+	add("DBS-HOT-TABLE", score.Medium, "locks a busy table: "+busy+"; if the schema lock has to wait, every query on the table queues behind it",
+		"SET LOCK_TIMEOUT 5000 earlier in the script, run it at the quietest time, and retry on error 1222")
 }
 
 func (a *ddlAnalysis) rewriteAlt() string {

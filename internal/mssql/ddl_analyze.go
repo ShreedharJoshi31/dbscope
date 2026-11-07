@@ -227,6 +227,11 @@ func (a *ddlAnalysis) lockWait(out *migrate.Statement, add adder, lowPriority bo
 	add("DBS-MSSQL-LOCK-WAIT", score.Medium,
 		"DDL needs a schema modification (Sch-M) lock, at least briefly; behind any open transaction on the table it waits, "+
 			"and every later query on the table queues behind it. LOCK_TIMEOUT defaults to -1, which waits forever", alt)
+	var rels []string
+	for _, l := range out.Locks {
+		rels = append(rels, l.Relation)
+	}
+	a.busy(out, add, rels, "", true)
 }
 
 func indexOf(toks []Token, word string) int {
