@@ -64,7 +64,8 @@ The test fails if `rules` data disagrees with the recorded ground truth for any 
   live base or a `dbscope stats export` file (`scans`, `rowsWritten`, `totalScans`,
   `totalRowsWritten`, `activitySince`, `inRecovery`); without database totals the share is of the
   schemas read, and the finding says so. A schema dump alone has no counters, so K is 0. On a replica
-  they count only that replica's reads and no writes.
+  they count only that replica's reads and no writes. MySQL and MariaDB use the same cutoffs
+  (`migrate.BusyShare`) on performance_schema's row counters; see ENGINES.md.
 - score = L·W·Z + Q + 3T + 2H + 2K → Low 0-2 · Medium 3-6 · High 7-11 · Critical ≥ 12
 
 Query dependents found in `pg_stat_statements` carry their call counts. Workload on the canvas is

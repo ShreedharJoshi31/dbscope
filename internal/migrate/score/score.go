@@ -42,6 +42,16 @@ func Max(a, b Rating) Rating {
 	return a
 }
 
+// Up returns the next higher rating; Critical stays Critical.
+func (r Rating) Up() Rating {
+	for _, next := range []Rating{Medium, High, Critical} {
+		if next.Rank() == r.Rank()+1 {
+			return next
+		}
+	}
+	return Critical
+}
+
 // ParseRating validates a --fail-on value.
 func ParseRating(s string) (Rating, bool) {
 	r := Rating(s)

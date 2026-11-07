@@ -27,6 +27,11 @@ type Base struct {
 	Tables map[string]*TableInfo
 	// Source is "live", or "none" when only a server version was given.
 	Source string
+	// Traffic is each table's row I/O, keyed like Tables; nil when
+	// performance_schema could not be read, so no table counts as busy.
+	Traffic *migrate.Traffic
+	// Warnings say what the base could not read.
+	Warnings []string
 }
 
 // ReadBase reads table sizes, row formats and column types for the rules.
@@ -124,7 +129,14 @@ func ReadBase(ctx context.Context, db *sql.DB, schemas []string, fallback string
 			}
 		}
 	}
-	return b, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	var warning string
+	if b.Traffic, warning = readTraffic(ctx, db, m); warning != "" {
+		b.Warnings = append(b.Warnings, warning)
+	}
+	return b, nil
 }
 
 // Analyze rates migration files against base: the algorithm each ALTER
@@ -136,6 +148,7 @@ func Analyze(base *Base, files []ingest.Input) *migrate.Report {
 		Impact: map[string][]impact.Item{}, Unanalyzable: []migrate.Unanalyzable{}, Warnings: []string{}, Base: base.Source,
 		Diff: apply.Diff{Added: []string{}, Dropped: []string{}, Altered: []string{}, Columns: []apply.ColumnChange{}}}
 	label := map[string]string{"mysql": "MySQL", "mariadb": "MariaDB"}[srv.Flavor]
+	rep.Warnings = append(rep.Warnings, base.Warnings...)
 	if base.Source == "none" {
 		rep.Warnings = append(rep.Warnings, fmt.Sprintf("no base schema: rules assume %s %s, and table sizes and column types are unknown, so type changes are assumed to copy the table", label, srv.Version))
 	}
@@ -306,8 +319,10 @@ func (a *ddlAnalysis) statement(file string, p Piece) migrate.Statement {
 			for i < len(toks) && (toks[i].Word == "if" || toks[i].Word == "exists" || toks[i].Word == "temporary") {
 				i++
 			}
+			var keys, displays []string
 			for i < len(toks) {
 				display, key, next := a.tableName(toks, i)
+				keys, displays = append(keys, key), append(displays, display)
 				a.rep.Diff.Dropped = append(a.rep.Diff.Dropped, display)
 				out.Locks = append(out.Locks, migrate.Lock{Relation: display, Mode: "METADATA EXCLUSIVE"})
 				if a.base.Tables[key] != nil {
@@ -321,15 +336,17 @@ func (a *ddlAnalysis) statement(file string, p Piece) migrate.Statement {
 				}
 			}
 			a.mdl(&out, add, hasWord(toks, "wait", "nowait"))
+			a.busy(add, keys, displays, "", nil)
 			return finish()
 		}
 		out.Kind = "DROP " + strings.ToUpper(at(1))
 		return finish()
 	case "rename":
 		out.Kind = "RENAME TABLE"
-		display, _, _ := a.tableName(toks, 2)
+		display, key, _ := a.tableName(toks, 2)
 		out.Locks = append(out.Locks, migrate.Lock{Relation: display, Mode: "METADATA EXCLUSIVE"})
 		a.mdl(&out, add, hasWord(toks, "wait", "nowait"))
+		a.busy(add, []string{key}, []string{display}, "", nil)
 		return finish()
 	case "optimize", "truncate":
 		i := 1
@@ -342,6 +359,7 @@ func (a *ddlAnalysis) statement(file string, p Piece) migrate.Statement {
 			out.Locks = append(out.Locks, migrate.Lock{Relation: display, Mode: "METADATA EXCLUSIVE"})
 			add("DBS-MYSQL-TRUNCATE", score.High, "TRUNCATE deletes every row of "+display+"; it is not a schema-only change", "")
 			a.mdl(&out, add, false)
+			a.busy(add, []string{key}, []string{display}, "", nil)
 			return finish()
 		}
 		a.alter(&out, add, display, key, [][]Token{{{Text: "force", Word: "force"}}}, false)
@@ -513,8 +531,9 @@ func (a *ddlAnalysis) alter(out *migrate.Statement, add func(string, score.Ratin
 		out.SizeBytes = &b
 	}
 	out.Estimate = ddlEstimate(plan, out.Work, tbl, kinds)
-	a.sizeRules(out, add, plan, display, tbl, strings.Join(whats, ", "))
+	blocked := a.sizeRules(out, add, plan, display, tbl, strings.Join(whats, ", "))
 	a.mdl(out, add, wait)
+	a.busy(add, []string{key}, []string{display}, blocked, tbl)
 }
 
 // guardKinds are the clauses whose algorithm, LOCK=NONE and rebuild
@@ -552,10 +571,11 @@ func (a *ddlAnalysis) rewrite(sql, verb string) *migrate.Rewrite {
 	return &migrate.Rewrite{SQL: sql, Note: note}
 }
 
-// sizeRules rates the work an ALTER does by the table's size.
-func (a *ddlAnalysis) sizeRules(out *migrate.Statement, add func(string, score.Rating, string, string), plan Plan, display string, tbl *TableInfo, what string) {
+// sizeRules rates the work an ALTER does by the table's size. It returns the
+// rating given to blocking writes for the whole run, or "" when writes continue.
+func (a *ddlAnalysis) sizeRules(out *migrate.Statement, add func(string, score.Rating, string, string), plan Plan, display string, tbl *TableInfo, what string) score.Rating {
 	if out.Work == "none" && (plan.DML || plan.Algo == Instant) {
-		return // metadata only; the metadata lock rule covers the brief exclusive lock
+		return "" // metadata only; the metadata lock rule covers the brief exclusive lock
 	}
 	size := "of unknown size"
 	tier := 1 // 0 small, 1 unknown or medium, 2 large
@@ -579,11 +599,43 @@ func (a *ddlAnalysis) sizeRules(out *migrate.Statement, add func(string, score.R
 		}
 		add("DBS-MYSQL-BLOCKS-WRITES", r,
 			fmt.Sprintf("%s (ALGORITHM=%s) %s %s (%s) and blocks writes to it for the whole time", what, plan.Algo, verb, display, size), alt)
-		return
+		return r
 	}
 	r := []score.Rating{score.Low, score.Medium, score.High}[tier]
 	add("DBS-MYSQL-TABLE-WORK", r,
 		fmt.Sprintf("%s (ALGORITHM=%s) %s %s (%s); writes continue, but replicas apply it only after it finishes, so they fall behind by its duration", what, plan.Algo, verb, display, size), alt)
+	return ""
+}
+
+// busy adds DBS-HOT-TABLE when the statement stops traffic on a busy table
+// (docs/MIGRATIONS.md, "Scoring"). Writes blocked for the whole run (blocked
+// is that finding's rating) weigh the table's rows written and raise the
+// rating one step. Otherwise only a metadata lock that may wait without a
+// timeout stops traffic, and then every query on the table queues, so rows
+// read and written count, and the rating stays Medium.
+func (a *ddlAnalysis) busy(add func(string, score.Rating, string, string), keys, displays []string, blocked score.Rating, tbl *TableInfo) {
+	if blocked == "" && !a.cur.lockWait {
+		return
+	}
+	var lines []string
+	for i, k := range keys {
+		if line, ok := a.base.Traffic.Busy(k, displays[i], blocked == ""); ok {
+			lines = append(lines, line)
+		}
+	}
+	if len(lines) == 0 {
+		return
+	}
+	busy := strings.Join(lines, "; ")
+	if blocked != "" {
+		add("DBS-HOT-TABLE", blocked.Up(),
+			"locks a busy table: "+busy+"; writes to it wait for as long as the statement runs",
+			"Run it at the quietest time, or use "+a.oscTool(tbl))
+		return
+	}
+	add("DBS-HOT-TABLE", score.Medium,
+		"locks a busy table: "+busy+"; if the metadata lock has to wait, every query on the table queues behind it",
+		"SET SESSION lock_wait_timeout = 5 before it, run it at the quietest time, and retry on timeout")
 }
 
 // oscTool names the online schema change tool that fits the table.

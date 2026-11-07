@@ -315,6 +315,12 @@ come from the manuals and are not checked against a server.
 | `DBS-MYSQL-UNIQUE-DATA`, `-FK-UNCHECKED`, `-PARTITION-DATA`, `-TRUNCATE`, `-ROW-VERSIONS` | data-dependent failures, unchecked foreign keys, partition and table data loss, INSTANT's row-version limit |
 | `DBS-MYSQL-DROPS-DATA` | DROP COLUMN, or DROP TABLE of a table in the base (high) |
 | `DBS-DROP-CONSTRAINT` | dropping a foreign key, check, unique index or the primary key, with what stops being enforced (medium) |
+| `DBS-HOT-TABLE` | the table has at least 5% of the rows counted in the schemas read, and at least 1,000: writes blocked for the whole run raise `DBS-MYSQL-BLOCKS-WRITES`'s rating one step (rows written count); a metadata lock that may wait without a timeout stays medium (rows read and written count, since every query queues) |
+
+Busy tables come from performance_schema's `table_io_waits_summary_by_index_usage`, the rows the Workload
+view counts, since the server started. Without performance_schema, or without SELECT on it, the report warns
+and no table counts as busy. `TestBusyTable` checks this on MySQL 8.4 and MariaDB 11.8, with performance_schema
+on and off. This can move a migration that passed `--fail-on high` to failing it.
 
 The safe alternative names gh-ost or pt-online-schema-change by the table's
 foreign keys and primary key. The CLI takes a live base (`--mysql URL` or

@@ -58,13 +58,6 @@ type Base struct {
 	timeout time.Duration
 }
 
-// Hot tables: at least this share of the database's activity, and at least
-// minHotCount events, so a nearly idle database has no hot tables.
-const (
-	hotShare    = 0.05
-	minHotCount = 1000
-)
-
 // hotness is how much traffic waits on a lock of class L on a relation:
 // ACCESS EXCLUSIVE stops reads, so its scans count; the SHARE-class locks
 // stop only writes, so its row writes count.
@@ -90,11 +83,10 @@ func (b *Base) hot(rel apply.QName, L int) hotness {
 		h.of = "the " + unit + " in the schemas read"
 	}
 	h.n = n
-	if L < 2 || total == 0 || n < minHotCount {
+	if L < 2 {
 		return h
 	}
-	h.share = float64(n) / float64(total)
-	h.hot = h.share >= hotShare
+	h.share, h.hot = BusyShare(n, total)
 	return h
 }
 
