@@ -1308,6 +1308,14 @@ TRUNCATE, DROP PARTITION and DROP TABLE ... PURGE, and medium for DROP TABLE wit
 on, since FLASHBACK TABLE ... TO BEFORE DROP restores it. MOVE without ONLINE or UPDATE INDEXES leaves indexes
 unusable (`DBS-ORA-UNUSABLE-INDEXES`).
 
+`DBS-HOT-TABLE` weighs these by how busy the table is: one with at least 5% of the rows written in the schemas read,
+and at least 1,000. Work under `DBS-ORA-BLOCKS-DML` on a busy table is rated one step higher; DDL that needs its lock
+at once while ddl_lock_timeout is 0 stays medium, since an uncommitted change, and so ORA-00054, is likely there. Only
+writes count, because Oracle queries never wait for a DDL lock. Rows written come from `DBA_TAB_MODIFICATIONS` (or
+`ALL_TAB_MODIFICATIONS`), the counts the Workload view reads: each table's count starts at its last statistics
+gathering, and Oracle may hold them in memory for a while before the view shows them; dbscope never flushes them.
+`TestBusyTable` checks this on Free 23.26. This can move a migration that passed `--fail-on high` to failing it.
+
 ONLINE index builds, rebuilds and moves let writes continue; they need "Online Index Build" in v$option, which
 Enterprise Edition and Free have and Standard Edition 2 lacks (`DBS-ORA-ONLINE-EDITION` otherwise). The safer rewrites
 offered are the ONLINE form, ENABLE NOVALIDATE followed by VALIDATE for constraints, SET UNUSED ONLINE for DROP COLUMN

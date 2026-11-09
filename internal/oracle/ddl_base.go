@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dbscope/dbscope/internal/migrate"
 	"github.com/dbscope/dbscope/internal/schema"
 )
 
@@ -31,6 +32,9 @@ type Base struct {
 	Indexes map[string]string
 	// Source is "live", or "none" when the base is empty.
 	Source string
+	// Traffic is each table's rows written, keyed like Tables; nil when
+	// they could not be read.
+	Traffic *migrate.Traffic
 	// Warnings are reads that were skipped, with why.
 	Warnings []string
 }
@@ -145,6 +149,10 @@ func ReadBase(ctx context.Context, db *sql.DB, schemas []string) (*Base, error) 
 		return nil, err
 	}
 	b.readSizes(ctx, db, m.Schemas)
+	var warning string
+	if b.Traffic, warning = readTraffic(ctx, db, m); warning != "" {
+		warn(warning)
+	}
 	return b, nil
 }
 

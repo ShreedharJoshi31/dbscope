@@ -175,6 +175,7 @@ func (a *ddlAnalysis) sizeRules(key string, tbl *TableInfo, p opPlan) {
 		}
 		a.add(ruleBlocksDML, r, fmt.Sprintf("%s %s %s%s while holding a %s lock: inserts, updates and deletes on it wait for the whole time", p.what, verb, key, size, p.mode),
 			a.blockingAlt(p))
+		a.hot(key, r)
 		return
 	}
 	r := []score.Rating{score.Low, score.Low, score.Medium}[tier]
@@ -209,10 +210,37 @@ func (a *ddlAnalysis) busy(key string, b behavior) {
 		a.add(ruleDDLLock, score.Medium,
 			fmt.Sprintf("it needs an exclusive lock on %s at once: if any transaction has uncommitted changes to the table, it fails with ORA-00054 (ddl_lock_timeout is 0, the default). Oracle commits before and after every DDL, so the script stops part way with the earlier statements applied, unlike PostgreSQL, where DDL queues for its lock", key),
 			"Run ALTER SESSION SET ddl_lock_timeout = 5 earlier in the script, so it waits up to 5 s for open transactions before failing; keep it short, because DML arriving meanwhile queues behind the waiting DDL")
+		a.hot(key, "")
 	case b.nowait:
 		a.out.LockTimeout = true
 		a.add(ruleDDLLock, score.Low, fmt.Sprintf("if a transaction has uncommitted changes to %s, it waits up to %d s (ddl_lock_timeout) for the table lock and then fails with ORA-00054; while it waits, inserts, updates and deletes arriving on the table queue behind it", key, a.timeout), "")
 	}
+}
+
+// hot adds DBS-HOT-TABLE once per statement when it stops writes to a busy
+// table (docs/MIGRATIONS.md, "Scoring"). Only writes count: Oracle queries
+// read a consistent snapshot and never wait for a DDL lock. Work that blocks
+// writes for its whole run (blocked is its DBS-ORA-BLOCKS-DML rating) raises
+// the rating one step. A lock needed at once with ddl_lock_timeout 0 (blocked
+// is "") stays Medium: on a busy table an uncommitted change is likely, so
+// the statement is likely to fail with ORA-00054.
+func (a *ddlAnalysis) hot(key string, blocked score.Rating) {
+	for _, f := range a.out.Findings {
+		if f.RuleID == "DBS-HOT-TABLE" {
+			return
+		}
+	}
+	line, ok := a.base.Traffic.Busy(key, key, false)
+	if !ok {
+		return
+	}
+	if blocked != "" {
+		a.add("DBS-HOT-TABLE", blocked.Up(), "locks a busy table: "+line+"; inserts, updates and deletes on it wait for as long as the statement runs",
+			"Run it at the quietest time, or use an online form (ONLINE, or DBMS_REDEFINITION) so writes continue")
+		return
+	}
+	a.add("DBS-HOT-TABLE", score.Medium, "locks a busy table: "+line+"; an uncommitted change to it is likely when the statement runs, so with ddl_lock_timeout 0 it is likely to fail with ORA-00054 and stop the script part way",
+		"Run ALTER SESSION SET ddl_lock_timeout = 5 earlier in the script, and run it at the quietest time")
 }
 
 // columnList reads "c" or "(c1, c2)" and the COLUMN keyword before it.
