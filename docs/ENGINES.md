@@ -408,6 +408,19 @@ break them fail on their next update), `updateMany` by size, renames, capped
 conversions, sharding, and drops and deletes. Other engines' analyses skip
 `.js` files and say how many.
 
+`DBS-HOT-TABLE` weighs exclusive collection locks by how busy the collection
+is: one with at least 5% of the write operations in the database, and at least
+1,000, from `latencyStats` since mongod started. `convertToCapped`, which holds
+its lock for the whole copy, is rated one step above `DBS-MONGO-CAPPED`. Index
+builds, `collMod`, renames, `dropIndex` and drops hold theirs only briefly and
+stay medium: on 8.0 the lock waits for open transactions that wrote to the
+collection, and new inserts queue behind it meanwhile, while finds go on (they
+take no collection lock since 5.0). That is why only writes count, and because
+the read counters include dbscope's own `$collStats` reads. The start date
+needs clusterMonitor; the read role alone gets the counts without it.
+`TestBusyTable` checks this on 8.0. A `convertToCapped` on a busy collection
+is now critical, so it can fail `--fail-on critical`.
+
 **Workload.** dbscope changes neither source. Per-collection numbers come
 from `$collStats` and `$indexStats`, counted since mongod started: calls are
 read plus write operations from `latencyStats` and query time their total

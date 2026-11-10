@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -23,6 +24,11 @@ import (
 type Base struct {
 	Server      Server
 	Collections map[string]*CollectionInfo
+	// Traffic is each collection's write operations; nil when a
+	// collection's counters could not be read.
+	Traffic *migrate.Traffic
+	// Warnings say what the base could not read.
+	Warnings []string
 }
 
 // CollectionInfo is what the rules need to know about one collection.
@@ -40,6 +46,11 @@ func ReadBase(ctx context.Context, c *mongo.Client, db string) (*Base, error) {
 		return nil, err
 	}
 	b := &Base{Server: srv, Collections: map[string]*CollectionInfo{}}
+	// Only writes count: reads take no collection lock since 5.0, so they
+	// pass a waiting exclusive lock (seen on 8.0), and latencyStats counts
+	// dbscope's own $collStats reads too.
+	traffic := &migrate.Traffic{Writes: map[string]int64{}, WriteUnit: "write operations", Of: "the database"}
+	var unread error
 	d := c.Database(db)
 	names, err := d.ListCollectionNames(ctx, bson.D{{Key: "type", Value: "collection"}})
 	if err != nil {
@@ -55,19 +66,47 @@ func ReadBase(ctx context.Context, c *mongo.Client, db string) (*Base, error) {
 		if info.Indexes, err = indexes(ctx, coll); err != nil {
 			return nil, err
 		}
-		if cur, err := coll.Aggregate(ctx, bson.A{bson.D{{Key: "$collStats", Value: bson.D{{Key: "storageStats", Value: bson.D{}}}}}}); err == nil {
+		cur, err := coll.Aggregate(ctx, bson.A{bson.D{{Key: "$collStats", Value: bson.D{
+			{Key: "latencyStats", Value: bson.D{{Key: "histograms", Value: false}}},
+			{Key: "storageStats", Value: bson.D{}}}}}})
+		if err == nil {
 			var row struct {
+				Latency struct {
+					Writes latency `bson:"writes"`
+				} `bson:"latencyStats"`
 				StorageStats struct {
 					Size int64 `bson:"size"`
 				} `bson:"storageStats"`
 			}
-			if cur.Next(ctx) && cur.Decode(&row) == nil {
-				info.Bytes = row.StorageStats.Size
+			if cur.Next(ctx) {
+				err = cur.Decode(&row)
+			} else {
+				err = cur.Err()
 			}
 			cur.Close(ctx)
+			info.Bytes = row.StorageStats.Size
+			traffic.Writes[n] = row.Latency.Writes.Ops
+			traffic.TotalWrites += row.Latency.Writes.Ops
+		}
+		if err != nil && unread == nil {
+			unread = fmt.Errorf("%s: %w", n, err)
 		}
 		b.Collections[n] = info
 	}
+	if unread != nil {
+		b.Warnings = append(b.Warnings, "busy collections are not taken into account: $collStats was not read ("+unread.Error()+")")
+		return b, nil
+	}
+	var status struct {
+		LocalTime    time.Time `bson:"localTime"`
+		UptimeMillis int64     `bson:"uptimeMillis"`
+	}
+	// Counters start with mongod; its uptime needs clusterMonitor, so without it the start is unknown.
+	if c.Database("admin").RunCommand(ctx, bson.D{{Key: "serverStatus", Value: 1}}).Decode(&status) == nil && status.UptimeMillis > 0 {
+		since := status.LocalTime.Add(-time.Duration(status.UptimeMillis) * time.Millisecond)
+		traffic.Since = &since
+	}
+	b.Traffic = traffic
 	return b, nil
 }
 
@@ -79,7 +118,7 @@ func ReadBase(ctx context.Context, c *mongo.Client, db string) (*Base, error) {
 // (docs/ENGINES.md, "MongoDB").
 func Analyze(base *Base, files []ingest.Input) *migrate.Report {
 	rep := &migrate.Report{Engine: "mongodb", PGVersion: base.Server.Num, Rating: score.Low, Statements: []migrate.Statement{},
-		Impact: map[string][]impact.Item{}, Unanalyzable: []migrate.Unanalyzable{}, Warnings: []string{}, Base: "live",
+		Impact: map[string][]impact.Item{}, Unanalyzable: []migrate.Unanalyzable{}, Warnings: append([]string{}, base.Warnings...), Base: "live",
 		Diff: apply.Diff{Added: []string{}, Dropped: []string{}, Altered: []string{}, Columns: []apply.ColumnChange{}}}
 	if len(base.Collections) == 0 {
 		rep.Base = "none"
@@ -173,10 +212,12 @@ func (a *mongoAnalysis) statement(file string, c call) (out migrate.Statement) {
 			fails("No index named "+name+" exists on "+c.Collection, "")
 		default:
 			add("DBS-MONGO-DROP-INDEX", score.Medium, "Queries that use the index fall back to other indexes or collection scans", "Hide it first (collMod hidden: true), watch query latency, then drop it")
+			a.hot(&out, add, c.Collection, "")
 		}
 	case "drop":
 		a.rep.Diff.Dropped = append(a.rep.Diff.Dropped, c.Collection)
 		add("DBS-MONGO-DROPS-DATA", score.High, fmt.Sprintf("drop() removes %s and its %s", c.Collection, docsText(info)), "Take a backup first; mongodump can export the collection")
+		a.hot(&out, add, c.Collection, "")
 	case "dropDatabase":
 		add("DBS-MONGO-DROPS-DATA", score.High, "dropDatabase() removes every collection of the database", "")
 	case "deleteMany", "remove", "findOneAndDelete", "deleteOne":
@@ -208,6 +249,7 @@ func (a *mongoAnalysis) statement(file string, c call) (out migrate.Statement) {
 		_, exists := a.base.Collections[to]
 		a.rep.Diff.Dropped = append(a.rep.Diff.Dropped, c.Collection)
 		a.rep.Diff.Added = append(a.rep.Diff.Added, to)
+		a.hot(&out, add, c.Collection, "")
 		switch {
 		case exists && !dropTarget:
 			fails("renameCollection fails: "+to+" already exists", "Pass dropTarget: true only if its data may go")
@@ -219,6 +261,7 @@ func (a *mongoAnalysis) statement(file string, c call) (out migrate.Statement) {
 	case "convertToCapped":
 		out.Work = "rewrite"
 		add("DBS-MONGO-CAPPED", score.High, "convertToCapped copies "+c.Collection+" under an exclusive lock, blocking reads and writes, and drops documents beyond the size", "")
+		a.hot(&out, add, c.Collection, score.High)
 	case "createCollection":
 		name, _ := arg(0).(string)
 		a.rep.Diff.Added = append(a.rep.Diff.Added, name)
@@ -273,6 +316,7 @@ func (a *mongoAnalysis) createIndex(out *migrate.Statement, add func(string, sco
 	}
 	add("DBS-MONGO-INDEX-BUILD", a.tier(info), fmt.Sprintf("Building %s reads all of %s (%s, %s); reads and writes continue except at its start and end",
 		name, coll, docsText(info), sizeText(info)), "Build it at a quiet time; on a replica set every member builds at once")
+	a.hot(out, add, coll, "")
 	if unique && info != nil && info.Count > 0 {
 		add("DBS-MONGO-UNIQUE", score.Medium, "A unique index build fails if any two existing documents share the key (E11000)",
 			"Check first with an aggregation that groups by the key and keeps counts above 1")
@@ -296,6 +340,7 @@ func (a *mongoAnalysis) command(out *migrate.Statement, add func(string, score.R
 		coll, _ := o[0].Value.(string)
 		a.altered[coll] = true
 		out.Touch(coll)
+		a.hot(out, add, coll, "")
 		if o.get("validator") != nil {
 			level, _ := o.get("validationLevel").(string)
 			action, _ := o.get("validationAction").(string)
@@ -311,9 +356,12 @@ func (a *mongoAnalysis) command(out *migrate.Statement, add func(string, score.R
 		coll, _ := o[0].Value.(string)
 		a.rep.Diff.Dropped = append(a.rep.Diff.Dropped, coll)
 		add("DBS-MONGO-DROPS-DATA", score.High, "drop removes "+coll+" and its documents", "")
+		a.hot(out, add, coll, "")
 	case "dropDatabase":
 		add("DBS-MONGO-DROPS-DATA", score.High, "dropDatabase removes every collection of the database", "")
 	case "renameCollection":
+		from, _ := o[0].Value.(string)
+		a.hot(out, add, afterDot(from), "")
 		to, _ := o.get("to").(string)
 		_, exists := a.base.Collections[afterDot(to)]
 		if exists && o.get("dropTarget") != true {
@@ -324,9 +372,37 @@ func (a *mongoAnalysis) command(out *migrate.Statement, add func(string, score.R
 	case "convertToCapped":
 		out.Work = "rewrite"
 		add("DBS-MONGO-CAPPED", score.High, "convertToCapped copies the collection under an exclusive lock, blocking reads and writes", "")
+		coll, _ := o[0].Value.(string)
+		a.hot(out, add, coll, score.High)
 	case "shardCollection", "reshardCollection":
 		add("DBS-MONGO-SHARD", score.High, o[0].Key+" moves data between shards for hours on a large collection; balancer migrations add load", "")
 	}
+}
+
+// hot adds DBS-HOT-TABLE once per statement when it takes an exclusive lock
+// on a busy collection (docs/MIGRATIONS.md, "Scoring"). A lock held for the
+// whole run (blocked is that finding's rating) raises the rating one step.
+// Index builds, collMod, renames and drops hold theirs only briefly, so they
+// stay Medium: the lock waits for open transactions that wrote to the
+// collection, and new writes queue behind it meanwhile while reads continue
+// (seen on 8.0).
+func (a *mongoAnalysis) hot(out *migrate.Statement, add func(string, score.Rating, string, string), coll string, blocked score.Rating) {
+	for _, f := range out.Findings {
+		if f.RuleID == "DBS-HOT-TABLE" {
+			return
+		}
+	}
+	line, ok := a.base.Traffic.Busy(coll, coll, false)
+	if !ok {
+		return
+	}
+	if blocked != "" {
+		add("DBS-HOT-TABLE", blocked.Up(), "locks a busy collection: "+line+"; writes to it wait for as long as the command runs",
+			"Create a new capped collection and copy the documents in batches, then rename it into place at the quietest time")
+		return
+	}
+	add("DBS-HOT-TABLE", score.Medium, "locks a busy collection briefly: "+line+"; the exclusive lock waits for open transactions that wrote to it, and new writes queue behind it meanwhile",
+		"Run it at the quietest time, and keep transactions on the collection short (dbscope names open ones when it reads blockers)")
 }
 
 // secondsText spells a literal number of seconds: "2592000 seconds (30 days)".
