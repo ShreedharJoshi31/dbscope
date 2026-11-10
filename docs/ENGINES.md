@@ -929,6 +929,17 @@ reindexed), replica changes (copies over the network, or no copy at 0),
 write blocks, closed indices, templates (new indices only), and deletes of
 indices or documents.
 
+`DBS-HOT-TABLE` weighs what stops traffic by how busy the index is: one with at
+least 5% of the counted activity in the indices read, and at least 1,000. A
+write block, `_split`, `_shrink` or `_clone` on a busy index is rated one step
+above its own finding, counting documents indexed and deleted on primaries; a
+close is too, counting shard searches as well, since searches fail on a closed
+index. The counters are the index stats the Workload view reads, from when each
+shard copy started. Without the monitor index privilege the report says what to
+grant and no index counts as busy. `TestBusyTable` checks this on Elasticsearch
+9.5 and OpenSearch 3.9. A write block or close on a busy index is now critical,
+so a migration that passed `--fail-on high` can fail it.
+
 Not yet: AWS SigV4, PPL (it needs another cluster permission), and cluster
 health and shard allocation.
 

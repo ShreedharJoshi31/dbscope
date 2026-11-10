@@ -26,6 +26,11 @@ type Base struct {
 	Indices map[string]*IndexInfo
 	// Aliases maps an alias or data stream to its indices.
 	Aliases map[string][]string
+	// Traffic is each index's searches and writes, keyed like Indices; nil
+	// when index stats could not be read.
+	Traffic *migrate.Traffic
+	// Warnings say what the base could not read.
+	Warnings []string
 }
 
 // IndexInfo is what the rules need to know about one index.
@@ -117,6 +122,10 @@ func ReadBase(ctx context.Context, c *Client) (*Base, error) {
 		info.WriteBlock = s["index.blocks.write"] == "true" || s["index.blocks.read_only"] == "true"
 		b.Indices[ix.Name] = info
 	}
+	var warning string
+	if b.Traffic, warning = readTraffic(ctx, c, b.Indices); warning != "" {
+		b.Warnings = append(b.Warnings, warning)
+	}
 	return b, nil
 }
 
@@ -187,7 +196,7 @@ var staticSettings = []string{"number_of_shards", "number_of_routing_shards", "c
 // (docs/ENGINES.md, "Elasticsearch and OpenSearch").
 func Analyze(base *Base, files []ingest.Input) *migrate.Report {
 	rep := &migrate.Report{Engine: base.Server.Product, PGVersion: versionNum(base.Server.Version), Rating: score.Low, Statements: []migrate.Statement{},
-		Impact: map[string][]impact.Item{}, Unanalyzable: []migrate.Unanalyzable{}, Warnings: []string{}, Base: "live",
+		Impact: map[string][]impact.Item{}, Unanalyzable: []migrate.Unanalyzable{}, Warnings: append([]string{}, base.Warnings...), Base: "live",
 		Diff: apply.Diff{Added: []string{}, Dropped: []string{}, Altered: []string{}, Columns: []apply.ColumnChange{}}}
 	if len(base.Indices) == 0 {
 		rep.Base = "none"
@@ -348,6 +357,7 @@ func (a *esAnalysis) statement(file string, r request) (out migrate.Statement) {
 		add("DBS-ES-DROPS-DATA", score.High, "_delete_by_query deletes the matching documents of "+named, "Take a snapshot first, or check the query with _count")
 	case api == "_close":
 		add("DBS-ES-CLOSE", score.High, "Closing "+named+" makes it unavailable to reads and writes until it is opened", "")
+		a.hot(indices, score.High, true, add)
 	case api == "_forcemerge":
 		out.Work = "rewrite"
 		add("DBS-ES-FORCEMERGE", score.Max(score.Medium, tier(indices)), fmt.Sprintf("_forcemerge rewrites the segments of %s (%s); on an index still written to it leaves segments that never merge again", named, sizeOf(indices)),
@@ -361,6 +371,7 @@ func (a *esAnalysis) statement(file string, r request) (out migrate.Statement) {
 		}
 		if len(out.Findings) == 0 {
 			add("DBS-ES-RESIZE", tier(indices), fmt.Sprintf("%s builds a new index from %s (%s) by hard-linking or copying segments", api, named, sizeOf(indices)), "")
+			a.hot(indices, tier(indices), false, add)
 		}
 	case strings.HasSuffix(api, "_template"):
 		add("DBS-ES-TEMPLATE", score.Low, "Templates apply to indices created from now on; existing indices keep their mappings and settings", "")
@@ -454,12 +465,34 @@ func (a *esAnalysis) settings(indices []string, named string, body map[string]an
 					a.blocked[i] = true
 				}
 				add("DBS-ES-WRITE-BLOCK", score.High, "Writes to "+named+" fail until the block is removed", "Remove it in the same migration once the operation that needed it is done")
+				a.hot(indices, score.High, false, add)
 			}
 		}
 	}
 	for _, i := range indices {
 		a.altered[i] = true
 	}
+}
+
+// hot adds DBS-HOT-TABLE when a request stops traffic on a busy index
+// (docs/MIGRATIONS.md, "Scoring"), one step above the finding that stops it
+// (blocked). Writes always count; stopsReads adds searches, for a close.
+func (a *esAnalysis) hot(indices []string, blocked score.Rating, stopsReads bool, add func(string, score.Rating, string, string)) {
+	var lines []string
+	for _, i := range indices {
+		if line, ok := a.base.Traffic.Busy(i, i, stopsReads); ok {
+			lines = append(lines, line)
+		}
+	}
+	if len(lines) == 0 {
+		return
+	}
+	stopped := "writes to it fail"
+	if stopsReads {
+		stopped = "searches and writes on it fail"
+	}
+	add("DBS-HOT-TABLE", blocked.Up(), "stops a busy index: "+strings.Join(lines, "; ")+"; "+stopped+" until it is undone",
+		"Run it at the quietest time, or build a new index and switch an alias to it so traffic never stops")
 }
 
 // reindexIndices reads source.index and dest.index of a _reindex body.

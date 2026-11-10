@@ -68,12 +68,9 @@ func Workload(ctx context.Context, c *Client, m *schema.Model) (*workload.Snapsh
 	snap := &workload.Snapshot{GeneratedAt: time.Now().UTC(), Tables: map[string]*workload.Table{},
 		Statements: workload.Statements{Status: workload.StatusNotLoaded, Message: noQueryHistory}}
 	pattern := url.PathEscape(c.Pattern)
-	var stats struct {
-		Indices map[string]indexStats `json:"indices"`
-	}
-	if err := c.do(ctx, "GET", "/"+pattern+"/_stats/search,indexing,docs?groups="+statsGroup+"&filter_path="+statsFilter, nil, &stats); err != nil {
-		var e *Error
-		if errors.As(err, &e) && (e.Status == 401 || e.Status == 403) {
+	stats, err := readIndexStats(ctx, c)
+	if err != nil {
+		if denied(err) {
 			snap.Statements.Status, snap.Statements.Message = workload.StatusUnavailable, fmt.Sprintf(monitorIndexGrant, c.Pattern)
 			return snap, nil
 		}
@@ -100,19 +97,14 @@ func Workload(ctx context.Context, c *Client, m *schema.Model) (*workload.Snapsh
 			keys[r.Name] = r.QName().String()
 		}
 	}
-	for name, st := range stats.Indices {
+	for name, st := range stats {
 		if ds, ok := stream[name]; ok {
 			name = ds
 		}
-		// OpenSearch's audit log is a system index without the dot.
-		if (strings.HasPrefix(name, ".") && !strings.HasPrefix(c.Pattern, ".")) || strings.HasPrefix(name, "security-auditlog-") {
+		if system(name, c.Pattern) {
 			continue
 		}
-		search := st.Total.Search
-		calls, ms := search.QueryTotal, search.QueryTimeMs
-		if g, ok := search.Groups[statsGroup]; ok {
-			calls, ms = calls-g.QueryTotal, ms-g.QueryTimeMs
-		}
+		calls, ms := st.searches()
 		snap.Statements.TotalCalls += calls
 		snap.Statements.TotalTimeMs += float64(ms)
 		key := keys[name]
@@ -128,9 +120,45 @@ func Workload(ctx context.Context, c *Client, m *schema.Model) (*workload.Snapsh
 		}
 		t.QueryCalls += calls
 		t.QueryTimeMs += float64(ms)
-		t.RowsWritten += st.Primaries.Indexing.IndexTotal + st.Primaries.Indexing.DeleteTotal
+		t.RowsWritten += st.writes()
 		// Nested objects are hidden documents and count here too.
 		t.LiveRows += st.Primaries.Docs.Count
 	}
 	return snap, nil
+}
+
+// readIndexStats reads the search, indexing and document counters of the
+// indices matching the client's pattern, keyed by index name.
+func readIndexStats(ctx context.Context, c *Client) (map[string]indexStats, error) {
+	var stats struct {
+		Indices map[string]indexStats `json:"indices"`
+	}
+	err := c.do(ctx, "GET", "/"+url.PathEscape(c.Pattern)+"/_stats/search,indexing,docs?groups="+statsGroup+"&filter_path="+statsFilter, nil, &stats)
+	return stats.Indices, err
+}
+
+// searches are shard searches and their time in ms, less dbscope's own.
+func (st indexStats) searches() (calls, ms int64) {
+	search := st.Total.Search
+	calls, ms = search.QueryTotal, search.QueryTimeMs
+	if g, ok := search.Groups[statsGroup]; ok {
+		calls, ms = calls-g.QueryTotal, ms-g.QueryTimeMs
+	}
+	return calls, ms
+}
+
+// writes are documents indexed and deleted on primaries.
+func (st indexStats) writes() int64 {
+	return st.Primaries.Indexing.IndexTotal + st.Primaries.Indexing.DeleteTotal
+}
+
+// system reports a dot-prefixed system index outside the pattern, or
+// OpenSearch's audit log, a system index without the dot.
+func system(name, pattern string) bool {
+	return (strings.HasPrefix(name, ".") && !strings.HasPrefix(pattern, ".")) || strings.HasPrefix(name, "security-auditlog-")
+}
+
+func denied(err error) bool {
+	var e *Error
+	return errors.As(err, &e) && (e.Status == 401 || e.Status == 403)
 }
