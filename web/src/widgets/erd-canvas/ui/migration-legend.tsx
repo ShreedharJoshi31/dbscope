@@ -8,6 +8,7 @@ import {
   useCanvasStore,
 } from "@/entities/schema";
 import { clearComparison, DRIFT_SOURCE } from "@/features/compare-schema";
+import { showLive, TIMELINE_SOURCE, useTimelineStore } from "@/features/schema-timeline";
 import { announce } from "@/shared/lib/announcer";
 import { formatCompact } from "@/shared/lib/format-number";
 import { Button } from "@/shared/ui/button";
@@ -54,23 +55,28 @@ export function MigrationLegend() {
   const graph = useCanvasStore((s) => s.graph);
   const root = useCanvasStore((s) => s.derived.impactRoot);
   const selected = useCanvasStore((s) => s.selectedId);
+  const step = useTimelineStore((s) => s.shown);
   if (!diff) return null;
   // A schema comparison reuses the overlay; it has no dependents to explain.
   const comparison = diff.sourceId === DRIFT_SOURCE;
+  // So does a timeline step, compared with the step before it.
+  const timeline = diff.sourceId === TIMELINE_SOURCE;
+  const first = timeline && !step?.changes;
 
   const counts = { added: 0, altered: 0, dropped: 0 };
   for (const change of Object.values(diff.relations)) counts[change] += 1;
   const { missing } = partitionDiffRelations(diff, (k) => Boolean(graph?.byKey.has(k)));
   const impact = root ? (diff.impact[root] ?? []) : [];
+  const notCompared = timeline ? (step?.changes?.notComparedSchemas ?? []) : [];
 
   return (
     <section
-      aria-label={comparison ? "Comparison overlay" : "Migration overlay"}
+      aria-label={timeline ? "Timeline overlay" : comparison ? "Comparison overlay" : "Migration overlay"}
       data-testid="migration-legend"
       className="absolute top-3 left-3 z-10 flex max-h-[60%] w-72 flex-col gap-2 overflow-y-auto rounded-md border border-border-default bg-surface-raised p-2 text-xs shadow-sm"
     >
       <h3 className="font-semibold break-all text-text-primary">
-        {comparison ? "Compared " : "Migration: "}
+        {timeline ? "Snapshot from " : comparison ? "Compared " : "Migration: "}
         <span className="font-mono">{diff.label}</span>
       </h3>
       <Button
@@ -78,20 +84,31 @@ export function MigrationLegend() {
         size="xs"
         className="self-start"
         onClick={() => {
-          if (comparison) clearComparison();
+          if (timeline) showLive();
+          else if (comparison) clearComparison();
           else clearMigrationOverlay();
-          announce(comparison ? "Cleared the comparison." : "Cleared the migration overlay.");
+          announce(
+            timeline
+              ? "Showing the live schema."
+              : comparison
+                ? "Cleared the comparison."
+                : "Cleared the migration overlay.",
+          );
         }}
       >
         <Eraser aria-hidden />
-        {comparison ? "Clear comparison" : "Clear migration overlay"}
+        {timeline ? "Back to live" : comparison ? "Clear comparison" : "Clear migration overlay"}
       </Button>
-      <ul aria-label="Changed relations" className="flex flex-wrap gap-x-3 gap-y-1">
-        {(["added", "altered", "dropped"] as const).map((c) => (
-          <ChangeKey key={c} change={c} count={counts[c]} />
-        ))}
-      </ul>
-      {!comparison && (
+      {first ? (
+        <p className="text-text-muted">The first observation. There is no earlier snapshot to compare it with.</p>
+      ) : (
+        <ul aria-label="Changed relations" className="flex flex-wrap gap-x-3 gap-y-1">
+          {(["added", "altered", "dropped"] as const).map((c) => (
+            <ChangeKey key={c} change={c} count={counts[c]} />
+          ))}
+        </ul>
+      )}
+      {!comparison && !timeline && (
         <ul aria-label="Dependency certainty" className="flex flex-col gap-0.5 text-text-muted">
           <li className="flex items-center gap-1">
             <span className="flex items-center gap-0.5 rounded-xs border border-accent-fg px-1 text-2xs font-semibold text-accent-fg">
@@ -109,18 +126,43 @@ export function MigrationLegend() {
           </li>
         </ul>
       )}
-      {missing.length > 0 && (
-        <p className="text-text-muted">
-          Not on the canvas:{" "}
-          {missing.map((k, i) => (
-            <span key={k}>
-              {i > 0 && ", "}
-              <span className="font-mono text-text-primary">{k}</span> ({diff.relations[k]})
-            </span>
-          ))}
+      {missing.length > 0 &&
+        (timeline ? (
+          <section aria-label="Removed at this step" data-testid="timeline-removed">
+            <h4 className="font-semibold text-text-primary">Removed at this step ({missing.length})</h4>
+            <ul className="flex flex-col gap-0.5">
+              {missing.map((k) => (
+                <li key={k} className="font-mono break-all text-text-primary">
+                  {k}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : (
+          <p className="text-text-muted">
+            Not on the canvas:{" "}
+            {missing.map((k, i) => (
+              <span key={k}>
+                {i > 0 && ", "}
+                <span className="font-mono text-text-primary">{k}</span> ({diff.relations[k]})
+              </span>
+            ))}
+          </p>
+        ))}
+      {notCompared.length > 0 && (
+        <p data-testid="timeline-not-compared" className="text-text-muted">
+          Not compared, read in only one of the two snapshots: schema{notCompared.length === 1 ? "" : "s"}{" "}
+          <span className="font-mono text-text-primary">{notCompared.join(", ")}</span>
         </p>
       )}
-      {comparison ? (
+      {timeline ? (
+        !first && (
+          <p className="text-text-muted">
+            Changes since the previous snapshot. Nobody read the schema between the two, so when each change happened is
+            not known.
+          </p>
+        )
+      ) : comparison ? (
         <p className="text-text-muted">Every difference, with what changed, is in the Drift tab of the results dock.</p>
       ) : root ? (
         <section aria-labelledby="impact-heading" data-testid="impact-list" className="flex flex-col gap-1">

@@ -131,7 +131,8 @@ function columnDiffLines(columns: ColumnDiff | undefined): string[] {
 function DiffBadge({ change, columns }: { change: DiffChange; columns: ColumnDiff | undefined }) {
   const meta = DIFF_CHANGE_META[change];
   const Icon = DIFF_ICON[change];
-  const lines = [meta.description, ...columnDiffLines(columns)];
+  const description = useCanvasStore((s) => s.diff?.descriptions?.[change]) ?? meta.description;
+  const lines = [description, ...columnDiffLines(columns)];
   return (
     <span
       data-testid="diff-badge"

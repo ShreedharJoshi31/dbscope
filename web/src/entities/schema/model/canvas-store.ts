@@ -60,6 +60,8 @@ export interface DiffOverlay {
   columns: Readonly<Record<string, Readonly<Record<string, { change: ColumnChangeKind; to?: string | undefined }>>>>;
   /** By changed relation: its own dependents plus those of its changed columns. */
   impact: Readonly<Record<string, readonly DiffImpact[]>>;
+  /** Badge tooltips when the comparison is not a migration's ("Created by the migration"). */
+  descriptions?: Readonly<Record<DiffChange, string>>;
 }
 
 export type FocusHops = 1 | 2 | 3;

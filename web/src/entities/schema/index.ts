@@ -86,6 +86,16 @@ export {
   visibleColumns,
 } from "@/entities/schema/model/sizing";
 export {
+  BEFORE_FIRST_OBSERVATION,
+  buildTimeline,
+  compareStep,
+  NO_OBSERVATION,
+  type StepChanges,
+  type Timeline,
+  type TimelineGap,
+  type TimelineStep,
+} from "@/entities/schema/model/timeline";
+export {
   closeSampleWorkspace,
   openSampleWorkspace,
   type SchemaSource,

@@ -11,6 +11,8 @@ export const schemaQueryKeys = {
   layout: (profileId: string, key: string) => ["profiles", profileId, "layout", key] as const,
   sample: ["sample", "schema"] as const,
   snapshots: (profileId: string) => ["profiles", profileId, "snapshots"] as const,
+  /** Not under `snapshots`, so refreshing the list keeps the stored models, which never change. */
+  snapshot: (profileId: string, id: number) => ["profiles", profileId, "snapshot", id] as const,
 };
 
 /** A stored schema of a connection, saved when its structure changed (docs/API.md). */

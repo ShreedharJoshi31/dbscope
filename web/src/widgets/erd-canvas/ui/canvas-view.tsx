@@ -26,6 +26,7 @@ import {
   TableNodeActionsContext,
   useZoomDetail,
 } from "@/entities/schema/canvas";
+import { SchemaTimeline } from "@/features/schema-timeline";
 import { useResolvedTheme } from "@/features/toggle-theme";
 import type { CanvasLayoutInput } from "@/shared/api";
 import { announce } from "@/shared/lib/announcer";
@@ -289,6 +290,14 @@ function CanvasViewInner({ graph, layoutKey, restored, schedule, profileId }: Ca
         </TableNodeActionsContext>
         <LayoutStatusBanner status={model.status} onDismiss={model.dismissError} />
         <MigrationLegend />
+        {profileId && (
+          // Between the zoom controls (bottom left) and the minimap (bottom right).
+          <div
+            className={`pointer-events-none absolute bottom-[15px] left-16 z-10 flex justify-center ${minimap ? "right-[232px]" : "right-4"}`}
+          >
+            <SchemaTimeline profileId={profileId} />
+          </div>
+        )}
         <TableDetails
           onClose={() => {
             useCanvasStore.getState().setDetailsOpen(false);

@@ -2,6 +2,7 @@ import { LoaderCircle, Network } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { getSchemaGraph } from "@/entities/schema";
 import { openSample, SchemaLoadError, useWorkbenchSchema } from "@/features/load-schema";
+import { useTimelineStore } from "@/features/schema-timeline";
 import type { Model } from "@/shared/api";
 import { useLayoutEpoch } from "@/shared/lib/layout-sync";
 import { EmptyState } from "@/shared/ui/empty-state";
@@ -26,9 +27,14 @@ interface LoadedProps {
   sample: boolean;
 }
 
+const SKIP_SAVE = () => {};
+
 function Loaded({ model, layoutKey, profileId, sample }: LoadedProps) {
   const storage = useLayoutStorage(profileId, layoutKey, sample);
-  const graph = getSchemaGraph(model);
+  const step = useTimelineStore((s) => (s.shown && s.shown.profileId === profileId ? s.shown : null));
+  // A timeline step is drawn on the live layout; positions are not saved while it is shown,
+  // so its tables never enter the live schema's saved layout.
+  const graph = getSchemaGraph(step?.model ?? model);
   if (storage.restored === undefined) return <Loading label="Restoring the saved layout…" />;
   return (
     <Suspense fallback={<Loading label="Loading the canvas…" />}>
@@ -36,7 +42,7 @@ function Loaded({ model, layoutKey, profileId, sample }: LoadedProps) {
         graph={graph}
         layoutKey={layoutKey}
         restored={storage.restored}
-        schedule={storage.schedule}
+        schedule={step ? SKIP_SAVE : storage.schedule}
         profileId={sample ? undefined : profileId}
       />
     </Suspense>

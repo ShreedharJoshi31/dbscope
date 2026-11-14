@@ -134,7 +134,7 @@ export interface SchemaStubOptions {
   /** Models by profile id, for profiles whose schema differs from `schema`. */
   schemasByProfile?: Record<string, StubModel>;
   /** Snapshots by profile id: GET /snapshots lists them, GET /snapshots/{id} returns the model. */
-  snapshots?: Record<string, { id: number; takenAt: string; model: StubModel }[]>;
+  snapshots?: Record<string, { id: number; takenAt: string; lastSeenAt?: string; model: StubModel }[]>;
 }
 
 /** In-memory Phase 1 state that survives page reloads within one test. */
@@ -187,7 +187,7 @@ export async function handleSchemaRoute(
         list.map((s) => ({
           id: s.id,
           takenAt: s.takenAt,
-          lastSeenAt: s.takenAt,
+          lastSeenAt: s.lastSeenAt ?? s.takenAt,
           relations: s.model.relations?.length ?? 0,
           schemas: s.model.schemas ?? [],
         })),
