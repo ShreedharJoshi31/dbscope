@@ -151,8 +151,10 @@ type Profile struct {
 	StatementTimeoutMs int         `json:"statementTimeoutMs"`
 	// MaxCost is the EXPLAIN cost above which a query needs confirming;
 	// 0 means no limit and nil means the env default (see CostLimit).
-	MaxCost     *float64 `json:"maxCost,omitempty"`
-	HasPassword bool     `json:"hasPassword"`
+	MaxCost *float64 `json:"maxCost,omitempty"`
+	// SnapshotsKept is how many schema snapshots the profile keeps; older ones are deleted.
+	SnapshotsKept int  `json:"snapshotsKept"`
+	HasPassword   bool `json:"hasPassword"`
 	// SSH, when set, reaches the server through an SSH tunnel.
 	SSH *SSHTunnel `json:"ssh,omitempty"`
 	// MigrationsDir and ProjectDir are local folders the agent reads (never
@@ -189,6 +191,7 @@ type ProfileInput struct {
 	MaxRowsToLLM       *int        `json:"maxRowsToLLM"`
 	StatementTimeoutMs *int        `json:"statementTimeoutMs"`
 	MaxCost            *float64    `json:"maxCost"`
+	SnapshotsKept      *int        `json:"snapshotsKept"`
 	Password           *string     `json:"password"`
 	SSH                *SSHTunnel  `json:"ssh"`
 	// SSHPassphrase is the SSH key file's passphrase; like Password, omitted keeps the stored one.
@@ -600,8 +603,18 @@ func (p *Profile) options(in ProfileInput) error {
 		c := *in.MaxCost
 		p.MaxCost = &c
 	}
+	p.SnapshotsKept = DefaultSnapshotsKept
+	if in.SnapshotsKept != nil {
+		p.SnapshotsKept = *in.SnapshotsKept
+	}
+	if p.SnapshotsKept < 2 || p.SnapshotsKept > 500 {
+		return invalid("snapshotsKept must be 2-500")
+	}
 	return nil
 }
+
+// DefaultSnapshotsKept is how many schema snapshots a profile keeps unless it says otherwise.
+const DefaultSnapshotsKept = 20
 
 // Default EXPLAIN cost limits per env; local has none.
 const (

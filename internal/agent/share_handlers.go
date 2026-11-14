@@ -130,6 +130,7 @@ func (s *server) existing(ctx context.Context, p conn.Profile) *share.Existing {
 		}
 		return nil
 	}
+	s.saveSnapshot(ctx, p.ID, m)
 	ex := &share.Existing{Schemas: map[string]bool{}, Tables: map[string]bool{}, InferredFKs: map[string]bool{}}
 	for _, sc := range m.Schemas {
 		ex.Schemas[sc] = true

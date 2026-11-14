@@ -197,7 +197,7 @@ func TestCreateProfileDefaults(t *testing.T) {
 	p := decodeBody[map[string]any](t, w)
 	want := map[string]any{
 		"name": "Orders", "port": 5432.0, "sslMode": "prefer", "summaryMode": "profile",
-		"maxRowsToLLM": 50.0, "statementTimeoutMs": 30000.0, "hasPassword": false, "env": "staging",
+		"maxRowsToLLM": 50.0, "statementTimeoutMs": 30000.0, "snapshotsKept": 20.0, "hasPassword": false, "env": "staging",
 	}
 	for k, v := range want {
 		if p[k] != v {
@@ -235,6 +235,8 @@ func TestCreateProfileValidation(t *testing.T) {
 		"rows zero":       `{"name":"n","host":"h","database":"d","user":"u","env":"local","maxRowsToLLM":0}`,
 		"rows too many":   `{"name":"n","host":"h","database":"d","user":"u","env":"local","maxRowsToLLM":501}`,
 		"bad timeout":     `{"name":"n","host":"h","database":"d","user":"u","env":"local","statementTimeoutMs":0}`,
+		"snapshots one":   `{"name":"n","host":"h","database":"d","user":"u","env":"local","snapshotsKept":1}`,
+		"snapshots 501":   `{"name":"n","host":"h","database":"d","user":"u","env":"local","snapshotsKept":501}`,
 		"missing host":    `{"name":"n","database":"d","user":"u","env":"local"}`,
 		"unknown field":   `{"name":"n","host":"h","database":"d","user":"u","env":"local","hasPassword":true}`,
 		"wrong type":      `{"name":"n","host":"h","port":"5432","database":"d","user":"u","env":"local"}`,
@@ -284,6 +286,10 @@ func TestProfileLifecycle(t *testing.T) {
 	}
 	if s, ok, _ := e.vault.Get(p.ID); !ok || s != testPass {
 		t.Fatal("password lost on update without password")
+	}
+	expect(t, e.do("PUT", url, strings.Replace(validBody, "}", `,"snapshotsKept":3}`, 1)), 200, "")
+	if list := decodeBody[[]conn.Profile](t, e.do("GET", "/api/profiles", "")); list[1].SnapshotsKept != 3 {
+		t.Fatalf("snapshotsKept read back as %d", list[1].SnapshotsKept)
 	}
 	// A new password replaces it.
 	expect(t, e.do("PUT", url, strings.Replace(withPass, testPass, testPass+"2", 1)), 200, "")

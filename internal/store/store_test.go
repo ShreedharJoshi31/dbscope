@@ -26,7 +26,7 @@ func profile(name string) conn.Profile {
 	return conn.Profile{
 		Name: name, Host: "db.example", Port: 5432, Database: "app", User: "reader",
 		SSLMode: conn.SSLRequire, Env: conn.EnvStaging, Schemas: []string{"public", "sales"},
-		SummaryMode: conn.SummaryProfile, MaxRowsToLLM: 50, StatementTimeoutMs: 30000,
+		SummaryMode: conn.SummaryProfile, MaxRowsToLLM: 50, StatementTimeoutMs: 30000, SnapshotsKept: conn.DefaultSnapshotsKept,
 	}
 }
 
@@ -52,7 +52,7 @@ func TestOpenCreatesPrivateDirAndIsIdempotent(t *testing.T) {
 	}
 	defer s2.Close()
 	var n int
-	if err := s2.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&n); err != nil || n != 9 {
+	if err := s2.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&n); err != nil || n != 10 {
 		t.Fatalf("schema_migrations rows = %d, err %v", n, err)
 	}
 	ps, err := s2.ListProfiles(context.Background())

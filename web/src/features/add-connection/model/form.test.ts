@@ -188,6 +188,7 @@ describe("toProfileInput", () => {
       summaryMode: "profile",
       maxRowsToLLM: 50,
       statementTimeoutMs: 30000,
+      snapshotsKept: 20,
       migrationsDir: "",
       projectDir: "",
     });
@@ -280,6 +281,19 @@ describe("maxCost", () => {
     expect(validateConnectionForm({ ...valid, maxCost: "lots" }).maxCost).toBeDefined();
     expect(validateConnectionForm({ ...valid, maxCost: "1e6" }).maxCost).toBeDefined();
     expect(validateConnectionForm({ ...valid, maxCost: "1500.5" }).maxCost).toBeUndefined();
+  });
+});
+
+describe("snapshotsKept", () => {
+  it("defaults to 20, accepts 2-500 and reads a saved value back", () => {
+    expect(toProfileInput(valid).snapshotsKept).toBe(20);
+    expect(toProfileInput({ ...valid, snapshotsKept: "500" }).snapshotsKept).toBe(500);
+    for (const bad of ["1", "501", "", "2.5", "x"]) {
+      expect(validateConnectionForm({ ...valid, snapshotsKept: bad }).snapshotsKept).toBeDefined();
+    }
+    expect(validateConnectionForm({ ...valid, snapshotsKept: "2" }).snapshotsKept).toBeUndefined();
+    expect(firstInvalidField(validateConnectionForm({ ...valid, snapshotsKept: "1" }))).toBe("snapshotsKept");
+    expect(formFromProfile(makeProfile({ snapshotsKept: 3 })).snapshotsKept).toBe("3");
   });
 });
 

@@ -106,6 +106,7 @@ func (s *server) analyzeFor(ctx context.Context, w http.ResponseWriter, r *http.
 		}
 		return rep
 	}
+	// No snapshot from these engines: each reads its migration base inside Analyze, which returns no model.
 	if p.Engine == conn.EngineMongoDB {
 		src, _ := s.source.(engineSource)[conn.EngineMongoDB].(*mongoSource)
 		if src == nil {
@@ -223,6 +224,7 @@ func (s *server) analyzeFor(ctx context.Context, w http.ResponseWriter, r *http.
 		s.upstreamError(w, r, err)
 		return nil
 	}
+	s.saveSnapshot(ctx, p.ID, base.Model)
 	rep, err := migrate.Analyze(ctx, base, req)
 	if err != nil {
 		s.upstreamError(w, r, err)

@@ -42,6 +42,7 @@ export interface StubProfile {
   maxRowsToLLM: number;
   statementTimeoutMs: number;
   maxCost?: number;
+  snapshotsKept: number;
   hasPassword: boolean;
   createdAt: string;
   updatedAt: string;
@@ -73,6 +74,7 @@ export function stubProfile(overrides: Partial<StubProfile> = {}): StubProfile {
     summaryMode: "profile",
     maxRowsToLLM: 50,
     statementTimeoutMs: 30000,
+    snapshotsKept: 20,
     hasPassword: true,
     createdAt: NOW,
     updatedAt: NOW,

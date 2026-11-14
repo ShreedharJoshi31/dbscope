@@ -187,6 +187,7 @@ export async function handleSchemaRoute(
         list.map((s) => ({
           id: s.id,
           takenAt: s.takenAt,
+          lastSeenAt: s.takenAt,
           relations: s.model.relations?.length ?? 0,
           schemas: s.model.schemas ?? [],
         })),

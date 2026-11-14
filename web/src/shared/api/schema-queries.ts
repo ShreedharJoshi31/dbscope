@@ -17,6 +17,8 @@ export const schemaQueryKeys = {
 export interface SnapshotInfo {
   id: number;
   takenAt: string;
+  /** The last read that found this structure unchanged; equals takenAt until then. */
+  lastSeenAt: string;
   relations: number;
   schemas: string[];
 }

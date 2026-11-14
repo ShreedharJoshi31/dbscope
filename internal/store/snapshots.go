@@ -11,28 +11,30 @@ import (
 	"time"
 )
 
-// SnapshotsKept is how many schema snapshots a profile keeps.
-const SnapshotsKept = 20
-
 // SnapshotInfo describes a stored schema snapshot.
 type SnapshotInfo struct {
-	ID        int64     `json:"id"`
-	TakenAt   time.Time `json:"takenAt"`
-	Relations int       `json:"relations"`
-	Schemas   []string  `json:"schemas"`
+	ID      int64     `json:"id"`
+	TakenAt time.Time `json:"takenAt"`
+	// LastSeenAt is the last read that found this structure unchanged, or TakenAt.
+	LastSeenAt time.Time `json:"lastSeenAt"`
+	Relations  int       `json:"relations"`
+	Schemas    []string  `json:"schemas"`
 }
 
 // SaveSnapshot stores model (schema.Model JSON) unless its structure hash
-// equals the newest snapshot's, then keeps only the newest SnapshotsKept.
+// equals the newest snapshot's, whose last_seen_at it then moves to now.
+// After a write it keeps only the newest snapshots_kept of the profile.
 // It reports whether a snapshot was written.
 func (s *Store) SaveSnapshot(ctx context.Context, profileID, hash string, schemas []string, relations int, model []byte) (bool, error) {
+	var lastID int64
 	var last string
-	err := s.db.QueryRowContext(ctx, `SELECT hash FROM schema_snapshots WHERE profile_id = ? ORDER BY id DESC LIMIT 1`, profileID).Scan(&last)
+	err := s.db.QueryRowContext(ctx, `SELECT id, hash FROM schema_snapshots WHERE profile_id = ? ORDER BY id DESC LIMIT 1`, profileID).Scan(&lastID, &last)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return false, err
 	}
 	if last == hash {
-		return false, nil
+		_, err := s.db.ExecContext(ctx, `UPDATE schema_snapshots SET last_seen_at = ? WHERE id = ?`, formatTime(now()), lastID)
+		return false, err
 	}
 	var buf bytes.Buffer
 	zw := gzip.NewWriter(&buf)
@@ -51,12 +53,14 @@ func (s *Store) SaveSnapshot(ctx context.Context, profileID, hash string, schema
 		return false, err
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `INSERT INTO schema_snapshots (profile_id, taken_at, hash, relations, schemas_json, model)
-		VALUES (?, ?, ?, ?, ?, ?)`, profileID, formatTime(now()), hash, relations, string(names), buf.Bytes()); err != nil {
+	taken := formatTime(now())
+	if _, err := tx.ExecContext(ctx, `INSERT INTO schema_snapshots (profile_id, taken_at, last_seen_at, hash, relations, schemas_json, model)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`, profileID, taken, taken, hash, relations, string(names), buf.Bytes()); err != nil {
 		return false, fkErr(err)
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM schema_snapshots WHERE profile_id = ? AND id NOT IN (
-		SELECT id FROM schema_snapshots WHERE profile_id = ? ORDER BY id DESC LIMIT ?)`, profileID, profileID, SnapshotsKept); err != nil {
+		SELECT id FROM schema_snapshots WHERE profile_id = ? ORDER BY id DESC
+		LIMIT (SELECT snapshots_kept FROM profiles WHERE id = ?))`, profileID, profileID, profileID); err != nil {
 		return false, err
 	}
 	return true, tx.Commit()
@@ -64,7 +68,7 @@ func (s *Store) SaveSnapshot(ctx context.Context, profileID, hash string, schema
 
 // Snapshots lists a profile's snapshots, newest first.
 func (s *Store) Snapshots(ctx context.Context, profileID string) ([]SnapshotInfo, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, taken_at, relations, schemas_json FROM schema_snapshots
+	rows, err := s.db.QueryContext(ctx, `SELECT id, taken_at, COALESCE(last_seen_at, taken_at), relations, schemas_json FROM schema_snapshots
 		WHERE profile_id = ? ORDER BY id DESC`, profileID)
 	if err != nil {
 		return nil, err
@@ -73,11 +77,14 @@ func (s *Store) Snapshots(ctx context.Context, profileID string) ([]SnapshotInfo
 	out := []SnapshotInfo{}
 	for rows.Next() {
 		var info SnapshotInfo
-		var taken, names string
-		if err := rows.Scan(&info.ID, &taken, &info.Relations, &names); err != nil {
+		var taken, seen, names string
+		if err := rows.Scan(&info.ID, &taken, &seen, &info.Relations, &names); err != nil {
 			return nil, err
 		}
 		if info.TakenAt, err = time.Parse(time.RFC3339Nano, taken); err != nil {
+			return nil, err
+		}
+		if info.LastSeenAt, err = time.Parse(time.RFC3339Nano, seen); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal([]byte(names), &info.Schemas); err != nil {

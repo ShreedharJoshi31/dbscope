@@ -41,6 +41,7 @@ interface Profile {
   summaryMode: SummaryMode; // default "profile"
   maxRowsToLLM: number;     // default 50, 1-500
   statementTimeoutMs: number; // default 30000 local/staging, 10000 prod-replica
+  snapshotsKept: number;    // default 20, 2-500; schema snapshots kept, older ones are deleted
   hasPassword: boolean;     // the password itself is never returned
   capabilities: {           // derived from engine; never sent back
     query: boolean; ask: boolean; migrations: boolean; workload: boolean;
@@ -103,7 +104,10 @@ Profile create/update/test-by-id with a locked vault → `423 {"error":{"code":"
   Partitions are collapsed into their parent (`partitions`, `partitionKey`, summed `rowEstimate`).
   Relations outside the selected schemas that a foreign key references are included with `"stub": true`.
   Each successful read is kept as a snapshot when its structure (relations, columns, keys, indexes,
-  findings; not counts, sizes or comments) differs from the newest one; the newest 20 per profile are kept.
+  findings; not counts, sizes or comments) differs from the newest one; the profile's newest `snapshotsKept`
+  (default 20) are kept. A read that finds the newest structure unchanged moves its `lastSeenAt` to now.
+  Workload, ask, the team-file preview and PostgreSQL migration analysis read the same schema selection
+  and record snapshots the same way.
   Design risks the engine's introspection found are in each relation's `findings`:
   `[{"ruleId":"DBS-CH-NO-PRIMARY-INDEX","level":"warn","message":"...","column":"..."}]`, `level` one of
   `info|warn|danger`, `column` only when the risk is about one column (docs/ENGINES.md, Schema risks).
@@ -114,7 +118,9 @@ Profile create/update/test-by-id with a locked vault → `423 {"error":{"code":"
 
 ### Schema snapshots
 
-- `GET /api/profiles/{id}/snapshots` → `200 [{"id":7,"takenAt":"…","relations":42,"schemas":["public"]}]`, newest first.
+- `GET /api/profiles/{id}/snapshots` → `200 [{"id":7,"takenAt":"…","lastSeenAt":"…","relations":42,"schemas":["public"]}]`,
+  newest first. `takenAt` is when the structure was first read; `lastSeenAt` is the last read that found it
+  unchanged (equal to `takenAt` until then).
 - `GET /api/profiles/{id}/snapshots/{snapshot}` → `200 Model` as it was read (before inferred-key decisions),
   `404 not_found` for an unknown id or another profile's snapshot.
 

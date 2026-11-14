@@ -55,6 +55,8 @@ export interface Profile {
    * default (prod-replica 1e6, staging 1e7, local none); 0 = no limit.
    */
   maxCost?: number;
+  /** How many schema snapshots are kept, 2-500; older ones are deleted. */
+  snapshotsKept: number;
   hasPassword: boolean;
   /** The SSH server the database is reached through. */
   ssh?: SSHTunnel;

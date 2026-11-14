@@ -21,6 +21,7 @@ interface AdvancedFieldsProps {
   onOpenChange: (open: boolean) => void;
   timeoutRef: (el: HTMLInputElement | null) => void;
   maxCostRef?: (el: HTMLInputElement | null) => void;
+  snapshotsKeptRef?: (el: HTMLInputElement | null) => void;
 }
 
 function summaryModes(maxRows: number): { value: SummaryMode; title: string; text: string }[] {
@@ -48,6 +49,7 @@ export function AdvancedFields({
   onOpenChange,
   timeoutRef,
   maxCostRef,
+  snapshotsKeptRef,
 }: AdvancedFieldsProps) {
   const summaryLabelId = useId();
 
@@ -56,7 +58,7 @@ export function AdvancedFields({
       <CollapsibleTrigger className="group/advanced flex items-center gap-1 rounded-sm text-xs font-medium text-text-muted hover:text-text-primary">
         <ChevronRight aria-hidden className="size-3.5 transition-transform group-data-panel-open/advanced:rotate-90" />
         Advanced
-        <span className="font-normal">schemas, assistant data, statement timeout, cost limit, folders</span>
+        <span className="font-normal">schemas, assistant data, statement timeout, cost limit, snapshots, folders</span>
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-3 flex flex-col gap-4 border-l border-border-default pl-4">
         {values.engine === "neo4j" && (
@@ -201,6 +203,25 @@ export function AdvancedFields({
             )}
           </FormField>
         )}
+
+        <FormField
+          label="Schema snapshots kept"
+          error={errors.snapshotsKept}
+          description="Default 20, from 2 to 500. Older snapshots are deleted beyond this number."
+          className="max-w-60"
+        >
+          {(control) => (
+            <Input
+              {...control}
+              ref={snapshotsKeptRef}
+              inputMode="numeric"
+              value={values.snapshotsKept}
+              onChange={(e) => onChange("snapshotsKept", e.target.value)}
+              onBlur={() => onBlur("snapshotsKept")}
+              className="font-mono tabular-nums"
+            />
+          )}
+        </FormField>
 
         {hasMigrationReview(values.engine) && (
           <>

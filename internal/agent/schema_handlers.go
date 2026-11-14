@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -90,6 +91,7 @@ func (s *server) namespaces(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// No snapshot: Namespaces returns no model, and for PostgreSQL lists every schema rather than the profile's selection.
 	ns, err := s.source.Namespaces(r.Context(), p, password)
 	if err != nil {
 		s.upstreamError(w, r, err)
@@ -108,7 +110,7 @@ func (s *server) schema(w http.ResponseWriter, r *http.Request) {
 		s.upstreamError(w, r, err)
 		return
 	}
-	s.saveSnapshot(r, p.ID, m)
+	s.saveSnapshot(r.Context(), p.ID, m)
 	decisions, err := s.store.InferredFKDecisions(r.Context(), p.ID)
 	if err != nil {
 		s.internalError(w, r, err)
@@ -120,11 +122,12 @@ func (s *server) schema(w http.ResponseWriter, r *http.Request) {
 
 // saveSnapshot keeps the schema as read, before the user's inferred-key
 // decisions apply, when its structure changed since the last snapshot. A
-// failure is logged, never sent: the schema itself was read.
-func (s *server) saveSnapshot(r *http.Request, profileID string, m *schema.Model) {
+// failure is logged, never sent: the schema itself was read. Callers pass
+// only models of the profile's own schema selection, as GET /schema reads it.
+func (s *server) saveSnapshot(ctx context.Context, profileID string, m *schema.Model) {
 	body, err := json.Marshal(m)
 	if err == nil {
-		_, err = s.store.SaveSnapshot(r.Context(), profileID, schema.StructureHash(m), m.Schemas, len(m.Relations), body)
+		_, err = s.store.SaveSnapshot(ctx, profileID, schema.StructureHash(m), m.Schemas, len(m.Relations), body)
 	}
 	if err != nil {
 		s.log.Warn("schema snapshot not saved", "profile", profileID, "err", err)
@@ -304,6 +307,7 @@ func (s *server) workload(w http.ResponseWriter, r *http.Request) {
 		s.upstreamError(w, r, err)
 		return
 	}
+	s.saveSnapshot(r.Context(), p.ID, m)
 	snap, err := s.source.Workload(r.Context(), p, password, m)
 	if err != nil {
 		s.upstreamError(w, r, err)

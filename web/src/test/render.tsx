@@ -54,6 +54,7 @@ export function makeProfile(
     summaryMode: "profile",
     maxRowsToLLM: 50,
     statementTimeoutMs: 30_000,
+    snapshotsKept: 20,
     hasPassword: true,
     createdAt: "2026-10-26T10:00:00Z",
     updatedAt: "2026-10-26T10:00:00Z",

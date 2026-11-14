@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/dbscope/dbscope/internal/conn"
 	"github.com/dbscope/dbscope/internal/schema"
@@ -65,3 +66,27 @@ func TestSchemaSnapshots(t *testing.T) {
 }
 
 func itoa(n int64) string { b, _ := json.Marshal(n); return string(b) }
+
+// TestWorkloadRefreshesSnapshot reads the same selection as GET /schema, so
+// it moves the snapshot's lastSeenAt instead of adding a row.
+func TestWorkloadRefreshesSnapshot(t *testing.T) {
+	e, _ := fakeEnv(t)
+	p := e.createProfile(validBody)
+	list := func() []store.SnapshotInfo {
+		t.Helper()
+		w := e.do("GET", "/api/profiles/"+p.ID+"/snapshots", "")
+		expect(t, w, 200, "")
+		return decodeBody[[]store.SnapshotInfo](t, w)
+	}
+	expect(t, e.do("GET", "/api/profiles/"+p.ID+"/schema", ""), 200, "")
+	before := list()
+	if len(before) != 1 || !before[0].LastSeenAt.Equal(before[0].TakenAt) {
+		t.Fatalf("after /schema %+v", before)
+	}
+	time.Sleep(5 * time.Millisecond)
+	expect(t, e.do("GET", "/api/profiles/"+p.ID+"/workload", ""), 200, "")
+	after := list()
+	if len(after) != 1 || after[0].ID != before[0].ID || !after[0].LastSeenAt.After(before[0].LastSeenAt) {
+		t.Fatalf("workload on the same selection: %+v then %+v", before, after)
+	}
+}

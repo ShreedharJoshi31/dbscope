@@ -137,7 +137,7 @@ export function ConnectionForm({ profile, submitLabel, onSaved, onCancel, autoFo
     setSubmitted(true);
     const first = firstInvalidField(allErrors);
     if (!first) return true;
-    if (first === "statementTimeoutMs" || first === "maxCost") setAdvancedOpen(true);
+    if (first === "statementTimeoutMs" || first === "maxCost" || first === "snapshotsKept") setAdvancedOpen(true);
     // Wait a frame so a just-opened Advanced section is in the DOM.
     requestAnimationFrame(() => fieldRefs.current[first]?.focus());
     const count = Object.keys(allErrors).length;
@@ -260,13 +260,18 @@ export function ConnectionForm({ profile, submitLabel, onSaved, onCancel, autoFo
 
       <AdvancedFields
         values={values}
-        errors={{ statementTimeoutMs: visibleError("statementTimeoutMs"), maxCost: visibleError("maxCost") }}
+        errors={{
+          statementTimeoutMs: visibleError("statementTimeoutMs"),
+          maxCost: visibleError("maxCost"),
+          snapshotsKept: visibleError("snapshotsKept"),
+        }}
         onChange={change}
         onBlur={blur}
         open={advancedOpen}
         onOpenChange={setAdvancedOpen}
         timeoutRef={register("statementTimeoutMs")}
         maxCostRef={register("maxCost")}
+        snapshotsKeptRef={register("snapshotsKept")}
       />
 
       {testResult && <TestResultChecklist result={testResult} env={values.env} />}

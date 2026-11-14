@@ -22,6 +22,7 @@ export interface ConnectionFormValues {
   statementTimeoutMs: string;
   /** "" = the environment default, "0" = no limit. */
   maxCost: string;
+  snapshotsKept: string;
   maxRowsToLLM: number;
   /** Whether the database is reached through an SSH server. */
   ssh: boolean;
@@ -58,9 +59,12 @@ export const FIELD_ORDER: readonly ConnectionField[] = [
   "summaryMode",
   "statementTimeoutMs",
   "maxCost",
+  "snapshotsKept",
   "migrationsDir",
   "projectDir",
 ];
+
+const DEFAULT_SNAPSHOTS_KEPT = 20;
 
 export const EMPTY_CONNECTION_FORM: ConnectionFormValues = {
   name: "",
@@ -79,6 +83,7 @@ export const EMPTY_CONNECTION_FORM: ConnectionFormValues = {
   summaryMode: "profile",
   statementTimeoutMs: String(defaultStatementTimeoutMs(undefined)),
   maxCost: "",
+  snapshotsKept: String(DEFAULT_SNAPSHOTS_KEPT),
   maxRowsToLLM: 50,
   ssh: false,
   sshHost: "",
@@ -108,6 +113,7 @@ export function formFromProfile(profile: Profile): ConnectionFormValues {
     summaryMode: profile.summaryMode,
     statementTimeoutMs: String(profile.statementTimeoutMs),
     maxCost: profile.maxCost === undefined ? "" : String(profile.maxCost),
+    snapshotsKept: String(profile.snapshotsKept),
     maxRowsToLLM: profile.maxRowsToLLM,
     ssh: Boolean(profile.ssh),
     sshHost: profile.ssh?.host ?? "",
@@ -199,6 +205,10 @@ export function validateConnectionForm(values: ConnectionFormValues): Connection
   if (cost && !(/^\d+(\.\d+)?$/.test(cost) && Number.isFinite(Number(cost)))) {
     errors.maxCost = "Cost limit must be 0 (no limit) or a positive number, or empty for the default.";
   }
+  const kept = Number(values.snapshotsKept);
+  if (!isWholeNumber(values.snapshotsKept) || kept < 2 || kept > 500) {
+    errors.snapshotsKept = "Snapshots kept must be a whole number from 2 to 500.";
+  }
   return errors;
 }
 
@@ -250,6 +260,7 @@ export function toProfileInput(values: ConnectionFormValues): ProfileInput {
       summaryMode: values.summaryMode,
       maxRowsToLLM: values.maxRowsToLLM,
       statementTimeoutMs: Number(values.statementTimeoutMs),
+      snapshotsKept: Number(values.snapshotsKept),
     };
   }
   if (values.engine === "sqlite") {
@@ -268,6 +279,7 @@ export function toProfileInput(values: ConnectionFormValues): ProfileInput {
       summaryMode: values.summaryMode,
       maxRowsToLLM: values.maxRowsToLLM,
       statementTimeoutMs: Number(values.statementTimeoutMs),
+      snapshotsKept: Number(values.snapshotsKept),
     };
   }
   const input: ProfileInput = {
@@ -291,6 +303,7 @@ export function toProfileInput(values: ConnectionFormValues): ProfileInput {
     summaryMode: values.summaryMode,
     maxRowsToLLM: values.maxRowsToLLM,
     statementTimeoutMs: Number(values.statementTimeoutMs),
+    snapshotsKept: Number(values.snapshotsKept),
   };
   // Omitted means the environment default; the agent treats 0 as no limit.
   if (values.maxCost.trim()) input.maxCost = Number(values.maxCost.trim());

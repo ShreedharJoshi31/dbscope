@@ -172,8 +172,41 @@ describe("ConnectionForm", () => {
 
     await user.click(screen.getByRole("button", { name: "Save and open" }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
-    expect(saved).toMatchObject({ name: "reports", env: "prod-replica", statementTimeoutMs: 10000 });
+    expect(saved).toMatchObject({ name: "reports", env: "prod-replica", statementTimeoutMs: 10000, snapshotsKept: 20 });
     expect(saved).not.toHaveProperty("password");
+  });
+
+  it("validates and saves the number of schema snapshots kept", async () => {
+    let saved: ProfileInput | undefined;
+    server.use(
+      http.post("/api/profiles", async ({ request }) => {
+        saved = (await request.json()) as ProfileInput;
+        return HttpResponse.json(makeProfile({ ...saved, id: "new-id" }), { status: 201 });
+      }),
+    );
+    const { user, onSaved } = renderForm();
+    await user.type(screen.getByLabelText("Name"), "reports");
+    await user.click(screen.getByRole("radio", { name: /local/ }));
+    await user.type(screen.getByLabelText("Host"), "h");
+    await user.type(screen.getByLabelText("Database"), "d");
+    await user.type(screen.getByLabelText("User"), "u");
+    await user.click(screen.getByRole("button", { name: /Advanced/ }));
+    const kept = screen.getByLabelText("Schema snapshots kept");
+    expect(kept).toHaveValue("20");
+    expect(kept).toHaveAccessibleDescription(/Older snapshots are deleted beyond this number/);
+
+    await user.clear(kept);
+    await user.type(kept, "1");
+    await user.click(screen.getByRole("button", { name: "Save and open" }));
+    expect(await screen.findByText("Snapshots kept must be a whole number from 2 to 500.")).toBeInTheDocument();
+    await waitFor(() => expect(kept).toHaveFocus());
+    expect(saved).toBeUndefined();
+
+    await user.clear(kept);
+    await user.type(kept, "50");
+    await user.click(screen.getByRole("button", { name: "Save and open" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+    expect(saved).toMatchObject({ snapshotsKept: 50 });
   });
 
   it("flags a duplicate name reported by the agent on the name field", async () => {

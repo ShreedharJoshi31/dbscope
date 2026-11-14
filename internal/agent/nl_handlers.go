@@ -453,6 +453,7 @@ func (s *server) model(ctx context.Context, p conn.Profile, password string) (*s
 	if err != nil {
 		return nil, err
 	}
+	s.saveSnapshot(ctx, p.ID, m)
 	decisions, err := s.store.InferredFKDecisions(ctx, p.ID)
 	if err != nil {
 		return nil, err
