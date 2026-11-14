@@ -58,7 +58,7 @@ export function AdvancedFields({
       <CollapsibleTrigger className="group/advanced flex items-center gap-1 rounded-sm text-xs font-medium text-text-muted hover:text-text-primary">
         <ChevronRight aria-hidden className="size-3.5 transition-transform group-data-panel-open/advanced:rotate-90" />
         Advanced
-        <span className="font-normal">schemas, assistant data, statement timeout, cost limit, snapshots, folders</span>
+        <span className="font-normal">schemas, assistant data, limits, snapshots, folders</span>
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-3 flex flex-col gap-4 border-l border-border-default pl-4">
         {values.engine === "neo4j" && (
