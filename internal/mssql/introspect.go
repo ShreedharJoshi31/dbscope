@@ -104,6 +104,12 @@ func Introspect(ctx context.Context, db *sql.DB, schemas []string) (*schema.Mode
 	if err != nil {
 		return nil, fmt.Errorf("tables: %w", err)
 	}
+	if srv.Azure || srv.Num >= 140000 { // history_retention_period is from SQL Server 2017
+		if err := temporalTables(ctx, db, in, args, rel); err != nil {
+			return nil, fmt.Errorf("temporal tables: %w", err)
+		}
+		m.TimeTravel = &schema.ModelTimeTravel{Supported: true}
+	}
 
 	err = each(ctx, db, `SELECT s.name, o.name, c.name, TYPE_NAME(c.user_type_id), c.max_length, c.precision, c.scale,
 			c.is_nullable, c.is_identity, c.is_computed, dc.definition, cc.definition, coalesce(cc.is_persisted, 0), CAST(ep.value AS nvarchar(4000))
@@ -282,6 +288,59 @@ func Introspect(ctx context.Context, db *sql.DB, schemas []string) (*schema.Mode
 	m.IntrospectedAt = time.Now().UTC()
 	m.DurationMs = time.Since(start).Milliseconds()
 	return m, nil
+}
+
+// temporalTables marks system-versioned temporal tables and their history
+// tables. AS OF also reads the history table, so it fails (Msg 229) without
+// SELECT on it; a user with no permission there sees its name as NULL.
+func temporalTables(ctx context.Context, db *sql.DB, in string, args []any, rel func(s, t string) *schema.Relation) error {
+	return each(ctx, db, `SELECT s.name, t.name, t.temporal_type, t.history_retention_period, t.history_retention_period_unit_desc,
+			OBJECT_SCHEMA_NAME(t.history_table_id) + '.' + OBJECT_NAME(t.history_table_id),
+			HAS_PERMS_BY_NAME(QUOTENAME(OBJECT_SCHEMA_NAME(t.history_table_id)) + '.' + QUOTENAME(OBJECT_NAME(t.history_table_id)), 'OBJECT', 'SELECT'),
+			(SELECT SCHEMA_NAME(p.schema_id) + '.' + p.name FROM sys.tables p WHERE p.history_table_id = t.object_id)
+		FROM sys.tables t JOIN sys.schemas s ON s.schema_id = t.schema_id
+		WHERE t.temporal_type IN (1, 2) AND `+in, args,
+		func(r *sql.Rows) error {
+			var s, t string
+			var kind int
+			var period, canRead sql.NullInt64
+			var unit, history, parent sql.NullString
+			if err := r.Scan(&s, &t, &kind, &period, &unit, &history, &canRead, &parent); err != nil {
+				return err
+			}
+			x := rel(s, t)
+			if x == nil {
+				return nil
+			}
+			if kind == 1 {
+				x.TimeTravel = &schema.TimeTravel{Kind: schema.TimeTravelHistory, Available: true, HistoryOf: parent.String}
+				return nil
+			}
+			tt := &schema.TimeTravel{Kind: schema.TimeTravelTemporal, Available: canRead.Int64 == 1, Retention: retention(period, unit.String)}
+			switch {
+			case !history.Valid:
+				tt.Note = "Needs SELECT on the history table, whose name this user cannot see"
+			case !tt.Available:
+				tt.Note = "Needs SELECT on the history table " + history.String
+			}
+			x.TimeTravel = tt
+			return nil
+		})
+}
+
+// retention spells a history retention period: "3 months", "1 day", "infinite" (-1).
+func retention(period sql.NullInt64, unit string) string {
+	switch {
+	case !period.Valid:
+		return ""
+	case period.Int64 < 0 || unit == "INFINITE":
+		return "infinite"
+	}
+	u := strings.ToLower(unit)
+	if period.Int64 != 1 {
+		u += "s"
+	}
+	return fmt.Sprintf("%d %s", period.Int64, u)
 }
 
 // storageFindings flags tables without a clustered index and clustered keys

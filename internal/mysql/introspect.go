@@ -56,7 +56,10 @@ func Introspect(ctx context.Context, db *sql.DB, schemas []string, fallback stri
 		return nil, err
 	}
 	m := &schema.Model{Engine: srv.Flavor, ServerVersion: srv.Num, Schemas: slices.Clone(schemas),
-		Relations: []schema.Relation{}, Enums: []schema.Enum{}}
+		Relations: []schema.Relation{}, Enums: []schema.Enum{}, TimeTravel: &schema.ModelTimeTravel{Supported: srv.Flavor == "mariadb"}}
+	if !m.TimeTravel.Supported {
+		m.TimeTravel.Note = "MySQL has no system-versioned tables; MariaDB does (WITH SYSTEM VERSIONING)"
+	}
 	in := "(" + strings.TrimSuffix(strings.Repeat("?,", len(schemas)), ",") + ")"
 	args := make([]any, len(schemas))
 	for i, s := range schemas {
@@ -70,12 +73,13 @@ func Introspect(ctx context.Context, db *sql.DB, schemas []string, fallback stri
 		return nil
 	}
 
-	err = each(ctx, tx, `SELECT TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, TABLE_ROWS, coalesce(TABLE_COMMENT, '')
+	partitioned := false
+	err = each(ctx, tx, `SELECT TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, TABLE_ROWS, coalesce(TABLE_COMMENT, ''), coalesce(CREATE_OPTIONS, '')
 		FROM information_schema.TABLES WHERE TABLE_SCHEMA IN `+in+` ORDER BY TABLE_SCHEMA, TABLE_NAME`, args,
 		func(r *sql.Rows) error {
-			var s, t, kind, comment string
+			var s, t, kind, comment, options string
 			var rowsEst sql.NullInt64
-			if err := r.Scan(&s, &t, &kind, &rowsEst, &comment); err != nil {
+			if err := r.Scan(&s, &t, &kind, &rowsEst, &comment, &options); err != nil {
 				return err
 			}
 			x := schema.Relation{Schema: s, Name: t, Kind: schema.KindTable, Comment: comment}
@@ -90,6 +94,10 @@ func Introspect(ctx context.Context, db *sql.DB, schemas []string, fallback stri
 					n := rowsEst.Int64
 					x.RowEstimate = &n
 				}
+				if kind == "SYSTEM VERSIONED" { // MariaDB only; SELECT is enough to read it AS OF
+					x.TimeTravel = &schema.TimeTravel{Kind: schema.TimeTravelSystemVersioned, Available: true}
+					partitioned = partitioned || strings.Contains(options, "partitioned")
+				}
 			}
 			byName[x.QName()] = len(m.Relations)
 			m.Relations = append(m.Relations, x)
@@ -97,6 +105,11 @@ func Introspect(ctx context.Context, db *sql.DB, schemas []string, fallback stri
 		})
 	if err != nil {
 		return nil, fmt.Errorf("tables: %w", err)
+	}
+	if partitioned {
+		if err := historyPartitions(ctx, tx, in, args, rel); err != nil {
+			return nil, fmt.Errorf("history partitions: %w", err)
+		}
 	}
 
 	err = each(ctx, tx, `SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT,
@@ -230,6 +243,24 @@ func Introspect(ctx context.Context, db *sql.DB, schemas []string, fallback stri
 	m.IntrospectedAt = time.Now().UTC()
 	m.DurationMs = time.Since(start).Milliseconds()
 	return m, nil
+}
+
+// historyPartitions notes the trap of MariaDB tables whose history is
+// partitioned BY SYSTEM_TIME: AS OF a time in a dropped partition returns no
+// rows rather than an error (measured, docs/TIME.md).
+func historyPartitions(ctx context.Context, tx *sql.Tx, in string, args []any, rel func(s, t string) *schema.Relation) error {
+	return each(ctx, tx, `SELECT DISTINCT TABLE_SCHEMA, TABLE_NAME FROM information_schema.PARTITIONS
+		WHERE TABLE_SCHEMA IN `+in+` AND PARTITION_METHOD = 'SYSTEM_TIME'`, args,
+		func(r *sql.Rows) error {
+			var s, t string
+			if err := r.Scan(&s, &t); err != nil {
+				return err
+			}
+			if x := rel(s, t); x != nil && x.TimeTravel != nil {
+				x.TimeTravel.Note = "History is partitioned; dropped history partitions read as empty, not as an error"
+			}
+			return nil
+		})
 }
 
 // checks reads CHECK constraints: MariaDB's CHECK_CONSTRAINTS names the

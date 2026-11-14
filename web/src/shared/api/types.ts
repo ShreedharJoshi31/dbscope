@@ -29,6 +29,8 @@ export interface Capabilities {
   health?: boolean;
   /** Exploring a graph database's nodes by their neighbours. */
   graph?: boolean;
+  /** Native AS OF reads; which tables have them is in the schema model (on MySQL only MariaDB does). */
+  timeTravel?: boolean;
 }
 
 export interface Profile {

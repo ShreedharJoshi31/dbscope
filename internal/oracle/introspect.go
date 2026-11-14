@@ -53,7 +53,7 @@ func Introspect(ctx context.Context, db *sql.DB, schemas []string) (*schema.Mode
 		}
 	}
 	m := &schema.Model{Engine: "oracle", ServerVersion: srv.Num, Schemas: slices.Clone(schemas),
-		Relations: []schema.Relation{}, Enums: []schema.Enum{}}
+		Relations: []schema.Relation{}, Enums: []schema.Enum{}, TimeTravel: &schema.ModelTimeTravel{Supported: true}}
 	if len(schemas) == 0 {
 		return m, nil
 	}
@@ -284,10 +284,55 @@ func Introspect(ctx context.Context, db *sql.DB, schemas []string) (*schema.Mode
 	for i := range m.Relations {
 		unindexedForeignKeys(&m.Relations[i])
 	}
+	if err := flashback(ctx, db, in, args, m); err != nil {
+		return nil, fmt.Errorf("flashback privileges: %w", err)
+	}
 	addStubs(m)
 	m.IntrospectedAt = time.Now().UTC()
 	m.DurationMs = time.Since(start).Milliseconds()
 	return m, nil
+}
+
+// flashback marks every table and view as readable AS OF, which Oracle has no
+// per-table switch for. The read needs ownership, FLASHBACK ANY TABLE or the
+// FLASHBACK object privilege (on a view, on the view itself); READ or SELECT
+// alone gives ORA-41900 (measured, docs/TIME.md).
+func flashback(ctx context.Context, db *sql.DB, in string, args []any, m *schema.Model) error {
+	var user string
+	var anyTable int
+	err := db.QueryRowContext(ctx, `SELECT USER, (SELECT count(*) FROM session_privs WHERE privilege = 'FLASHBACK ANY TABLE') FROM dual`).
+		Scan(&user, &anyTable)
+	if err != nil {
+		return err
+	}
+	granted := map[schema.QualifiedName]bool{}
+	if anyTable == 0 {
+		// ALL_TAB_PRIVS includes grants to PUBLIC and to the session's enabled roles.
+		err = each(ctx, db, `SELECT DISTINCT table_schema, table_name FROM all_tab_privs
+			WHERE privilege = 'FLASHBACK' AND table_schema `+in+`
+				AND (grantee IN (USER, 'PUBLIC') OR grantee IN (SELECT role FROM session_roles))`, args,
+			func(r *sql.Rows) error {
+				var q schema.QualifiedName
+				if err := r.Scan(&q.Schema, &q.Name); err != nil {
+					return err
+				}
+				granted[q] = true
+				return nil
+			})
+		if err != nil {
+			return err
+		}
+	}
+	for i := range m.Relations {
+		x := &m.Relations[i]
+		tt := &schema.TimeTravel{Kind: schema.TimeTravelFlashback,
+			Available: anyTable > 0 || x.Schema == user || granted[x.QName()]}
+		if !tt.Available {
+			tt.Note = "Needs the FLASHBACK privilege on this table, or FLASHBACK ANY TABLE"
+		}
+		x.TimeTravel = tt
+	}
+	return nil
 }
 
 func markPrimary(x *schema.Relation, index string) {

@@ -62,6 +62,9 @@ type Capabilities struct {
 	Health bool `json:"health"`
 	// Graph is exploring a graph database's nodes by their neighbours.
 	Graph bool `json:"graph"`
+	// TimeTravel is native AS OF reads; which tables have them is in the
+	// schema model (on MySQL only MariaDB does), see docs/TIME.md.
+	TimeTravel bool `json:"timeTravel"`
 }
 
 func (e Engine) Capabilities() Capabilities {
@@ -71,7 +74,7 @@ func (e Engine) Capabilities() Capabilities {
 	case EngineSQLite:
 		return Capabilities{Query: true, Migrations: true}
 	case EngineMySQL:
-		return Capabilities{Query: true, Migrations: true, Workload: true, Health: true}
+		return Capabilities{Query: true, Migrations: true, Workload: true, Health: true, TimeTravel: true}
 	case EngineElasticsearch:
 		return Capabilities{Query: true, Migrations: true, Workload: true, Health: true}
 	case EngineClickHouse:
@@ -83,9 +86,9 @@ func (e Engine) Capabilities() Capabilities {
 	case EngineRedis:
 		return Capabilities{Keyspace: true, Health: true}
 	case EngineSQLServer:
-		return Capabilities{Query: true, Migrations: true, Workload: true, Health: true}
+		return Capabilities{Query: true, Migrations: true, Workload: true, Health: true, TimeTravel: true}
 	case EngineOracle:
-		return Capabilities{Query: true, Migrations: true, Workload: true, Health: true}
+		return Capabilities{Query: true, Migrations: true, Workload: true, Health: true, TimeTravel: true}
 	case EngineNeo4j:
 		return Capabilities{Query: true, Migrations: true, Workload: true, Health: true, Graph: true}
 	case EngineDynamoDB:

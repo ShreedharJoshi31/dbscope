@@ -95,6 +95,29 @@ export interface Relation {
   dependsOn?: QualifiedName[];
   /** Design risks the engine's introspection found, such as no primary index or a field type conflict. */
   findings?: Finding[];
+  /** Set when the relation can be read as of a past time (docs/TIME.md). */
+  timeTravel?: TimeTravel;
+}
+
+export type TimeTravelKind = "flashback" | "temporal" | "history" | "system-versioned";
+
+export interface TimeTravel {
+  /** flashback: Oracle; temporal and history: SQL Server; system-versioned: MariaDB. */
+  kind: TimeTravelKind;
+  /** False when the reading user lacks a privilege the read needs. */
+  available: boolean;
+  /** Human text such as "3 months" or "infinite"; absent when unknown. */
+  retention?: string;
+  /** "schema.table" of the temporal table a SQL Server history table belongs to. */
+  historyOf?: string;
+  /** One sentence for the user when the read is unavailable or has a trap. */
+  note?: string;
+}
+
+/** Whether the server has native AS OF reads at all; absent for engines that were never checked. */
+export interface ModelTimeTravel {
+  supported: boolean;
+  note?: string;
 }
 
 export interface Finding {
@@ -114,6 +137,7 @@ export interface Model {
   /** RFC 3339. */
   introspectedAt: string;
   durationMs: number;
+  timeTravel?: ModelTimeTravel;
 }
 
 export interface Namespace {

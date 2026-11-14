@@ -65,6 +65,13 @@ func TestEngines(t *testing.T) {
 	if p.Capabilities != (Capabilities{Query: true, Migrations: true}) { // SQLite
 		t.Fatalf("sqlite capabilities %+v", p.Capabilities)
 	}
+	for _, e := range []Engine{EnginePostgres, EngineSQLite, EngineMySQL, EngineMongoDB, EngineRedis, EngineDynamoDB, EngineCassandra,
+		EngineNeo4j, EngineMemgraph, EngineElasticsearch, EngineClickHouse, EngineSQLServer, EngineOracle} {
+		want := e == EngineOracle || e == EngineSQLServer || e == EngineMySQL
+		if e.Capabilities().TimeTravel != want {
+			t.Errorf("%s time travel %v, want %v", e, e.Capabilities().TimeTravel, want)
+		}
+	}
 }
 
 func TestCostLimit(t *testing.T) {

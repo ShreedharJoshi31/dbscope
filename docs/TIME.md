@@ -1,8 +1,10 @@
 # Time
 
-**Time** is a planned feature. Nothing described here is built yet; this
-document records the design and the measurements it rests on, so the
-distinction between "measured" and "planned" matters throughout.
+**Time** is a planned feature. Most of what is described here is not built
+yet; the one built part covered by this document is per-table detection of
+native AS OF support (see "Per-table detection (built)" below). The rest
+records the design and the measurements it rests on, so the distinction
+between "measured" and "planned" matters throughout.
 
 It has two parts:
 
@@ -98,6 +100,90 @@ Each subsection quotes SQL exactly as it appears in the throwaway test file
 for that engine (`internal/<pkg>/zz_time_<pkg>_test.go` in the measurement
 worktree), and states only what the test runs showed. Anything inferred
 rather than run is marked "not measured."
+
+### Per-table detection (built)
+
+Introspection now marks which relations support a native AS OF read, as
+`Relation.TimeTravel` (`kind`, `available`, `retention`, `historyOf`,
+`note`), and says per model whether the server has such reads at all, as
+`Model.TimeTravel` (`supported`, `note`). The `timeTravel` capability is true
+for Oracle, SQL Server and MySQL (the MySQL engine also covers MariaDB; the
+model fields tell them apart). None of these fields is part of
+`schema.StructureHash`, so turning detection on, or a grant changing, does
+not record a new snapshot (`TestStructureHashIgnoresTimeTravel`). The canvas
+shows an "as of" badge on each flagged table card, muted when `available` is
+false, and the table details panel has a "Time travel" row. No query rewrite
+or time picker exists yet.
+
+Each engine adds a fixed number of queries per introspection, not one per
+table. `TestTimeTravelDetection` in each package checks the flags on real
+servers, and for Oracle and SQL Server also checks that each flag matches
+whether an AS OF read by that user succeeds.
+
+- **SQL Server** (`internal/mssql/introspect.go`, `temporalTables`): one
+  query, run on SQL Server 2017 and later (`history_retention_period` first
+  appears in 2017) and on Azure SQL:
+
+  ```sql
+  SELECT s.name, t.name, t.temporal_type, t.history_retention_period, t.history_retention_period_unit_desc,
+         OBJECT_SCHEMA_NAME(t.history_table_id) + '.' + OBJECT_NAME(t.history_table_id),
+         HAS_PERMS_BY_NAME(QUOTENAME(OBJECT_SCHEMA_NAME(t.history_table_id)) + '.' + QUOTENAME(OBJECT_NAME(t.history_table_id)), 'OBJECT', 'SELECT'),
+         (SELECT SCHEMA_NAME(p.schema_id) + '.' + p.name FROM sys.tables p WHERE p.history_table_id = t.object_id)
+  FROM sys.tables t JOIN sys.schemas s ON s.schema_id = t.schema_id
+  WHERE t.temporal_type IN (1, 2) AND s.name IN (...)
+  ```
+
+  `temporal_type` 2 gives kind `temporal`, with retention such as
+  `3 months`, or `infinite` for `-1`. It is `available` only when the user
+  has SELECT on the history table. When the user cannot see the history
+  table's name at all, the note is "Needs SELECT on the history table, whose
+  name this user cannot see". When the name is visible (for example through
+  VIEW DEFINITION) but SELECT is missing, the note is "Needs SELECT on the
+  history table dbo.acct_history". `temporal_type` 1 gives kind `history`
+  with `historyOf` set and `available` true. Measured on 2025 and 2022 as
+  sa, as a `db_datareader` user, as a user with SELECT on `dbo.acct` only,
+  and as that user plus VIEW DEFINITION on `dbo.acct_history`.
+- **MariaDB** (`internal/mysql/introspect.go`): the existing
+  `information_schema.TABLES` query also reads `CREATE_OPTIONS`.
+  `TABLE_TYPE = 'SYSTEM VERSIONED'` gives kind `system-versioned`,
+  `available` true (SELECT is enough). The relation's kind stays `table`.
+  Only when a versioned table's `CREATE_OPTIONS` contains `partitioned`,
+  one more query runs:
+
+  ```sql
+  SELECT DISTINCT TABLE_SCHEMA, TABLE_NAME FROM information_schema.PARTITIONS
+  WHERE TABLE_SCHEMA IN (...) AND PARTITION_METHOD = 'SYSTEM_TIME'
+  ```
+
+  Those tables get the note "History is partitioned; dropped history
+  partitions read as empty, not as an error". A versioned table partitioned
+  BY HASH gets no note. Measured on 11.8 as root and as a user with
+  `SELECT ON app.*`.
+- **MySQL**: no table is flagged, and the model carries
+  `{"supported": false, "note": "MySQL has no system-versioned tables; MariaDB does (WITH SYSTEM VERSIONING)"}`.
+  The flavor comes from the existing `Describe`. Measured on 8.4.
+- **Oracle** (`internal/oracle/introspect.go`, `flashback`): every table and
+  view read gets kind `flashback` and no retention (bounds come later). It
+  uses at most two queries:
+
+  ```sql
+  SELECT USER, (SELECT count(*) FROM session_privs WHERE privilege = 'FLASHBACK ANY TABLE') FROM dual
+  -- only when FLASHBACK ANY TABLE is missing:
+  SELECT DISTINCT table_schema, table_name FROM all_tab_privs
+  WHERE privilege = 'FLASHBACK' AND table_schema IN (...)
+    AND (grantee IN (USER, 'PUBLIC') OR grantee IN (SELECT role FROM session_roles))
+  ```
+
+  `available` is true for the owner, for a user with FLASHBACK ANY TABLE,
+  and for a user with a FLASHBACK grant on the object, directly or through
+  an enabled role. Otherwise the note is "Needs the FLASHBACK privilege on
+  this table, or FLASHBACK ANY TABLE". Measured on 23.26 Free with a non-DBA
+  user for each case: the owner; READ only; FLASHBACK on the table and on a
+  view; FLASHBACK ANY TABLE; FLASHBACK through a role; and FLASHBACK through
+  a role granted to another role. `ALL_TAB_PRIVS` listed the role and the
+  nested-role grants for that user, and the AS OF read succeeded in exactly
+  the cases flagged available. Not measured: global temporary tables and
+  external tables, which are flagged like any other table.
 
 ### Oracle
 
@@ -626,3 +712,4 @@ measurements, and are noted as open items for whoever builds this:
   not a static capability), but a per-table "is this specific table
   versioned" signal for SQL Server and MariaDB has to come from
   introspection or from the request itself, not from `Capabilities`.
+  Introspection now provides it; see "Per-table detection (built)".

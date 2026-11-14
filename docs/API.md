@@ -45,6 +45,8 @@ interface Profile {
   hasPassword: boolean;     // the password itself is never returned
   capabilities: {           // derived from engine; never sent back
     query: boolean; ask: boolean; migrations: boolean; workload: boolean;
+    timeTravel: boolean;    // native AS OF reads: Oracle, SQL Server, MySQL (only MariaDB has them;
+                            // the schema model's timeTravel fields say which tables)
   };
   createdAt: string;        // RFC 3339
   updatedAt: string;
@@ -111,6 +113,15 @@ Profile create/update/test-by-id with a locked vault → `423 {"error":{"code":"
   Design risks the engine's introspection found are in each relation's `findings`:
   `[{"ruleId":"DBS-CH-NO-PRIMARY-INDEX","level":"warn","message":"...","column":"..."}]`, `level` one of
   `info|warn|danger`, `column` only when the risk is about one column (docs/ENGINES.md, Schema risks).
+  Relations that can be read as of a past time carry `timeTravel`:
+  `{"kind":"flashback|temporal|history|system-versioned","available":true,"retention":"3 months","historyOf":"dbo.acct","note":"..."}`.
+  `available` is false when the reading user lacks a privilege the read needs (`note` says which);
+  `retention` is human text (`"infinite"` included) and absent when unknown; `historyOf` is set only on a
+  SQL Server history table. The model's own `timeTravel` is `{"supported":bool,"note"?}` for Oracle,
+  SQL Server (2017 and later, and Azure SQL) and MySQL/MariaDB, and absent for other engines; on MySQL it
+  is `{"supported":false,"note":"MySQL has no system-versioned tables; MariaDB does (WITH SYSTEM VERSIONING)"}`.
+  Neither field is part of the snapshot structure, so a grant change does not record a new snapshot
+  (docs/TIME.md).
   Foreign keys inferred from naming carry `"inferred": true` and a `confidence` in (0,1]; inferred
   keys the user rejected are omitted and accepted ones are returned with `"inferred": true, "confidence": 1`.
   Errors: connection failures → `502 {"error":{"code":"upstream", ...}}` with `detail` = the TestResult

@@ -30,6 +30,7 @@ export interface StubProfile {
     workload: boolean;
     health?: boolean;
     graph?: boolean;
+    timeTravel?: boolean;
   };
   host: string;
   port: number;
@@ -54,7 +55,7 @@ const NOW = "2026-10-26T10:00:00Z";
 
 function capabilitiesOf(engine: StubProfile["engine"] | undefined): StubProfile["capabilities"] {
   if (engine === "sqlite") return { query: true, ask: false, migrations: true, workload: false };
-  if (engine === "mysql") return { query: true, ask: false, migrations: true, workload: false };
+  if (engine === "mysql") return { query: true, ask: false, migrations: true, workload: false, timeTravel: true };
   return { query: true, ask: true, migrations: true, workload: true };
 }
 

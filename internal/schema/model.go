@@ -36,6 +36,36 @@ type Model struct {
 	Enums          []Enum     `json:"enums"`
 	IntrospectedAt time.Time  `json:"introspectedAt"`
 	DurationMs     int64      `json:"durationMs"`
+	// TimeTravel says whether the server has native AS OF reads at all; nil
+	// for engines that were never checked (docs/TIME.md).
+	TimeTravel *ModelTimeTravel `json:"timeTravel,omitempty"`
+}
+
+// ModelTimeTravel is the engine-level answer, such as MySQL having no system-versioned tables.
+type ModelTimeTravel struct {
+	Supported bool   `json:"supported"`
+	Note      string `json:"note,omitempty"`
+}
+
+// TimeTravel kinds.
+const (
+	TimeTravelFlashback       = "flashback"        // Oracle: AS OF on any table, given FLASHBACK
+	TimeTravelTemporal        = "temporal"         // SQL Server system-versioned temporal table
+	TimeTravelHistory         = "history"          // SQL Server history table of a temporal table
+	TimeTravelSystemVersioned = "system-versioned" // MariaDB WITH SYSTEM VERSIONING
+)
+
+// TimeTravel is how a relation can be read as of a past time.
+type TimeTravel struct {
+	Kind string `json:"kind"`
+	// Available is false when the reading user lacks a privilege the read needs.
+	Available bool `json:"available"`
+	// Retention is human text such as "3 months" or "infinite"; empty when unknown.
+	Retention string `json:"retention,omitempty"`
+	// HistoryOf is "schema.table" of the temporal table a history table belongs to.
+	HistoryOf string `json:"historyOf,omitempty"`
+	// Note is one sentence for the user when Available is false or there is a trap.
+	Note string `json:"note,omitempty"`
 }
 
 type Relation struct {
@@ -65,6 +95,8 @@ type Relation struct {
 	// Findings are design risks the engine's introspection found in this
 	// relation, such as a table with no primary index or an index near its field limit.
 	Findings []Finding `json:"findings,omitempty"`
+	// TimeTravel is set when the relation supports native AS OF reads.
+	TimeTravel *TimeTravel `json:"timeTravel,omitempty"`
 }
 
 type Column struct {
@@ -167,11 +199,19 @@ func (m *Model) Clone() *Model {
 		c.Enums[i].Values = slices.Clone(c.Enums[i].Values)
 	}
 	c.Relations = slices.Clone(m.Relations)
+	if m.TimeTravel != nil {
+		t := *m.TimeTravel
+		c.TimeTravel = &t
+	}
 	for i := range c.Relations {
 		r := &c.Relations[i]
 		if r.RowEstimate != nil {
 			v := *r.RowEstimate
 			r.RowEstimate = &v
+		}
+		if r.TimeTravel != nil {
+			t := *r.TimeTravel
+			r.TimeTravel = &t
 		}
 		r.Columns = slices.Clone(r.Columns)
 		r.PrimaryKey = slices.Clone(r.PrimaryKey)

@@ -85,6 +85,7 @@ export {
   STUB_WIDTH,
   visibleColumns,
 } from "@/entities/schema/model/sizing";
+export { TIME_TRAVEL_KIND_LABEL, timeTravelLines, timeTravelSummary } from "@/entities/schema/model/time-travel";
 export {
   BEFORE_FIRST_OBSERVATION,
   buildTimeline,

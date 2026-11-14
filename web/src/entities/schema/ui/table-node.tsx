@@ -37,6 +37,7 @@ import { KindIcon } from "@/entities/schema/ui/kind-icon";
 import { useZoomDetail } from "@/entities/schema/ui/lod";
 import { rowEstimateLabel } from "@/entities/schema/ui/row-estimate";
 import { useTableNodeActions } from "@/entities/schema/ui/table-node-actions";
+import { TimeTravelBadge } from "@/entities/schema/ui/time-travel-badge";
 import type { ColumnChangeKind, Relation } from "@/shared/api";
 
 /**
@@ -362,6 +363,7 @@ function Header({ id, data, mark }: { id: string; data: TableNodeData; mark: str
       {change && <DiffBadge change={change} columns={columns} />}
       {overlay && <OverlayBadge entry={overlay} />}
       {!overlay && <RiskBadge relation={relation} />}
+      {relation.timeTravel && <TimeTravelBadge timeTravel={relation.timeTravel} />}
       <button
         type="button"
         tabIndex={-1}

@@ -9,11 +9,12 @@ import {
   KindIcon,
   rowEstimateLabel,
   type SchemaGraph,
+  TIME_TRAVEL_KIND_LABEL,
   useCanvasStore,
   visibleColumns,
 } from "@/entities/schema";
 import { confidenceLabel, InferredFkActions } from "@/features/review-inferred-fk";
-import type { Relation } from "@/shared/api";
+import type { Relation, TimeTravel } from "@/shared/api";
 import { formatGrouped } from "@/shared/lib/format-number";
 import { Button } from "@/shared/ui/button";
 import { StatusIcon } from "@/shared/ui/status-icon";
@@ -88,6 +89,39 @@ function Columns({ relation }: { relation: Relation }) {
   );
 }
 
+function TimeTravelSection({ graph, timeTravel }: { graph: SchemaGraph; timeTravel: TimeTravel }) {
+  const { kind, available, retention, historyOf, note } = timeTravel;
+  return (
+    <Section title="Time travel">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
+        <dt className="text-text-muted">Kind</dt>
+        <dd>{TIME_TRAVEL_KIND_LABEL[kind]}</dd>
+        <dt className="text-text-muted">Available</dt>
+        <dd>{available ? "Yes" : "Not for this user"}</dd>
+        {retention && (
+          <>
+            <dt className="text-text-muted">Retention</dt>
+            <dd>{retention}</dd>
+          </>
+        )}
+        {historyOf && (
+          <>
+            <dt className="text-text-muted">History of</dt>
+            <dd className="min-w-0">
+              {graph.byKey.has(historyOf) ? (
+                <RelationLink id={historyOf} label={historyOf} />
+              ) : (
+                <span className="font-mono">{historyOf}</span>
+              )}
+            </dd>
+          </>
+        )}
+      </dl>
+      {note && <p className="text-xs text-text-muted">{note}</p>}
+    </Section>
+  );
+}
+
 function Body({ graph, id }: { graph: SchemaGraph; id: string }) {
   const relation = graph.byKey.get(id);
   if (!relation) return null;
@@ -119,6 +153,7 @@ function Body({ graph, id }: { graph: SchemaGraph; id: string }) {
           </ul>
         </Section>
       )}
+      {relation.timeTravel && <TimeTravelSection graph={graph} timeTravel={relation.timeTravel} />}
       {relation.kind === "partitioned_table" && (
         <Section title="Partitions">
           <p className="font-mono text-xs">{relation.partitionKey}</p>
