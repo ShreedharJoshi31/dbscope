@@ -15,6 +15,12 @@ actually enforce safety.
 `ROLLBACK`, never `COMMIT`: a `pg_notify()` inside a read-only transaction is
 accepted and would be delivered on commit.
 
+A query with `asOf` (Oracle, SQL Server, MariaDB; docs/TIME.md) is checked as written,
+then rewritten to add the engine's AS OF clause after each table name, then checked again
+as rewritten, and run. The second check sees exactly the text that runs. Each engine's
+`Check` and `Run` are unchanged; the rewrite only inserts fixed clause text built from the
+validated time and never moves user text.
+
 ## Verified facts (PostgreSQL 17, 2026-10-27, as a SELECT-only role)
 
 - `SELECT ... FOR UPDATE` in a read-only transaction: `ERROR: cannot execute SELECT FOR UPDATE in a read-only transaction`.

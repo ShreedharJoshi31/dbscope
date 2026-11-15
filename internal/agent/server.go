@@ -114,6 +114,7 @@ func New(cfg Config) (*Agent, error) {
 	mux.HandleFunc("POST /api/profiles/{id}/query", s.runQuery)
 	mux.HandleFunc("POST /api/profiles/{id}/explain", s.runExplain)
 	mux.HandleFunc("GET /api/profiles/{id}/history", s.history)
+	mux.HandleFunc("GET /api/profiles/{id}/time-travel", s.timeTravelBounds)
 	mux.HandleFunc("GET /api/llm/settings", s.getLLMSettings)
 	mux.HandleFunc("PUT /api/llm/settings", s.putLLMSettings)
 	mux.HandleFunc("POST /api/llm/test", s.testLLM)

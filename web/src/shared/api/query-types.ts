@@ -3,6 +3,8 @@
  * internal/query/exec.Result, internal/query/plan.Node and plan.Overlay.
  */
 
+import type { TimeTravelKind } from "@/shared/api/schema-types";
+
 export interface QueryRequest {
   /** Exactly one SELECT (incl. VALUES / TABLE / WITH ... SELECT). */
   sql: string;
@@ -12,9 +14,42 @@ export interface QueryRequest {
   analyze?: boolean;
   /** Re-send true after a 409 cost_confirmation_required. */
   confirmCost?: boolean;
+  /**
+   * RFC 3339 instant with an offset or Z: read every table as of then (docs/TIME.md).
+   * Oracle, SQL Server and MariaDB only; absent or "" reads the current data.
+   */
+  asOf?: string;
 }
 
 export type ExplainRequest = Omit<QueryRequest, "maxRows">;
+
+/** Where a table's oldest readable time comes from (GET /time-travel). */
+export type TimeTravelBoundSource =
+  | "undo_retention"
+  | "tuned_undo_retention"
+  | "assumed_default"
+  | "history_retention"
+  | "none";
+
+export interface TableTimeTravelBounds {
+  /** "schema.table" as requested. */
+  table: string;
+  /** null when the table has no time travel, or the name resolves to no table. */
+  kind: TimeTravelKind | null;
+  available: boolean;
+  /** RFC 3339; null when the engine sets no lower limit or the table cannot be read as of a time. */
+  oldest: string | null;
+  source: TimeTravelBoundSource;
+  note?: string;
+}
+
+/** GET /api/profiles/{id}/time-travel?tables=schema.a,schema.b */
+export interface TimeTravelBounds {
+  /** The database server's clock, RFC 3339. */
+  now: string;
+  tables: TableTimeTravelBounds[];
+  note?: string;
+}
 
 export interface ResultColumn {
   name: string;

@@ -222,6 +222,8 @@ interface QueryRequest {
   maxRows?: number;         // default 500, 1..5000
   analyze?: boolean;        // EXPLAIN ANALYZE as well (executes the query a second time); default false
   confirmCost?: boolean;    // re-send true after a 409 cost_confirmation_required
+  asOf?: string;            // RFC 3339 with an offset or Z: read every table as of then (Oracle, SQL Server,
+                            // MariaDB; docs/TIME.md "AS OF queries"). Absent or "" reads the current data.
 }
 interface QueryResult {
   columns: { name: string; type: string; typeOid: number; relation?: string; column?: string }[];
@@ -267,15 +269,45 @@ Errors (envelope `code`):
 - `504 timeout` (57014 from statement_timeout), `503 recovery_conflict` (40001 conflict with recovery),
   `502 upstream` (connection), `423 secrets_locked`, `404 not_found`.
 - Client disconnect (fetch aborted) cancels the running statement server-side.
+- With `asOf`: `501 unsupported` when the engine has no `timeTravel` capability; `400 validation` when
+  `asOf` is not RFC 3339 with an offset, is more than 1 s in the future, or the query cannot be read as of
+  that time (the message names the tables and why: not versioned, a view, a synonym, no FLASHBACK
+  privilege, unknown, or text the rewrite cannot account for). `executedSql` is the rewritten text;
+  history keeps the text as written. Oracle errors that mean "too far back" (ORA-01555, ORA-08180,
+  ORA-01466) say so and ask for a later time.
 
 Cost limits: `prod-replica` 1e6, `staging` 1e7, `local` none. Profiles gain an optional `maxCost: number`:
 omitted = the environment default, `0` = no limit, otherwise the limit.
 
 ### Explain only
 
-`POST /api/profiles/{id}/explain` body `{ sql, analyze?, confirmCost? }` → `200 { executedSql, plan, overlay, warnings }`
+`POST /api/profiles/{id}/explain` body `{ sql, analyze?, confirmCost?, asOf? }` → `200 { executedSql, plan, overlay, warnings }`
 (same guard, transaction and errors; no rows fetched). The cost gate applies only when `analyze` is true,
 since plain EXPLAIN does not execute the query. Not recorded in history.
+
+### Time travel bounds
+
+`GET /api/profiles/{id}/time-travel?tables=schema.a,schema.b` (exact catalog names as the schema
+model spells them, at most 200) → `200`:
+
+```ts
+interface TimeTravelBounds {
+  now: string;              // the database server's clock, RFC 3339
+  tables: {
+    table: string;          // as requested
+    kind: "flashback" | "temporal" | "history" | "system-versioned" | null;  // null: no time travel or no such table
+    available: boolean;     // false when this user cannot read it as of a time
+    oldest: string | null;  // RFC 3339; null when there is no lower limit or the table cannot be read as of a time
+    source: "undo_retention" | "tuned_undo_retention" | "assumed_default" | "history_retention" | "none";
+    note?: string;
+  }[];
+  note?: string;
+}
+```
+
+How `oldest` is found per engine is in docs/TIME.md "Bounds". Errors: `400 validation` for a missing or
+malformed `tables`, and on MySQL ("MySQL has no system-versioned tables, so it cannot read as of a past
+time"); `501 unsupported` when the engine has no `timeTravel` capability; `502 upstream`, `423 secrets_locked`.
 
 ### History
 

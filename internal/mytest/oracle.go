@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,16 +22,22 @@ const OracleImage = "container-registry.oracle.com/database/free:latest-lite"
 const OraclePassword = "OraTest2026x"
 
 // Oracle starts a server and returns a profile for SYSTEM on the FREEPDB1 service.
-func Oracle(t testing.TB) conn.Profile {
+// env adds container environment variables as name=value, such as TZ=Asia/Kolkata.
+func Oracle(t testing.TB, env ...string) conn.Profile {
 	t.Helper()
 	if testing.Short() || os.Getenv("DBSCOPE_SKIP_ORACLE") != "" {
 		t.Skip("integration test")
 	}
 	ctx := context.Background()
+	vars := map[string]string{"ORACLE_PWD": OraclePassword}
+	for _, e := range env {
+		k, v, _ := strings.Cut(e, "=")
+		vars[k] = v
+	}
 	c, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
 			Image: OracleImage, ExposedPorts: []string{"1521/tcp"},
-			Env:        map[string]string{"ORACLE_PWD": OraclePassword},
+			Env:        vars,
 			WaitingFor: wait.ForLog("DATABASE IS READY TO USE").WithStartupTimeout(5 * time.Minute),
 		},
 		Started: true,

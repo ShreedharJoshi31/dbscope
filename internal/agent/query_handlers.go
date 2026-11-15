@@ -37,6 +37,7 @@ import (
 	"github.com/dbscope/dbscope/internal/query/plan"
 	"github.com/dbscope/dbscope/internal/sqlite"
 	"github.com/dbscope/dbscope/internal/store"
+	"github.com/dbscope/dbscope/internal/timetravel"
 )
 
 const (
@@ -50,6 +51,9 @@ type queryBody struct {
 	MaxRows     *int   `json:"maxRows"`
 	Analyze     bool   `json:"analyze"`
 	ConfirmCost bool   `json:"confirmCost"`
+	// AsOf is an RFC 3339 instant to read every table as of (docs/TIME.md); empty reads the current data.
+	AsOf string `json:"asOf"`
+	at   time.Time
 }
 
 // runError is a failed run as the API reports it: the envelope plus the
@@ -127,6 +131,17 @@ func (s *server) run(w http.ResponseWriter, r *http.Request, body queryBody, max
 	if !ok || !supports(w, p, p.Capabilities.Query, "Running queries") {
 		return
 	}
+	if body.AsOf != "" {
+		if !supports(w, p, p.Capabilities.TimeTravel, "Reading as of a past time") {
+			return
+		}
+		at, err := parseAsOf(body.AsOf, time.Now())
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "validation", err.Error())
+			return
+		}
+		body.at = at
+	}
 	start := time.Now()
 	res, rerr := s.execute(r.Context(), p, password, body, maxRows, explainOnly)
 	if !explainOnly {
@@ -159,6 +174,23 @@ func (s *server) run(w http.ResponseWriter, r *http.Request, body queryBody, max
 }
 
 func (s *server) execute(ctx context.Context, p conn.Profile, password string, body queryBody, maxRows int, explainOnly bool) (*exec.Result, *runError) {
+	if body.AsOf == "" {
+		return s.executeSQL(ctx, p, password, body, maxRows, explainOnly)
+	}
+	rewritten, rerr := s.rewriteAsOf(ctx, p, password, body.SQL, body.at)
+	if rerr != nil {
+		return nil, rerr
+	}
+	body.SQL = rewritten
+	res, rerr := s.executeSQL(ctx, p, password, body, maxRows, explainOnly)
+	if rerr != nil {
+		asOfRunError(rerr)
+	}
+	return res, rerr
+}
+
+// executeSQL checks body.SQL with the engine's guard and runs it.
+func (s *server) executeSQL(ctx context.Context, p conn.Profile, password string, body queryBody, maxRows int, explainOnly bool) (*exec.Result, *runError) {
 	if p.Engine == conn.EngineSQLite {
 		if err := sqlite.Check(body.SQL); err != nil {
 			return nil, mapRunError(ctx, err)
@@ -353,7 +385,11 @@ func mapRunError(ctx context.Context, err error) *runError {
 	var chErr *chdrv.Exception
 	var msErr mssqldrv.Error
 	var oraErr *oranet.OracleError
+	var ttErr *timetravel.Error
 	switch {
+	case errors.As(err, &ttErr):
+		return &runError{status: http.StatusBadRequest, code: "validation", message: ttErr.Message,
+			histStatus: store.HistoryRejected, histCode: "as_of"}
 	case errors.As(err, &ge):
 		return &runError{status: http.StatusUnprocessableEntity, code: "rejected", message: ge.Message, detail: string(ge.Reason),
 			position: ge.Position, histStatus: store.HistoryRejected, histCode: string(ge.Reason)}
@@ -419,6 +455,8 @@ func mapRunError(ctx context.Context, err error) *runError {
 		switch msErr.Number {
 		case 229, 230, 262, 297, 300: // permission denied
 			r.message = "Blocked: " + msErr.Message
+		case 13544: // FOR SYSTEM_TIME on a table that is not system-versioned
+			r.message = "This table is not system-versioned, so it cannot be read as of a past time (" + msErr.Message + ")"
 		case 1222: // lock request time out period exceeded (SET LOCK_TIMEOUT)
 			r.status, r.code, r.histCode = http.StatusGatewayTimeout, "timeout", "timeout"
 			r.message = "Waited for locks for the profile's statement timeout: " + msErr.Message
@@ -504,6 +542,8 @@ func mysqlError(e *mysqldrv.MySQLError) *runError {
 		r.message = "Stopped after the profile's statement timeout"
 	case 1792: // ER_CANT_EXECUTE_IN_READ_ONLY_TRANSACTION
 		r.message = "Blocked: this would modify data (" + e.Message + ")"
+	case 4124: // MariaDB ER_VERS_NOT_VERSIONED
+		r.message = "This table is not system-versioned, so it cannot be read as of a past time (" + e.Message + ")"
 	}
 	return r
 }

@@ -1,10 +1,12 @@
 # Time
 
-**Time** is a planned feature. Most of what is described here is not built
-yet; the one built part covered by this document is per-table detection of
-native AS OF support (see "Per-table detection (built)" below). The rest
-records the design and the measurements it rests on, so the distinction
-between "measured" and "planned" matters throughout.
+**Time** is partly built. Built: per-table detection of native AS OF
+support (see "Per-table detection (built)") and, in the agent, AS OF
+queries and their bounds on Oracle, SQL Server and MariaDB (see "AS OF
+queries (built)"). Not built: the time picker in the UI, MongoDB, and the
+schema timeline described next. The rest records the design and the
+measurements it rests on, so the distinction between "measured" and
+"planned" matters throughout.
 
 It has two parts:
 
@@ -112,8 +114,8 @@ model fields tell them apart). None of these fields is part of
 `schema.StructureHash`, so turning detection on, or a grant changing, does
 not record a new snapshot (`TestStructureHashIgnoresTimeTravel`). The canvas
 shows an "as of" badge on each flagged table card, muted when `available` is
-false, and the table details panel has a "Time travel" row. No query rewrite
-or time picker exists yet.
+false, and the table details panel has a "Time travel" row. The query
+rewrite is described in "AS OF queries (built)"; no time picker exists yet.
 
 Each engine adds a fixed number of queries per introspection, not one per
 table. `TestTimeTravelDetection` in each package checks the flags on real
@@ -185,6 +187,155 @@ whether an AS OF read by that user succeeds.
   the cases flagged available. Not measured: global temporary tables and
   external tables, which are flagged like any other table.
 
+### AS OF queries (built)
+
+`POST /api/profiles/{id}/query` and `/explain` take an optional `asOf`
+(RFC 3339 with an offset or `Z`; docs/API.md). Without it, nothing changes.
+With it, the agent (`internal/agent/timetravel_handlers.go`):
+
+1. refuses (501) unless the profile has the `timeTravel` capability;
+2. parses `asOf`, converts it to UTC, and refuses (400) a time more than 1 s
+   after the agent's clock;
+3. runs the engine's `Check` on the text as written, so a statement the
+   guard refuses gets the same refusal with or without `asOf`;
+4. rewrites the text with the engine's rewriter (`internal/oracle/asof.go`,
+   `internal/mssql/asof.go`, `internal/mysql/asof.go`, sharing the walk in
+   `internal/timetravel`);
+5. runs the engine's `Check` again on the rewritten text, then `Run`
+   exactly as without `asOf`. `executedSql` is the rewritten text; history
+   keeps the text as written.
+
+`Check` and `Run` are not changed. The only tokenizer change is a byte
+offset on SQL Server tokens, which Oracle's and MySQL's already had.
+
+**Where the clause goes.** The rewriter walks each engine's own tokens. At
+every nesting level (subqueries, derived tables, UNION branches, CTE
+bodies), the table reference after `FROM`, `JOIN`, `APPLY`,
+`STRAIGHT_JOIN` and each comma of a FROM list gets the clause inserted
+straight after its name and before any alias or hint. It is not inserted
+after a subquery's parentheses, a CTE name (scoped to the level that
+defines it; on MySQL and MariaDB a WITH query's own name inside its body is
+the table, unless the WITH says RECURSIVE), a table function (a name
+followed by `(`), or `DUAL`. MySQL index hints (`USE INDEX FOR JOIN (...)`)
+do not end the FROM clause. Strings
+and comments are tokens or gaps the walk never inserts into. `FROM` inside
+a function call, such as `EXTRACT(YEAR FROM d)`, is not a FROM clause,
+because no `SELECT` opened that level. The rewrite only inserts the
+fixed clause below, built by Go from the validated time.
+
+| Engine | Clause after each table name |
+|---|---|
+| Oracle | `AS OF TIMESTAMP CAST(FROM_TZ(TIMESTAMP 'YYYY-MM-DD HH24:MI:SS.FFFFFF', 'UTC') AT TIME ZONE TO_CHAR(SYSTIMESTAMP, 'TZH:TZM') AS TIMESTAMP)` |
+| SQL Server | `FOR SYSTEM_TIME AS OF 'YYYY-MM-DDTHH:MM:SS.fffffff'` (UTC digits, no offset) |
+| MariaDB | `FOR SYSTEM_TIME AS OF FROM_UNIXTIME(<seconds>.<microseconds>)` |
+
+The Oracle form differs from the first design, `FROM_TZ(..., 'UTC')`
+alone. Measured on 23.26 Free (`TestAsOf` in `internal/oracle`): AS OF
+TIMESTAMP drops the zone of a TIMESTAMP WITH TIME ZONE and reads its
+digits in the zone of the server's clock (`SYSTIMESTAMP`), not the session
+time zone. On a server with a UTC clock, `FROM_TZ(<UTC digits>, 'UTC')`
+read checkpoint A correctly and `FROM_TZ(<+05:30 digits>, '+05:30')` gave
+`ORA-08186` (read as 5.5 hours in the future). On a server whose clock was
+`TZ=Asia/Kolkata`, the reverse held: the UTC form gave `ORA-01466` (read as
+5.5 hours earlier) and the +05:30 form read A. The built clause therefore
+moves the UTC instant into the clock's current offset first. It read
+checkpoints A and B correctly on both servers, with a session time zone of
++05:30 in each. Not measured: a server whose clock zone has DST, where the
+current offset can differ from the offset at the past instant.
+
+SQL Server and MariaDB: measured on 2025 and 2022, and on MariaDB 11.8,
+reading checkpoints A and B, joins of two versioned tables (`JOIN` and
+comma), and, on MariaDB, under session time zones UTC and +05:30, including
+one microsecond before and exactly at a row's `ROW_START`.
+
+**Which tables are versioned.** The agent does not cache the schema model,
+and the newest snapshot can be stale (time-travel flags are not part of the
+snapshot hash, so a grant or a new versioned table may never write a new
+snapshot). So each `asOf` request resolves only the names the query
+references, live, with the same catalog reads introspection uses:
+
+- Oracle: `ALL_OBJECTS` for the names (an unqualified name in
+  `SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')`), then the `flashback`
+  privilege check from introspection;
+- SQL Server: `OBJECT_ID` on each name, which resolves an unqualified name
+  the way the query will, then `temporalTables` from introspection;
+- MariaDB: `information_schema.TABLES` for the names (an unqualified name
+  in `DATABASE()`).
+
+This is a few small queries per request (at most five), independent of
+schema size.
+
+**Refusals.** Each is a 400 with a message naming the tables:
+
+- a table that cannot be read as of a time: on Oracle, no FLASHBACK
+  privilege (`available` false); on SQL Server, not a temporal table, a
+  history table, or no SELECT on the history table; on MariaDB, not
+  system-versioned;
+- a view on SQL Server or MariaDB (a view can mix versioned and current
+  tables); Oracle views are allowed, since AS OF applies to them given
+  FLASHBACK on the view (measured);
+- a name that does not resolve: unknown, not visible, a synonym, more than
+  two parts (another database or a database link);
+- text that already reads history (`AS OF`, `FOR SYSTEM_TIME`, `VERSIONS
+  BETWEEN`, `VERSIONS PERIOD`);
+- anything the walk cannot account for: a statement other than SELECT or
+  WITH, a parenthesized join, `PARTITION`, `SUBPARTITION`, `SAMPLE`,
+  `TABLESAMPLE` or `@dblink` after a name, Oracle `ONLY (...)` and
+  `CONTAINERS (...)`, SQL Server `CONTAINSTABLE` and similar functions that
+  read a named table, a SQL Server hint written as `t (NOLOCK)` without
+  `WITH`, a MySQL `/*! ... */` comment, unbalanced parentheses;
+- text the engine's tokenizer may read differently from the server: an
+  Oracle `NQ'...'` string (the tokenizer reads `q'` quoting only at the
+  start of a token), and MariaDB with `ANSI_QUOTES` or
+  `NO_BACKSLASH_ESCAPES` in the session `sql_mode`;
+- on MariaDB, an instant the session time zone gives twice (the repeated
+  hour when clocks go back), found by checking that
+  `UNIX_TIMESTAMP(FROM_UNIXTIME(x))` gives back `x` (not measured with a
+  zone that has DST);
+- MySQL, always: "MySQL has no system-versioned tables, so it cannot read
+  as of a past time";
+- MariaDB before 1970-01-01T00:00:01Z, which `FROM_UNIXTIME` cannot express.
+
+A statement that reads no table (`SELECT 1 FROM dual`) runs unchanged.
+
+**Known gap.** A function the query calls reads current data: a table
+function in FROM (left unchanged by design) or a scalar function anywhere.
+Built-in functions read no tables, and on Oracle `Run` already refuses a
+query that reaches user PL/SQL. On SQL Server and MariaDB, a user-defined
+function that reads a table is neither rewritten nor refused.
+
+**Errors after the rewrite.** With `asOf`, Oracle `ORA-01555`, `ORA-08180`
+and `ORA-01466` read "This table cannot be read that far back (ORA-nnnnn):
+choose a later time"; `ORA-41900` names the FLASHBACK privilege; `ORA-08186`
+says the time is in the future by the database's clock. SQL Server Msg
+13544 and MariaDB error 4124 (should not happen after the refusals) read as
+"not system-versioned".
+
+**Bounds.** `GET /api/profiles/{id}/time-travel?tables=schema.a,schema.b`
+(docs/API.md) gives each table's oldest readable time, measured against the
+database server's clock (`now` in the response):
+
+- Oracle: `oldest = max(now - max(undo_retention, latest
+  V$UNDOSTAT.TUNED_UNDORETENTION), LAST_DDL_TIME + 5 s)`, `source`
+  `undo_retention` or `tuned_undo_retention`, whichever is larger. Without
+  `SELECT_CATALOG_ROLE` the V$ views give ORA-00942, so 900 s (the default
+  `undo_retention`) is assumed with `source` `assumed_default` and a note
+  saying so. The 5 s margin is measured: `LAST_DDL_TIME + 1 s` after a
+  `DROP COLUMN` still gave ORA-01466, `+ 2 s` read the old rows.
+  `LAST_DDL_TIME` can also move on DDL that AS OF survives, such as adding
+  a column (not measured here), so the bound can be later than necessary. The response note says undo retention is a target, not a
+  promise, unless the undo tablespace has RETENTION GUARANTEE.
+- SQL Server: a finite `history_retention_period` gives `oldest =
+  DATEADD(<unit>, -period, SYSUTCDATETIME())` on the server, `source`
+  `history_retention`; INFINITE gives `oldest` null, `source` `none`, note
+  "History is kept until removed".
+- MariaDB: `oldest` null, `source` `none`, with a note that a time before
+  the history began, a dropped history partition, or DELETE HISTORY read as
+  empty, not as an error.
+
+A table that cannot be read as of a time (or does not resolve) has
+`available` false, `oldest` null, `source` `none` and a note saying why.
+
 ### Oracle
 
 Measured on `container-registry.oracle.com/database/free:latest-lite`,
@@ -237,10 +388,10 @@ measured. Reading these views (`v$parameter`, `v$undostat`,
 `ORA-00942: table or view "SYS"."V_$PARAMETER" does not exist` on all three,
 and `USER_TABLESPACES` returns 0 rows. The design bounds the picker at
 roughly `now − max(TUNED_UNDORETENTION, undo_retention)`, falling back to a
-fixed default when the role lacks `SELECT_CATALOG_ROLE` (not measured: the
-exact fallback value is a design choice, not a measured fact). The picker
-must never go before the table's `last_ddl_time` (see traps below) and never
-into the future.
+fixed default when the role lacks `SELECT_CATALOG_ROLE` (the built bounds use
+900 s, the default `undo_retention`; a design choice, not a measured fact).
+The picker must never go before the table's `last_ddl_time` (see traps
+below) and never into the future.
 
 **Errors and what they mean.**
 
@@ -651,9 +802,13 @@ already has one. PostgreSQL stays out of scope for native AS OF.
 
 Time must never weaken the read-only guard. The rewrite that adds an
 engine's AS OF clause to a query happens before `Check` runs, inside
-`execute()` in `internal/agent/query_handlers.go` (the per-engine branches
-are at `:201` for Oracle, `:215` for SQL Server, and `:290` for
-MySQL/MariaDB). `Check` and `Run` are unchanged by Time: `Check` sees the
+`execute()` in `internal/agent/query_handlers.go`, which calls
+`rewriteAsOf` and then the unchanged per-engine branches (built; see "AS OF
+queries (built)"). `Check` also runs on the text as written, before the
+rewrite. `TestAsOfKeepsGuard` (in `internal/agent` and each engine package)
+checks that DELETE, UPDATE, INSERT ... SELECT, SELECT ... FOR UPDATE,
+SELECT INTO and multi-statement text get the same refusal with `asOf` as
+without. `Check` and `Run` are unchanged by Time: `Check` sees the
 exact text that will run, including the AS OF clause, and judges it the same
 way it judges any other query. Rewriting inside `Run` instead (after
 `Check`) was considered and rejected, because `Check` would then be
@@ -698,12 +853,11 @@ because they would weaken or bypass the guard rather than work alongside it:
   text instead, which carries no state past the single query.
 
 Two implementation details follow from the existing code, not from the
-measurements, and are noted as open items for whoever builds this:
+measurements; both are now handled:
 
 - The query request's JSON decoder rejects unknown fields
-  (`internal/agent/server.go:180`), so an `asOf` field needs to be added to
-  `queryBody` (`internal/agent/query_handlers.go:48-53`) before a request
-  carrying it can be accepted; sending it today would fail with 400.
+  (`internal/agent/server.go:180`), so `asOf` was added to `queryBody`
+  (`internal/agent/query_handlers.go`).
 - `Capabilities` are static per engine (`internal/conn/profile.go:67`), with
   no per-table flag, and MySQL and MariaDB share one `Engine` value even
   though only MariaDB has system versioning. A connection-level "does this
