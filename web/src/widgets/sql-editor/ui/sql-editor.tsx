@@ -4,6 +4,7 @@ import { useActiveConnection } from "@/entities/connection";
 import { editorDiagnostic, type SqlTab, useRunStore, useSqlTabs } from "@/entities/query";
 import { useWorkbenchSchema } from "@/features/load-schema";
 import { MAX_ROWS_CHOICES, useQueryRunner, useTabRunOption, useTabRunOptions } from "@/features/run-query";
+import { AsOfControl } from "@/features/time-travel";
 import { ariaKeyShortcut, type KeyCombo, SHORTCUTS } from "@/shared/config/shortcuts";
 import { Button } from "@/shared/ui/button";
 import { Checkbox } from "@/shared/ui/checkbox";
@@ -64,6 +65,7 @@ export function SqlEditor({ tab }: { tab: SqlTab }) {
         analyze: analyze && profile.engine === "postgres",
         maxRows,
         tabId: tab.id,
+        ...(tab.asOf ? { asOf: tab.asOf } : {}),
       });
     } else runner.runActive(undefined, kind);
   };
@@ -121,6 +123,15 @@ export function SqlEditor({ tab }: { tab: SqlTab }) {
             ))}
           </NativeSelect>
         </label>
+        {runnable && profile && (
+          <AsOfControl
+            profile={profile}
+            model={query.data}
+            sql={tab.sql}
+            value={tab.asOf}
+            onChange={(asOf) => useSqlTabs.getState().setAsOf(tab.id, asOf)}
+          />
+        )}
         {busy && (
           <ToolbarButton
             label="Cancel the running query"

@@ -1,12 +1,12 @@
 # Time
 
 **Time** is partly built. Built: per-table detection of native AS OF
-support (see "Per-table detection (built)") and, in the agent, AS OF
-queries and their bounds on Oracle, SQL Server and MariaDB (see "AS OF
-queries (built)"). Not built: the time picker in the UI, MongoDB, and the
-schema timeline described next. The rest records the design and the
-measurements it rests on, so the distinction between "measured" and
-"planned" matters throughout.
+support (see "Per-table detection (built)"), AS OF queries and their
+bounds on Oracle, SQL Server and MariaDB in the agent (see "AS OF queries
+(built)"), and the "As of" picker in the SQL editor (see "Time picker
+(built)"). Not built: MongoDB, and the schema timeline described next. The
+rest records the design and the measurements it rests on, so the
+distinction between "measured" and "planned" matters throughout.
 
 It has two parts:
 
@@ -115,7 +115,8 @@ model fields tell them apart). None of these fields is part of
 not record a new snapshot (`TestStructureHashIgnoresTimeTravel`). The canvas
 shows an "as of" badge on each flagged table card, muted when `available` is
 false, and the table details panel has a "Time travel" row. The query
-rewrite is described in "AS OF queries (built)"; no time picker exists yet.
+rewrite is described in "AS OF queries (built)" and the editor's picker in
+"Time picker (built)".
 
 Each engine adds a fixed number of queries per introspection, not one per
 table. `TestTimeTravelDetection` in each package checks the flags on real
@@ -335,6 +336,34 @@ database server's clock (`now` in the response):
 
 A table that cannot be read as of a time (or does not resolve) has
 `available` false, `oldest` null, `source` `none` and a note saying why.
+
+### Time picker (built)
+
+The SQL editor toolbar has an "As of" control
+(`web/src/features/time-travel`) when the profile has the `timeTravel`
+capability; other engines show no control. When the model says
+`timeTravel.supported` is false (MySQL), the popover shows only the
+model's note. Otherwise it holds a date and time input (seconds, in the
+browser's zone), Now (the database server's time from the bounds), Clear,
+and a list of tables with their kind, whether this user can read them as
+of a time (or the note saying why not), and the oldest readable time. An
+`assumed_default` bound reads "about 15 minutes, assumed: undo retention
+could not be read".
+
+The tables are the versioned relations whose name the SQL mentions as a
+whole identifier, or, when it mentions none, every versioned relation in
+the model (at most 50). This is a text match for the bounds request only;
+the agent decides which tables a query reads and refuses what it cannot
+rewrite, and the editor does not repeat those checks. The bounds are read
+each time the popover opens. The input's range runs from the latest
+`oldest` of the available tables to the server's `now`; a time outside it
+shows why and disables Apply.
+
+Apply stores the instant on the SQL tab, as UTC with `Z`, and the tab
+saves it with its text, so it survives a reload. Switching to another
+connection clears it. While it is set, the toolbar shows "As of <local
+time>" with a button to clear it, Run and Explain send `asOf`, and the
+results header and run status name the time the results were read as of.
 
 ### Oracle
 

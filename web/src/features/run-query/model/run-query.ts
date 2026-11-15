@@ -27,8 +27,13 @@ function executedSqlFor(meta: RunMeta, error: ApiError): string | undefined {
 }
 
 async function fetchOutput(meta: RunMeta, options: RunOptions, signal: AbortSignal): Promise<RunOutput> {
-  const { profile, sql, analyze, confirmCost, maxRows } = options;
-  const body = { sql, ...(analyze ? { analyze } : {}), ...(confirmCost ? { confirmCost } : {}) };
+  const { profile, sql, analyze, confirmCost, maxRows, asOf } = options;
+  const body = {
+    sql,
+    ...(analyze ? { analyze } : {}),
+    ...(confirmCost ? { confirmCost } : {}),
+    ...(asOf ? { asOf } : {}),
+  };
   if (meta.kind === "query") {
     const result = await runQuery(profile.id, maxRows ? { ...body, maxRows } : body, signal);
     return { meta, result, ...result };
@@ -54,6 +59,7 @@ export async function executeRun(options: RunOptions, onSettled?: (profileId: st
     tabId: options.tabId,
     source: "editor",
     startedAt: Date.now(),
+    ...(options.asOf ? { asOf: options.asOf } : {}),
   };
   const store = useRunStore.getState();
   store.start(meta);
@@ -133,7 +139,10 @@ export function useQueryRunner() {
           return;
         }
         const { analyze, maxRows } = tabRunOptions(tab.id);
-        requestRun({ profile, sql: tab.sql, kind, analyze, maxRows, tabId: tab.id }, onSettled);
+        requestRun(
+          { profile, sql: tab.sql, kind, analyze, maxRows, tabId: tab.id, ...(tab.asOf ? { asOf: tab.asOf } : {}) },
+          onSettled,
+        );
       },
     };
   }, [client]);

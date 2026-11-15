@@ -82,4 +82,31 @@ describe("SQL tabs", () => {
     expect(state().active).toBe(q);
     expect(state().docTabs).toEqual([]);
   });
+
+  it("keeps a tab's asOf across a reload and clears it when switching connections", () => {
+    state().setScope("tt1");
+    const a = openSqlTab("SELECT 1 FROM acct");
+    state().setAsOf(a, "2026-11-15T04:30:00Z");
+    expect(readTabs("tt1").tabs[0]?.asOf).toBe("2026-11-15T04:30:00Z");
+
+    // A reload starts from no scope and restores the saved tabs as they were.
+    useSqlTabs.setState({ scope: null, tabs: [], next: 1, active: ERD_TAB });
+    state().setScope("tt1");
+    expect(state().tabs[0]?.asOf).toBe("2026-11-15T04:30:00Z");
+
+    state().setScope("tt2");
+    state().setScope("tt1");
+    expect(state().tabs[0]).toEqual({ id: a, title: "query-1.sql", sql: "SELECT 1 FROM acct" });
+    expect(readTabs("tt1").tabs[0]?.asOf).toBeUndefined();
+
+    state().setAsOf(a, "2026-11-15T04:30:00Z");
+    state().setAsOf(a, undefined);
+    expect(state().tabs[0]?.asOf).toBeUndefined();
+
+    window.localStorage.setItem(
+      "dbscope.sqlTabs.tt3",
+      JSON.stringify({ tabs: [{ id: "q1", title: "t", sql: "x", asOf: 5, extra: true }], next: 2, active: "q1" }),
+    );
+    expect(readTabs("tt3").tabs).toEqual([{ id: "q1", title: "t", sql: "x" }]);
+  });
 });

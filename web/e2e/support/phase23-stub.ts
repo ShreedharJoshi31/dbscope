@@ -9,6 +9,7 @@ export interface QueryBody {
   maxRows?: number;
   analyze?: boolean;
   confirmCost?: boolean;
+  asOf?: string;
 }
 
 export interface StubLlmSettings {

@@ -8,12 +8,15 @@ import type {
   HistoryEntry,
   QueryRequest,
   QueryResult,
+  TimeTravelBounds,
 } from "@/shared/api/query-types";
 
 const profilePath = (id: string) => `/api/profiles/${encodeURIComponent(id)}`;
 
 export const queryApiKeys = {
   history: (profileId: string) => ["profiles", profileId, "history"] as const,
+  timeTravel: (profileId: string, tables: readonly string[]) =>
+    ["profiles", profileId, "time-travel", tables.join(",")] as const,
 };
 
 /** POST /query. Aborting the signal makes the agent cancel the statement server-side. */
@@ -40,6 +43,28 @@ export function expandGraphNode(
 }
 
 export const HISTORY_LIMIT = 50;
+
+/** GET /time-travel: each table's oldest readable time against the database server's clock. */
+export function fetchTimeTravelBounds(
+  profileId: string,
+  tables: readonly string[],
+  signal?: AbortSignal,
+): Promise<TimeTravelBounds> {
+  const query = new URLSearchParams({ tables: tables.join(",") });
+  return apiFetch<TimeTravelBounds>(`${profilePath(profileId)}/time-travel?${query}`, { signal });
+}
+
+/** Bounds move with the server's clock, so they are read again each time `enabled` turns on (the picker opens). */
+export function useTimeTravelBounds(profileId: string | undefined, tables: readonly string[], enabled: boolean) {
+  return useQuery<TimeTravelBounds, ApiError>({
+    queryKey: queryApiKeys.timeTravel(profileId ?? "", tables),
+    queryFn: ({ signal }) => fetchTimeTravelBounds(profileId ?? "", tables, signal),
+    enabled: enabled && Boolean(profileId) && tables.length > 0,
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+  });
+}
 
 export function useQueryHistory(profileId: string | undefined) {
   return useQuery<HistoryEntry[], ApiError>({

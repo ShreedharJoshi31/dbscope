@@ -11,6 +11,7 @@ import {
   useRunStore,
 } from "@/entities/query";
 import { formatDuration } from "@/features/run-query";
+import { formatAsOf, localTimeZone } from "@/features/time-travel";
 import type { QueryResult } from "@/shared/api";
 import { formatCombo, SHORTCUTS } from "@/shared/config/shortcuts";
 import { announce } from "@/shared/lib/announcer";
@@ -50,6 +51,9 @@ function ResultToolbar({
           <span className="font-mono text-text-primary tabular-nums">{formatGrouped(result.rowCount)}</span> rows in{" "}
           <span className="font-mono text-text-primary tabular-nums">{formatDuration(result.durationMs)}</span>
           {output.meta.source === "assistant" && " · from the assistant"}
+          {output.meta.asOf && (
+            <span data-testid="result-as-of"> · as of {formatAsOf(output.meta.asOf, localTimeZone())}</span>
+          )}
         </span>
         <div className="ml-auto flex items-center gap-1">
           <Button

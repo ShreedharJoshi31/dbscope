@@ -13,6 +13,8 @@ export interface RunOptions {
   confirmCost?: boolean;
   /** The user already confirmed that ANALYZE may execute the statement on a prod-replica. */
   analyzeConfirmed?: boolean;
+  /** Read every table as of this RFC 3339 instant (the tab's "as of" time). */
+  asOf?: string;
 }
 
 export type RunPrompt =

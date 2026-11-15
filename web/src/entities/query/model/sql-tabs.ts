@@ -9,6 +9,8 @@ export interface SqlTab {
   id: string;
   title: string;
   sql: string;
+  /** RFC 3339 UTC instant the tab's queries read every table as of (docs/TIME.md); absent reads current data. */
+  asOf?: string;
 }
 
 interface Persisted {
@@ -54,6 +56,8 @@ interface SqlTabsState extends Persisted {
   openTab: (sql?: string) => string;
   closeTab: (id: string) => void;
   setSql: (id: string, sql: string) => void;
+  /** Sets or (with undefined) clears the tab's "as of" time. */
+  setAsOf: (id: string, asOf: string | undefined) => void;
   setActive: (id: string) => void;
 }
 
@@ -67,13 +71,22 @@ function isTab(value: unknown): value is SqlTab {
   return typeof t.id === "string" && typeof t.title === "string" && typeof t.sql === "string";
 }
 
+function withoutAsOf({ asOf: _asOf, ...tab }: SqlTab): SqlTab {
+  return tab;
+}
+
+function cleanTab(tab: SqlTab): SqlTab {
+  const { id, title, sql, asOf } = tab;
+  return typeof asOf === "string" && asOf ? { id, title, sql, asOf } : { id, title, sql };
+}
+
 /** Reads a scope's tabs; anything malformed falls back to no tabs. */
 export function readTabs(scope: string): Persisted {
   try {
     const raw: unknown = JSON.parse(safeLocalStorage.getItem(storageKey(scope)) ?? "null");
     if (typeof raw !== "object" || raw === null) return EMPTY;
     const r = raw as Record<string, unknown>;
-    const tabs = Array.isArray(r.tabs) ? r.tabs.filter(isTab) : [];
+    const tabs = Array.isArray(r.tabs) ? r.tabs.filter(isTab).map(cleanTab) : [];
     const next = typeof r.next === "number" && r.next > tabs.length ? Math.floor(r.next) : tabs.length + 1;
     const active = typeof r.active === "string" && tabs.some((t) => t.id === r.active) ? r.active : ERD_TAB;
     return { tabs, next, active };
@@ -110,8 +123,19 @@ export const useSqlTabs = create<SqlTabsState>((set, get) => {
       set({ reveal: { tabId, from, to, nonce: revealNonce } });
     },
     setScope: (scope, extension = "sql") => {
-      if (get().scope === scope) return set({ extension });
-      set({ scope, extension, ...(scope ? readTabs(scope) : EMPTY) });
+      const previous = get();
+      if (previous.scope === scope) return set({ extension });
+      // "As of" belongs to the connection it was chosen on: switching from one
+      // connection to another clears it on both sides. The first scope after a
+      // page load (from null) keeps what was saved, as the tabs do.
+      const switching = previous.scope !== null;
+      if (switching && previous.tabs.some((t) => t.asOf)) {
+        write(previous.scope, { ...previous, tabs: previous.tabs.map(withoutAsOf) });
+      }
+      const next = scope ? readTabs(scope) : EMPTY;
+      const tabs = switching ? next.tabs.map(withoutAsOf) : next.tabs;
+      set({ scope, extension, ...next, tabs });
+      if (switching && next.tabs.some((t) => t.asOf)) write(scope, { ...next, tabs });
     },
     openDocTab: (tab) => {
       const { docTabs, scope } = get();
@@ -143,6 +167,12 @@ export const useSqlTabs = create<SqlTabsState>((set, get) => {
       const { tabs } = get();
       if (tabs.find((t) => t.id === id)?.sql === sql) return;
       commit({ tabs: tabs.map((t) => (t.id === id ? { ...t, sql } : t)) });
+    },
+    setAsOf: (id, asOf) => {
+      const { tabs } = get();
+      const tab = tabs.find((t) => t.id === id);
+      if (!tab || tab.asOf === asOf) return;
+      commit({ tabs: tabs.map((t) => (t.id === id ? (asOf ? { ...t, asOf } : withoutAsOf(t)) : t)) });
     },
     setActive: (id) => {
       const { tabs, docTabs, scope } = get();

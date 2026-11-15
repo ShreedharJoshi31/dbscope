@@ -124,6 +124,28 @@ describe("run-query", () => {
     expect(dockTab).toBe("messages");
   });
 
+  it("sends asOf with a query and an explain, and records it on the run", async () => {
+    signIn();
+    const bodies: QueryRequest[] = [];
+    server.use(
+      http.post("/api/profiles/p1/query", async ({ request }) => {
+        bodies.push((await request.json()) as QueryRequest);
+        return HttpResponse.json(result());
+      }),
+      http.post("/api/profiles/p1/explain", async ({ request }) => {
+        bodies.push((await request.json()) as QueryRequest);
+        return HttpResponse.json({ executedSql: "x", plan: result().plan, overlay: result().overlay, warnings: [] });
+      }),
+    );
+    const asOf = "2026-11-15T04:30:00Z";
+    await executeRun({ profile, sql: "SELECT 1", kind: "query", analyze: false, tabId: "q1", asOf });
+    expect(useRunStore.getState().output?.meta.asOf).toBe(asOf);
+    await executeRun({ profile, sql: "SELECT 1", kind: "explain", analyze: false, tabId: "q1", asOf });
+    await executeRun({ profile, sql: "SELECT 1", kind: "query", analyze: false, tabId: "q1" });
+    expect(bodies).toEqual([{ sql: "SELECT 1", asOf }, { sql: "SELECT 1", asOf }, { sql: "SELECT 1" }]);
+    expect(useRunStore.getState().output?.meta.asOf).toBeUndefined();
+  });
+
   it("cancelling aborts the request and records a cancellation, not an error", async () => {
     signIn();
     let aborted = false;

@@ -15,6 +15,8 @@ export interface RunMeta {
   tabId: string | null;
   source: RunSource;
   startedAt: number;
+  /** The "as of" instant sent with the run (RFC 3339 UTC), when there was one. */
+  asOf?: string;
 }
 
 /** What the dock shows: rows (null for an explain) plus plan, overlay and the executed statement. */

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { type RunMeta, useRunStore } from "@/entities/query";
 import { formatDuration } from "@/features/run-query";
+import { formatAsOf, localTimeZone } from "@/features/time-travel";
 
 /** Seconds since the run started, ticking while it runs (UX rule 9). */
 function Elapsed({ meta }: { meta: RunMeta }) {
@@ -43,6 +44,7 @@ export function RunStatus({ tabId }: { tabId: string }) {
       <span data-testid="run-status" className="text-xs text-text-muted">
         <span className="font-mono tabular-nums">{r.rowCount.toLocaleString("en")}</span> rows{r.truncated ? "+" : ""}{" "}
         in <span className="font-mono tabular-nums">{formatDuration(r.durationMs)}</span>
+        <AsOfSuffix meta={output.meta} />
       </span>
     );
   }
@@ -50,8 +52,13 @@ export function RunStatus({ tabId }: { tabId: string }) {
     return (
       <span data-testid="run-status" className="text-xs text-text-muted">
         Plan ready
+        <AsOfSuffix meta={output.meta} />
       </span>
     );
   }
   return null;
+}
+
+function AsOfSuffix({ meta }: { meta: RunMeta }) {
+  return meta.asOf ? <>, as of {formatAsOf(meta.asOf, localTimeZone())}</> : null;
 }
